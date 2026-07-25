@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Côtéa — Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#152238; --ink2:#1E3A5F;
+  --coral:#F0604D; --coral-d:#D8492F;
+  --purple:#6C4FE0; --purple-d:#5638C4;
+  --sidebar:#0F1830;
+  --paper:#FFFFFF; --cream:#F5F6FA;
+  --line:rgba(21,34,56,.10); --muted:rgba(21,34,56,.55);
+  --shadow:0 10px 28px rgba(16,26,48,.10); --shadow-lg:0 24px 60px rgba(10,16,30,.35);
+  --r:18px; --r-lg:24px; --r-sm:12px;
+  --blue-bg:#E4EEFC; --blue:#2D6FE0;
+  --teal-bg:#DEF3F1; --teal:#128A82;
+  --coral-bg:#FCE7E2;
+  --purple-bg:#EAE4FB;
+  --amber-bg:#FCF0D9; --amber:#B9791E; --amber-solid:#E8A93B;
+  --pink-bg:#FCE4EC; --pink:#D34D82;
+  --green-bg:#E1F3EA; --green:#1F8F5A; --green-solid:#2FA36B;
+  --navy-bg:#E4E8F2; --orange-bg:#FDEADB; --orange:#C1631B;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Inter',sans-serif;color:var(--ink);background:var(--sidebar);min-height:100vh}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink)}
+:focus-visible{outline:2px solid var(--coral);outline-offset:2px;border-radius:4px}
+img{max-width:100%;display:block}
+svg{stroke:currentColor;overflow:visible;width:20px;height:20px;flex:none}
+.icon-circle,.iconbtn,.cat-card svg.chev,.tab,.acard .fav,.acard .ctarow .ic,.subcat,.interest,.step-row .icon-circle,.explainer-card .play,.watch-item .n,.snav button,.quick-item{color:var(--ink)}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ---------- demo bar ---------- */
+.demo-bar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:10px 16px;background:var(--sidebar);color:#fff;font-size:12px;letter-spacing:.02em}
+.demo-bar .tag{font-family:'Baloo 2',sans-serif;font-weight:700;font-size:16px}
+.demo-bar .tag span{color:var(--coral)}
+.demo-bar .sep{opacity:.3}
+.seg{display:inline-flex;border:1px solid rgba(255,255,255,.25);border-radius:99px;overflow:hidden}
+.seg button{padding:5px 14px;color:#fff;font-size:12px;font-weight:600}
+.seg button.on{background:var(--coral);color:#fff}
+.demo-bar .ghost{border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:5px 14px;color:#fff;font-size:12px}
+.demo-bar .ghost:hover{border-color:var(--coral)}
+
+/* ---------- stage / phone ---------- */
+.stage{display:flex;justify-content:center;align-items:flex-start;padding:28px 12px 60px;min-height:calc(100vh - 42px)}
+.phone{width:100%;max-width:412px;background:var(--cream);border-radius:38px;overflow:hidden;box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;height:min(880px,calc(100vh - 120px));min-height:640px;position:relative}
+@media (max-width:480px){.stage{padding:0}.phone{max-width:none;border-radius:0;height:calc(100vh - 42px);min-height:0;box-shadow:none;border:none}}
+.screen{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:block;position:relative}
+#screen>*{animation:screenIn .2s ease}
+@keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ---------- typography ---------- */
+.brand{font-family:'Baloo 2',sans-serif;font-weight:700}
+h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;color:var(--ink)}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.accent-line{width:46px;height:3px;background:var(--coral);border-radius:3px}
+
+/* ---------- buttons ---------- */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px;border-radius:99px;text-align:center;font-weight:700;font-size:14.5px;transition:transform .1s ease,opacity .15s}
+.btn:active{transform:scale(.98)}
+.btn-coral{background:var(--coral);color:#fff;box-shadow:0 8px 20px rgba(240,96,77,.35)}
+.btn-navy{background:var(--ink2);color:#fff}
+.btn-purple{background:var(--purple);color:#fff}
+.btn-outline{background:#fff;border:1.5px solid var(--line);color:var(--ink)}
+.btn-ghost{background:transparent;border:1.5px solid var(--coral);color:var(--coral)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn-sm{padding:10px 14px;font-size:12.5px;width:auto}
+
+/* ---------- cards / panels ---------- */
+.panel{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+.pill-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px}
+.icon-circle{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.icon-circle svg{width:22px;height:22px}
+.icon-circle.sm{width:34px;height:34px}
+.icon-circle.sm svg{width:17px;height:17px}
+.icon-circle.lg{width:56px;height:56px}
+.icon-circle.lg svg{width:26px;height:26px}
+
+/* ---------- fields ---------- */
+.field{text-align:left;margin-top:14px}
+.field label{display:block;font-size:12.5px;font-weight:700;margin-bottom:6px;color:var(--ink)}
+.field .cnt{font-weight:500;color:var(--muted);float:right}
+.field input,.field select,.field textarea{width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:14px;background:#fff;font-size:14px}
+.field textarea{resize:vertical;min-height:70px}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--coral)}
+
+/* ---------- top bars ---------- */
+.topbar{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;background:var(--cream);position:sticky;top:0;z-index:5}
+.topbar .logo{font-size:20px}
+.iconbtn{width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;position:relative;flex:none}
+.iconbtn svg{width:19px;height:19px;stroke:var(--ink)}
+.iconbtn .dot{position:absolute;top:6px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--coral);border:2px solid var(--cream)}
+.avatar{border-radius:50%;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+
+/* ---------- tabs (bottom nav) ---------- */
+.tabs{position:absolute;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid var(--line);padding:10px 6px calc(10px + env(safe-area-inset-bottom));z-index:6}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--muted);padding:4px 0;position:relative}
+.tab svg{width:22px;height:22px;stroke:currentColor}
+.tab.on{color:var(--coral)}
+.tab .bub{position:absolute;top:0;right:calc(50% - 20px);background:var(--coral);color:#fff;font-size:9px;font-weight:700;border-radius:99px;padding:1px 5px}
+.fab{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);width:54px;height:54px;border-radius:50%;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 22px rgba(108,79,224,.45);z-index:7;border:4px solid var(--cream)}
+.fab svg{width:24px;height:24px;stroke:#fff;stroke-width:2.4}
+
+/* ---------- landing ---------- */
+.landing{flex:1;display:flex;flex-direction:column;background:linear-gradient(180deg,#EAF2FB 0%,var(--cream) 220px)}
+.landing .heroTop{padding:22px 20px 12px;text-align:center}
+.landing .hero{position:relative}
+.landing .hero img{width:100%;height:210px;object-fit:cover;display:block}
+.landing .logo-big{font-size:34px}
+.landing .tagline{font-size:13px;font-weight:700;color:var(--ink2);margin-top:6px}
+.landing .subtag{font-size:11px;color:var(--muted);margin-top:2px}
+.landing .body{padding:0 20px 26px;margin-top:-24px;position:relative;z-index:2}
+.explainer-card{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.explainer-card .play{width:36px;height:36px;border-radius:50%;border:2px solid var(--ink2);display:flex;align-items:center;justify-content:center;flex:none}
+.estab-card{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.estab-card .ic{width:46px;height:46px;border-radius:50%;background:var(--teal-bg);display:flex;align-items:center;justify-content:center;flex:none}
+.feat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:22px}
+.feat-row .feat{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.feat-row .feat .ic{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.feat-row .feat span{font-size:11px;font-weight:700}
+.feat-row .feat small{font-size:10px;color:var(--muted);font-weight:500}
+.landing .footline{text-align:center;padding:26px 20px 8px;font-size:13.5px;font-weight:700}
+.landing .footline em{display:block;color:var(--coral);font-style:italic;margin-top:4px}
+
+/* ---------- explainer overlay ---------- */
+.expl-hero{display:flex;align-items:flex-start;gap:14px;padding:18px 20px}
+.expl-hero img{width:120px;border-radius:14px;flex:none}
+.step-row{display:flex;gap:14px;padding:16px 20px;position:relative}
+.step-row .icon-circle{position:relative;z-index:1}
+.step-row::before{content:"";position:absolute;left:38px;top:56px;bottom:-16px;width:2px;background:var(--line)}
+.step-row:last-of-type::before{display:none}
+.step-row h4{font-size:15.5px;margin-bottom:4px}
+.step-row p{font-size:12.5px;color:var(--muted);line-height:1.5}
+.notice-box{display:flex;align-items:center;gap:12px;background:var(--green-bg);border-radius:14px;padding:14px 16px;margin:8px 20px}
+
+/* ---------- onboarding ---------- */
+.onb{padding:22px 22px 22px;flex:1;display:flex;flex-direction:column}
+.onb .top-progress{display:flex;gap:6px;margin-bottom:20px}
+.onb .top-progress i{height:4px;flex:1;background:var(--line);border-radius:2px}
+.onb .top-progress i.on{background:var(--purple)}
+.onb .back-x{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.onb h2{font-size:23px;margin:8px 0 4px}
+.onb .sub{font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5}
+.onb .foot{margin-top:auto;padding-top:18px}
+.dots{display:flex;justify-content:center;gap:6px;margin-top:14px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--purple);width:18px;border-radius:4px}
+.avatar-upload{width:84px;height:84px;border-radius:50%;background:#fff;border:2px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin:6px auto 4px;font-size:10.5px;font-weight:600;color:var(--muted)}
+.avatar-upload svg{width:20px;height:20px;stroke:var(--muted)}
+.choice-card{border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;text-align:left}
+.choice-card.on{border-color:var(--purple);background:var(--purple-bg)}
+.choice-card b{display:block;font-size:14px;margin-bottom:3px}
+.choice-card p{font-size:12px;color:var(--muted);line-height:1.4}
+.choice-card .radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center}
+.choice-card.on .radio{border-color:var(--purple);background:var(--purple)}
+.interest-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.interest-grid.two{grid-template-columns:1fr 1fr}
+.interest{border:1.5px solid var(--line);border-radius:14px;background:#fff;padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:11.5px;font-weight:700;text-align:center;position:relative}
+.interest svg{width:22px;height:22px}
+.interest.on{border-color:var(--purple);background:var(--purple-bg)}
+.interest .badge-ok{position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center}
+.interest .badge-ok svg{width:10px;height:10px;stroke:#fff;stroke-width:3}
+.check-row{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.check-row b{font-size:13.5px;display:block}
+.check-row span{font-size:11.5px;color:var(--muted)}
+.switch{width:44px;height:25px;border-radius:99px;background:#D8DCE6;position:relative;transition:background .15s;flex:none}
+.switch.on{background:var(--green-solid)}
+.switch i{position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch.on i{left:22px}
+.privacy-check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;font-size:12.5px;line-height:1.5}
+.privacy-check svg{width:16px;height:16px;stroke:var(--green-solid);flex:none;margin-top:2px}
+
+/* ---------- home ---------- */
+.home{padding:0 0 96px}
+.home-hero{position:relative;padding:18px 20px 16px;overflow:hidden}
+.home-hero img{position:absolute;top:0;right:0;height:100%;width:52%;object-fit:cover;opacity:.95;-webkit-mask-image:linear-gradient(90deg,transparent,#000 30%);mask-image:linear-gradient(90deg,transparent,#000 30%)}
+.home-hero .txt{position:relative;z-index:1;max-width:62%}
+.home-hero h2{font-size:23px;line-height:1.2}
+.home-hero .script{color:var(--coral);font-style:italic}
+.home-hero p{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 20px 6px}
+.cat-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;align-items:flex-start;gap:10px;text-align:left;box-shadow:var(--shadow)}
+.cat-card .txt{flex:1;min-width:0}
+.cat-card b{font-size:13.5px;display:block;margin-bottom:3px;line-height:1.25}
+.cat-card p{font-size:11px;color:var(--muted);line-height:1.4}
+.cat-card svg.chev{width:15px;height:15px;stroke:var(--muted);flex:none;margin-top:4px}
+
+/* ---------- category listing ---------- */
+.cathead{position:relative;padding:16px 18px 0;background:var(--cream)}
+.cathead .row1{display:flex;align-items:center;gap:12px;margin-bottom:2px}
+.cathead h2{font-size:21px;flex:1}
+.subcat-row{display:flex;align-items:flex-start;gap:16px;overflow-x:auto;padding:14px 18px 4px;scrollbar-width:none}
+.subcat-row::-webkit-scrollbar{display:none}
+.subcat{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;font-size:10.5px;font-weight:700;color:var(--ink);white-space:nowrap}
+.tabseg{display:flex;border-bottom:1px solid var(--line);padding:6px 18px 0;gap:22px}
+.tabseg button{padding:10px 2px;font-size:13.5px;font-weight:700;color:var(--muted);border-bottom:2.5px solid transparent}
+.tabseg button.on.a{color:var(--ink);border-color:var(--ink)}
+.tabseg button.on.b{color:var(--coral);border-color:var(--coral)}
+.tabseg button.on.c{color:var(--purple);border-color:var(--purple)}
+.catlist{padding:16px 18px 110px}
+.info-banner{display:flex;align-items:center;gap:10px;border-radius:14px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.4}
+.info-banner.g{background:var(--green-bg);color:#175A3C}
+.info-banner.o{background:var(--coral-bg);color:#9B3B27}
+.info-banner.p{background:var(--purple-bg);color:#4630A0}
+.info-banner b{display:block;font-size:12.5px}
+.live-dot{width:9px;height:9px;border-radius:50%;background:#E23A3A;flex:none;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.3}}
+
+/* ---------- activity cards ---------- */
+.acard{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow);text-align:left;display:block;width:100%}
+.acard .media{position:relative;height:118px}
+.acard .media img{width:100%;height:100%;object-fit:cover}
+.acard .media .grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(0,0,0,.35))}
+.acard .tag{position:absolute;top:10px;left:10px;font-size:10px;font-weight:800;letter-spacing:.03em;padding:5px 10px;border-radius:99px;color:#fff}
+.acard .fav{position:absolute;top:9px;right:9px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center}
+.acard .fav svg{width:15px;height:15px;stroke:var(--ink)}
+.acard .avstack{position:absolute;bottom:9px;left:10px;display:flex;align-items:center}
+.acard .avstack .av{width:24px;height:24px;border-radius:50%;border:2px solid #fff;font-size:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;margin-right:-8px}
+.acard .avstack .more{background:rgba(0,0,0,.55);color:#fff;font-size:9px;font-weight:700;border-radius:99px;padding:3px 8px;margin-left:4px}
+.acard .body{padding:12px 14px 14px}
+.acard h4{font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:700;line-height:1.25;margin-bottom:6px}
+.acard .meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--muted);margin-bottom:8px}
+.acard .meta span{display:inline-flex;align-items:center;gap:4px}
+.acard .meta svg{width:12px;height:12px}
+.acard .desc{font-size:11.5px;color:var(--muted);line-height:1.45;margin-bottom:9px}
+.acard .row2{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted);margin-bottom:10px}
+.acard .row2 b{color:var(--ink);font-weight:700}
+.acard .orga{font-size:11px;color:var(--muted);margin-bottom:10px}
+.acard .ctarow{display:flex;gap:8px;align-items:center}
+.acard .ctarow .cta{flex:1;padding:11px;border-radius:99px;font-weight:700;font-size:12.5px;text-align:center}
+.acard .ctarow .ic{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;flex:none}
+.acard .ctarow .ic svg{width:16px;height:16px;stroke:var(--ink)}
+.acard.live .media{height:130px}
+.acard.live h4{margin-bottom:4px}
+.acard.past .body{display:flex;gap:10px}
+.acard.past .stats{flex:1}
+.acard.past .stats .row3{display:flex;gap:10px;font-size:11px;color:var(--muted);margin:4px 0 6px}
+.acard.past .rating{font-size:11.5px;font-weight:700;color:var(--amber-solid)}
+.acard.past .mini-map{width:70px;height:70px;border-radius:12px;flex:none;background:linear-gradient(135deg,#DCEBFB,#EAF4E3)}
+
+/* ---------- filters ---------- */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:#fff;border-radius:99px;padding:8px 15px;font-size:12px;font-weight:700;color:var(--ink)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.count-row{display:flex;align-items:center;justify-content:space-between;margin:2px 0 12px}
+.count-row h3{font-size:16px}
+.count-row .n{background:var(--purple-bg);color:var(--purple);font-weight:700;font-size:11px;padding:2px 8px;border-radius:99px;margin-left:6px}
+.filter-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border:1px solid var(--line);border-radius:99px;padding:8px 13px;background:#fff}
+.filter-btn svg{width:14px;height:14px}
+
+/* ---------- detail ---------- */
+.detail{padding:0 0 110px}
+.dethero{position:relative;height:260px}
+.dethero img{width:100%;height:100%;object-fit:cover}
+.dethero .grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,0) 32%,rgba(0,0,0,0) 60%,rgba(0,0,0,.55) 100%)}
+.dethero .top-row{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between}
+.dethero .top-row .r{display:flex;gap:8px}
+.dethero .circ{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center}
+.dethero .circ svg{width:17px;height:17px;stroke:var(--ink)}
+.dethero .bottom{position:absolute;left:18px;right:18px;bottom:16px;color:#fff}
+.dethero h2{color:#fff;font-size:24px;margin-bottom:8px}
+.dethero .creator{display:flex;align-items:center;gap:8px}
+.dethero .creator .av{width:26px;height:26px;border-radius:50%;font-size:10px}
+.dethero .creator span{font-size:12.5px;font-weight:600}
+.dethero .voybadge{margin-left:auto;background:var(--ink2);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:99px;display:flex;align-items:center;gap:5px}
+.dethero .voybadge svg{width:12px;height:12px;stroke:#fff}
+.det-body{padding:16px 18px}
+.statgrid{display:grid;grid-template-columns:1fr 1fr 1fr;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.statgrid .st{display:flex;gap:8px;padding:6px 4px}
+.statgrid .st svg{width:16px;height:16px;stroke:var(--coral);flex:none;margin-top:1px}
+.statgrid .st b{display:block;font-size:12.5px;line-height:1.3}
+.statgrid .st span{font-size:10.5px;color:var(--muted)}
+.det-panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+.det-panel h5{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;margin-bottom:12px}
+.det-panel h5 svg{width:16px;height:16px;stroke:var(--ink)}
+.det-panel .link{font-size:12px;font-weight:700;color:var(--coral);margin-left:auto}
+.avrow{display:flex;align-items:center;gap:-6px}
+.avrow-item{display:flex;flex-direction:column;align-items:center;gap:5px;margin-right:14px;font-size:11px;font-weight:600}
+.avrow-item .av{width:44px;height:44px;border-radius:50%;font-size:14px}
+.vis-toggle{border:1.5px solid var(--coral);background:var(--coral-bg);border-radius:16px;padding:14px 16px;margin-bottom:14px}
+.vis-toggle .top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.vis-toggle .top svg{width:16px;height:16px;stroke:var(--coral-d)}
+.vis-toggle .top b{font-size:13px;flex:1}
+.vis-toggle p{font-size:11.5px;color:#7A3826;line-height:1.5;margin:6px 0 10px}
+.vis-toggle .modify{font-size:12px;font-weight:700;color:var(--coral-d);border:1.5px solid var(--coral);border-radius:99px;padding:6px 14px}
+.tagpills{display:flex;flex-wrap:wrap;gap:8px}
+.tagpill{display:flex;align-items:center;gap:6px;background:var(--cream);border-radius:99px;padding:8px 13px;font-size:12px;font-weight:600}
+.tagpill svg{width:14px;height:14px}
+.minimap{height:110px;border-radius:14px;background:linear-gradient(135deg,#DCEBFB,#EAF4E3);position:relative;margin-bottom:12px;overflow:hidden}
+.minimap .pin{position:absolute;top:50%;left:50%;transform:translate(-50%,-100%)}
+.minimap .pin svg{width:30px;height:30px;stroke:var(--coral);fill:var(--coral-bg)}
+.addr b{display:block;font-size:13px}
+.addr span{font-size:12px;color:var(--muted)}
+.sticky-cta{position:sticky;bottom:0;background:linear-gradient(0deg,var(--cream) 60%,rgba(245,246,250,0));padding:16px 18px 8px;margin-top:-8px}
+
+/* ---------- join confirmation ---------- */
+.confirm{flex:1;display:flex;flex-direction:column}
+.confirm .hero{position:relative;height:230px}
+.confirm .hero img{width:100%;height:100%;object-fit:cover}
+.confirm .hero .back{position:absolute;top:16px;left:16px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center}
+.confirm .hero .back svg{width:17px;height:17px;stroke:var(--ink)}
+.confirm .checkbadge{width:64px;height:64px;border-radius:50%;background:#fff;box-shadow:var(--shadow-lg);display:flex;align-items:center;justify-content:center;margin:-32px auto 0;position:relative;z-index:2}
+.confirm .checkbadge svg{width:32px;height:32px;stroke:var(--green-solid);stroke-width:2.4}
+.confirm .body{padding:14px 22px 26px;text-align:center;flex:1}
+.confirm h2{font-size:26px;margin-bottom:18px}
+.confirm-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;text-align:left;margin-bottom:16px;display:flex;gap:12px;align-items:flex-start}
+.confirm-card .ic{width:44px;height:44px;border-radius:12px;flex:none;object-fit:cover}
+.confirm-card h4{font-size:15px;margin-bottom:6px}
+.confirm-card .meta{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.confirm-card .meta span{display:flex;align-items:center;gap:6px}
+.confirm-card .meta svg{width:13px;height:13px;stroke:var(--coral)}
+.part-banner{background:var(--cream);border-radius:16px;padding:14px 16px;text-align:left;margin-bottom:16px}
+.part-banner .top{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.part-banner b{font-size:13.5px;display:block}
+.part-banner span{font-size:11.5px;color:var(--muted)}
+.confirm .avrow-item.me .av{border:2.5px solid var(--coral)}
+.confirm .avrow-item.me span{color:var(--coral);font-weight:700}
+.confirm .actions .btn{margin-bottom:10px}
+
+/* ---------- create ---------- */
+.create{padding:20px 20px 40px}
+.icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 4px}
+.icon-opt{border:1.5px solid var(--line);border-radius:14px;background:#fff;padding:12px 4px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10.5px;font-weight:700}
+.icon-opt svg{width:22px;height:22px;stroke:var(--ink2)}
+.icon-opt.on{border-color:var(--coral);background:var(--coral-bg)}
+.icon-opt.on svg{stroke:var(--coral-d)}
+.preview-wrap{padding-top:6px}
+
+/* ---------- messages / chat ---------- */
+.chatwrap{flex:1;display:flex;flex-direction:column}
+.chatmsgs{flex:1;overflow-y:auto;padding:16px 16px 8px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:78%;padding:10px 14px;border-radius:16px;font-size:13.5px;line-height:1.45}
+.msg .who{font-size:10.5px;font-weight:700;margin-bottom:3px;color:var(--coral)}
+.msg.them{background:#fff;border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:5px}
+.msg.me{background:var(--ink2);color:#fff;align-self:flex-end;border-bottom-right-radius:5px}
+.msg .rep{display:block;margin-top:5px;font-size:10.5px;color:var(--muted);text-decoration:underline}
+.chatbar{display:flex;gap:9px;padding:12px 14px;border-top:1px solid var(--line);background:#fff}
+.chatbar input{flex:1;border:1px solid var(--line);border-radius:99px;padding:11px 16px;background:var(--cream);font-size:14px}
+.chatbar button{width:42px;height:42px;border-radius:50%;background:var(--coral);color:#fff;flex:none;display:flex;align-items:center;justify-content:center}
+.chatbar button svg{width:17px;height:17px;stroke:#fff}
+.convo-item{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px;text-align:left;width:100%}
+.convo-item .thumb{width:48px;height:48px;border-radius:12px;object-fit:cover;flex:none}
+.convo-item .txt{flex:1;min-width:0}
+.convo-item b{font-size:13.5px;display:block}
+.convo-item p{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- mes activités ---------- */
+.myact-head{display:flex;align-items:center;gap:12px;padding:6px 0 18px}
+.myact-head .av{width:48px;height:48px;border-radius:50%;font-size:17px}
+.myact-sec{display:flex;align-items:center;margin-bottom:12px}
+.myact-sec h3{font-size:16px;display:flex;align-items:center;gap:8px}
+.myact-sec .n{background:var(--coral);color:#fff;font-size:10.5px;font-weight:700;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.myact-sec .link{margin-left:auto;font-size:12px;font-weight:700;color:var(--coral)}
+.mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px}
+.mini-card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.mini-card img{height:70px;width:100%;object-fit:cover}
+.mini-card .b{padding:9px 10px}
+.mini-card .badge{position:relative;top:-58px;left:8px;display:inline-block;font-size:9px;font-weight:800;color:#fff;padding:3px 8px;border-radius:99px}
+.mini-card b{font-size:12px;display:block;margin-bottom:3px}
+.mini-card .meta{font-size:10.5px;color:var(--muted)}
+.row-card{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:10px;text-align:left;width:100%}
+.row-card img{width:52px;height:52px;border-radius:12px;object-fit:cover;flex:none}
+.row-card .txt{flex:1;min-width:0}
+.row-card b{font-size:13px;display:block;margin-bottom:2px}
+.row-card .meta{font-size:11px;color:var(--muted)}
+
+/* ---------- profil ---------- */
+.prof{padding:20px 20px 100px}
+.idcard{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:16px}
+.idcard .av{width:52px;height:52px;font-size:18px}
+.setline{display:flex;justify-content:space-between;align-items:center;padding:13px 2px;border-bottom:1px solid var(--line);font-size:13.5px}
+.setline:last-child{border:none}
+.link-danger{font-size:12.5px;color:var(--coral-d);font-weight:700}
+
+/* ---------- tips ---------- */
+.tip{background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px 16px;margin-bottom:12px}
+.tip h4{font-size:15.5px;margin:5px 0 6px}
+.tip p{font-size:12.5px;line-height:1.55;color:var(--ink)}
+.tip .by{font-size:11px;color:var(--muted);margin-top:9px;display:flex;justify-content:space-between}
+
+/* ---------- safety notice ---------- */
+.safety{display:flex;gap:10px;align-items:flex-start;background:var(--green-bg);border-radius:14px;padding:12px 14px;margin:4px 0 14px;font-size:11px;line-height:1.5;color:#175A3C}
+.safety svg{width:16px;height:16px;stroke:var(--green);flex:none;margin-top:1px}
+.safety .more{color:var(--blue);font-weight:700;white-space:nowrap}
+
+/* ---------- toast / modal ---------- */
+#toasthost{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:250;width:min(380px,calc(100% - 32px))}
+.toast{background:var(--ink);color:#fff;border-radius:14px;padding:13px 16px;font-size:13px;line-height:1.45;box-shadow:var(--shadow-lg);animation:up .25s ease;display:flex;gap:10px;align-items:flex-start}
+.toast .ic{color:var(--coral);flex:none;margin-top:1px}
+@keyframes up{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,20,35,.6);display:flex;align-items:center;justify-content:center;padding:22px;z-index:200}
+.modal-card{background:#fff;border-radius:20px;max-width:380px;width:100%;padding:22px;box-shadow:var(--shadow-lg);max-height:86vh;overflow-y:auto;animation:up .2s ease}
+.modal-card h3{font-size:19px;margin-bottom:4px}
+
+/* ---------- dashboard (directeur) ---------- */
+.dash-shell{width:100%;max-width:1320px;background:var(--cream);border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);display:flex;min-height:760px;max-height:calc(100vh - 90px)}
+.sidebar{width:236px;flex:none;background:var(--sidebar);color:#fff;display:flex;flex-direction:column;padding:20px 16px}
+.sidebar .slogo{font-family:'Baloo 2',sans-serif;font-weight:700;font-size:21px;padding:4px 8px 18px}
+.sidebar .slogo span{color:var(--coral)}
+.sidebar .scamp{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.06);border-radius:14px;padding:10px;margin-bottom:18px}
+.sidebar .scamp img{width:38px;height:38px;border-radius:10px;object-fit:cover}
+.sidebar .scamp b{font-size:12px;display:block}
+.sidebar .scamp .stars{color:var(--amber-solid);font-size:10px}
+.snav{display:flex;flex-direction:column;gap:2px;flex:1}
+.snav button{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;font-size:13px;font-weight:600;color:rgba(255,255,255,.65);text-align:left}
+.snav button svg{width:18px;height:18px;stroke:currentColor;flex:none}
+.snav button.on{background:var(--purple);color:#fff}
+.shelp{background:rgba(255,255,255,.06);border-radius:14px;padding:12px;font-size:11.5px;color:rgba(255,255,255,.75);margin-bottom:14px}
+.shelp b{display:block;color:#fff;font-size:12px;margin-bottom:2px}
+.suser{display:flex;align-items:center;gap:10px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)}
+.suser .av{width:36px;height:36px;font-size:13px}
+.suser b{font-size:12.5px;display:block}
+.suser span{font-size:10.5px;color:rgba(255,255,255,.5)}
+.dash-main{flex:1;overflow-y:auto;padding:26px 30px 40px;min-width:0}
+.dash-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:22px}
+.dash-top h1{font-size:24px}
+.dash-top p{font-size:13px;color:var(--muted);margin-top:2px}
+.dsel{display:flex;gap:10px}
+.dsel button{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 14px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.occ-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--amber-bg);border:1px solid rgba(184,121,30,.25);border-radius:16px;padding:14px 18px;margin-bottom:20px;flex-wrap:wrap}
+.occ-banner b{font-size:13px;display:block}
+.occ-banner p{font-size:11.5px;color:#7A5A1E;margin-top:2px}
+.occ-banner .in{display:flex;gap:8px;align-items:center}
+.occ-banner input{width:80px;padding:9px 10px;border-radius:10px;border:1px solid var(--line)}
+.sectitle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;letter-spacing:.03em;margin:0 0 12px;color:var(--ink2)}
+.sectitle svg{width:16px;height:16px}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:22px}
+.kpi2{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px}
+.kpi2 .top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.kpi2 b.num{font-family:'Baloo 2',sans-serif;font-size:26px;display:block}
+.kpi2 .lbl{font-size:11.5px;font-weight:700;color:var(--ink)}
+.kpi2 .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.spark{margin-top:8px;height:26px}
+.dgrid3{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:16px;margin-bottom:20px}
+.dgrid2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:20px}
+@media(max-width:980px){.dgrid3,.dgrid2{grid-template-columns:1fr}}
+.dpanel2{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px}
+.dpanel2 h3{font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.stat-line{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.stat-line:last-child{border:none}
+.stat-line b.num{font-family:'Baloo 2',sans-serif;font-size:22px;min-width:52px}
+.stat-line .lbl{font-size:12.5px;font-weight:600}
+.stat-line .sub{font-size:11px;color:var(--muted)}
+.donut-wrap{display:flex;align-items:center;gap:18px}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px}
+.legend-item i{width:9px;height:9px;border-radius:50%;flex:none}
+.leader{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px}
+.leader .rank{width:20px;font-weight:800;color:var(--muted)}
+.leader .track{flex:1;height:8px;background:var(--cream);border-radius:5px;overflow:hidden}
+.leader .track i{display:block;height:100%;background:var(--purple);border-radius:5px}
+.leader .pct{width:38px;text-align:right;font-weight:700}
+.hbar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px}
+.hbar-row .lbl{width:120px;flex:none;font-weight:600}
+.hbar-row .track{flex:1;height:9px;background:var(--cream);border-radius:5px;overflow:hidden}
+.hbar-row .track i{display:block;height:100%;border-radius:5px}
+.hbar-row .val{width:36px;text-align:right;font-weight:700}
+.partner-card{border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+.partner-card img{width:100%;height:64px;object-fit:cover;border-radius:10px;margin-bottom:8px}
+.partner-card b{font-size:12.5px;display:block}
+.partner-card .amt{font-family:'Baloo 2',sans-serif;font-size:18px;color:var(--purple);display:block;margin:4px 0 2px}
+.partner-card .sub{font-size:10.5px;color:var(--muted)}
+.impact-total{background:var(--purple-bg);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap;gap:8px}
+.impact-total b{font-family:'Baloo 2',sans-serif;font-size:20px;color:var(--purple)}
+.benefit-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.benefit-item{display:flex;gap:10px;align-items:flex-start}
+.benefit-item b{font-size:13px;display:block}
+.benefit-item span{font-size:11px;color:var(--muted)}
+.dtable{width:100%;border-collapse:collapse;font-size:12.5px}
+.dtable th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:0 10px 10px;font-weight:700}
+.dtable td{padding:10px;border-top:1px solid var(--line);vertical-align:middle}
+.dtable .actrow{display:flex;align-items:center;gap:10px}
+.dtable .actrow img{width:38px;height:38px;border-radius:10px;object-fit:cover;flex:none}
+.dtable .actrow b{font-size:12.5px;display:block}
+.dtable .actrow span{font-size:10.5px;color:var(--muted)}
+.status-pill{font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap}
+.fillbar{width:90px;height:7px;background:var(--cream);border-radius:5px;overflow:hidden;display:inline-block;margin-right:8px;vertical-align:middle}
+.fillbar i{display:block;height:100%;border-radius:5px}
+.watch-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.watch-item:last-child{border:none}
+.watch-item .n{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}
+.quick-item{display:flex;align-items:center;gap:10px;padding:10px 4px;border-radius:10px;font-size:12.5px;font-weight:600}
+.mod-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.mod-row:last-child{border:none}
+.mod-row.resolved{opacity:.5}
+.mod-row .resolve{font-size:11px;font-weight:700;color:var(--green-solid);white-space:nowrap;flex:none}
+.trend{display:flex;gap:14px;align-items:flex-end;padding:8px 2px 0;overflow-x:auto}
+.trend .tbar{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;font-size:10.5px;color:var(--muted)}
+.trend .tbar-col{height:74px;display:flex;align-items:flex-end}
+.trend .tbar-col i{display:block;width:24px;border-radius:6px 6px 0 0}
+.quick-item:hover{background:var(--cream)}
+.quick-item svg{width:16px;height:16px;stroke:var(--purple)}
+.linechart-wrap{position:relative}
+.tooltip-bubble{position:absolute;background:var(--ink);color:#fff;font-size:11px;border-radius:10px;padding:8px 10px;transform:translate(-50%,-118%);white-space:nowrap;box-shadow:var(--shadow)}
+.searchbar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 13px;flex:1;max-width:280px}
+.searchbar svg{width:15px;height:15px;stroke:var(--muted)}
+.searchbar input{border:none;background:none;flex:1;font-size:12.5px}
+.dtabs{display:flex;gap:6px;margin-bottom:16px}
+.dtabs button{padding:9px 14px;border-radius:10px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.dtabs button.on{background:var(--purple-bg);color:var(--purple)}
+.qr-card2{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.qr-visual2{width:150px;height:150px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px;flex:none}
+.qr-visual2 svg{width:100%;height:100%}
+.qr-code2{font-family:'Baloo 2',sans-serif;font-size:19px;margin:6px 0}
+.stub-page{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 20px;color:var(--muted)}
+.stub-page .ic{width:64px;height:64px;border-radius:50%;background:var(--purple-bg);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.stub-page .ic svg{width:28px;height:28px;stroke:var(--purple)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<div class="demo-bar" role="toolbar" aria-label="Contrôles de démonstration">
+  <span class="tag">côté<span>a</span></span>
+  <span class="sep">·</span>
+  <span>Prototype</span>
+  <span class="sep">·</span>
+  <div class="seg" role="group" aria-label="Rôle">
+    <button id="segVoy" class="on" onclick="setRole('voy')">Voyageur</button>
+    <button id="segDir" onclick="setRole('dir')">Directeur</button>
+  </div>
+  <button class="ghost" onclick="resetDemo()">Réinitialiser</button>
+</div>
+
+<div class="stage">
+  <div class="phone" id="phone">
+    <div class="screen" id="screen"></div>
+    <div id="tabbar"></div>
+  </div>
+  <div class="dash-shell" id="dash" hidden></div>
+</div>
+<div id="toasthost"></div>
+<div id="modalHost"></div>
+
+<script>
+/* ============================================================
+   CÔTÉA — Prototype
+   Parcours voyageur + tableau de bord directeur
+   Données en mémoire (localStorage) — démonstrateur UX/métier
+   ============================================================ */
+const $=id=>document.getElementById(id);
+function daysFrom(n){const d=new Date();d.setDate(d.getDate()+n);d.setHours(0,0,0,0);return d;}
+function iso(d){return d.toISOString().slice(0,10);}
+function fmtDate(s){
+  const d=new Date(s+"T00:00:00");const today=iso(daysFrom(0)),tmr=iso(daysFrom(1));
+  if(s===today)return"Aujourd'hui";if(s===tmr)return"Demain";
+  return d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ============================================================
+   QR Code Generator for JavaScript — Kazuhiko Arase (2009)
+   MIT license: http://www.opensource.org/licenses/mit-license.php
+   https://github.com/kazuhikoarase/qrcode-generator
+   (bundled, minified — keeps Côtéa a single portable offline file)
+   ============================================================ */
+var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],f={},c=function(t,r){o=function(t){for(var r=new Array(t),e=0;e<t;e+=1){r[e]=new Array(t);for(var n=0;n<t;n+=1)r[e][n]=null}return r}(i=4*e+17),l(0,0),l(i-7,0),l(0,i-7),s(),h(),d(t,r),e>=7&&v(t),null==a&&(a=p(e,n,u)),w(a,r)},l=function(t,r){for(var e=-1;e<=7;e+=1)if(!(t+e<=-1||i<=t+e))for(var n=-1;n<=7;n+=1)r+n<=-1||i<=r+n||(o[t+e][r+n]=0<=e&&e<=6&&(0==n||6==n)||0<=n&&n<=6&&(0==e||6==e)||2<=e&&e<=4&&2<=n&&n<=4)},h=function(){for(var t=8;t<i-8;t+=1)null==o[t][6]&&(o[t][6]=t%2==0);for(var r=8;r<i-8;r+=1)null==o[6][r]&&(o[6][r]=r%2==0)},s=function(){for(var t=B.getPatternPosition(e),r=0;r<t.length;r+=1)for(var n=0;n<t.length;n+=1){var i=t[r],a=t[n];if(null==o[i][a])for(var u=-2;u<=2;u+=1)for(var f=-2;f<=2;f+=1)o[i+u][a+f]=-2==u||2==u||-2==f||2==f||0==u&&0==f}},v=function(t){for(var r=B.getBCHTypeNumber(e),n=0;n<18;n+=1){var a=!t&&1==(r>>n&1);o[Math.floor(n/3)][n%3+i-8-3]=a}for(n=0;n<18;n+=1){a=!t&&1==(r>>n&1);o[n%3+i-8-3][Math.floor(n/3)]=a}},d=function(t,r){for(var e=n<<3|r,a=B.getBCHTypeInfo(e),u=0;u<15;u+=1){var f=!t&&1==(a>>u&1);u<6?o[u][8]=f:u<8?o[u+1][8]=f:o[i-15+u][8]=f}for(u=0;u<15;u+=1){f=!t&&1==(a>>u&1);u<8?o[8][i-u-1]=f:u<9?o[8][15-u-1+1]=f:o[8][15-u-1]=f}o[i-8][8]=!t},w=function(t,r){for(var e=-1,n=i-1,a=7,u=0,f=B.getMaskFunction(r),c=i-1;c>0;c-=2)for(6==c&&(c-=1);;){for(var g=0;g<2;g+=1)if(null==o[n][c-g]){var l=!1;u<t.length&&(l=1==(t[u]>>>a&1)),f(n,c-g)&&(l=!l),o[n][c-g]=l,-1==(a-=1)&&(u+=1,a=7)}if((n+=e)<0||i<=n){n-=e,e=-e;break}}},p=function(t,r,e){for(var n=A.getRSBlocks(t,r),o=b(),i=0;i<e.length;i+=1){var a=e[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var u=0;for(i=0;i<n.length;i+=1)u+=n[i].dataCount;if(o.getLengthInBits()>8*u)throw"code length overflow. ("+o.getLengthInBits()+">"+8*u+")";for(o.getLengthInBits()+4<=8*u&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=8*u||(o.put(236,8),o.getLengthInBits()>=8*u));)o.put(17,8);return function(t,r){for(var e=0,n=0,o=0,i=new Array(r.length),a=new Array(r.length),u=0;u<r.length;u+=1){var f=r[u].dataCount,c=r[u].totalCount-f;n=Math.max(n,f),o=Math.max(o,c),i[u]=new Array(f);for(var g=0;g<i[u].length;g+=1)i[u][g]=255&t.getBuffer()[g+e];e+=f;var l=B.getErrorCorrectPolynomial(c),h=k(i[u],l.getLength()-1).mod(l);for(a[u]=new Array(l.getLength()-1),g=0;g<a[u].length;g+=1){var s=g+h.getLength()-a[u].length;a[u][g]=s>=0?h.getAt(s):0}}var v=0;for(g=0;g<r.length;g+=1)v+=r[g].totalCount;var d=new Array(v),w=0;for(g=0;g<n;g+=1)for(u=0;u<r.length;u+=1)g<i[u].length&&(d[w]=i[u][g],w+=1);for(g=0;g<o;g+=1)for(u=0;u<r.length;u+=1)g<a[u].length&&(d[w]=a[u][g],w+=1);return d}(o,n)};f.addData=function(t,r){var e=null;switch(r=r||"Byte"){case"Numeric":e=M(t);break;case"Alphanumeric":e=x(t);break;case"Byte":e=m(t);break;case"Kanji":e=L(t);break;default:throw"mode:"+r}u.push(e),a=null},f.isDark=function(t,r){if(t<0||i<=t||r<0||i<=r)throw t+","+r;return o[t][r]},f.getModuleCount=function(){return i},f.make=function(){if(e<1){for(var t=1;t<40;t++){for(var r=A.getRSBlocks(t,n),o=b(),i=0;i<u.length;i++){var a=u[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var g=0;for(i=0;i<r.length;i++)g+=r[i].dataCount;if(o.getLengthInBits()<=8*g)break}e=t}c(!1,function(){for(var t=0,r=0,e=0;e<8;e+=1){c(!0,e);var n=B.getLostPoint(f);(0==e||t>n)&&(t=n,r=e)}return r}())},f.createTableTag=function(t,r){t=t||2;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+(r=void 0===r?4*t:r)+"px;",e+='">',e+="<tbody>";for(var n=0;n<f.getModuleCount();n+=1){e+="<tr>";for(var o=0;o<f.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+t+"px;",e+=" height: "+t+"px;",e+=" background-color: ",e+=f.isDark(n,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>"},f.createSvgTag=function(t,r,e,n){var o={};"object"==typeof arguments[0]&&(t=(o=arguments[0]).cellSize,r=o.margin,e=o.alt,n=o.title),t=t||2,r=void 0===r?4*t:r,(e="string"==typeof e?{text:e}:e||{}).text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,(n="string"==typeof n?{text:n}:n||{}).text=n.text||null,n.id=n.text?n.id||"qrcode-title":null;var i,a,u,c,g=f.getModuleCount()*t+2*r,l="";for(c="l"+t+",0 0,"+t+" -"+t+",0 0,-"+t+"z ",l+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',l+=o.scalable?"":' width="'+g+'px" height="'+g+'px"',l+=' viewBox="0 0 '+g+" "+g+'" ',l+=' preserveAspectRatio="xMinYMin meet"',l+=n.text||e.text?' role="img" aria-labelledby="'+y([n.id,e.id].join(" ").trim())+'"':"",l+=">",l+=n.text?'<title id="'+y(n.id)+'">'+y(n.text)+"</title>":"",l+=e.text?'<description id="'+y(e.id)+'">'+y(e.text)+"</description>":"",l+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',l+='<path d="',a=0;a<f.getModuleCount();a+=1)for(u=a*t+r,i=0;i<f.getModuleCount();i+=1)f.isDark(a,i)&&(l+="M"+(i*t+r)+","+u+c);return l+='" stroke="transparent" fill="black"/>',l+="</svg>"},f.createDataURL=function(t,r){t=t||2,r=void 0===r?4*t:r;var e=f.getModuleCount()*t+2*r,n=r,o=e-r;return I(e,e,function(r,e){if(n<=r&&r<o&&n<=e&&e<o){var i=Math.floor((r-n)/t),a=Math.floor((e-n)/t);return f.isDark(a,i)?0:1}return 1})},f.createImgTag=function(t,r,e){t=t||2,r=void 0===r?4*t:r;var n=f.getModuleCount()*t+2*r,o="";return o+="<img",o+=' src="',o+=f.createDataURL(t,r),o+='"',o+=' width="',o+=n,o+='"',o+=' height="',o+=n,o+='"',e&&(o+=' alt="',o+=y(e),o+='"'),o+="/>"};var y=function(t){for(var r="",e=0;e<t.length;e+=1){var n=t.charAt(e);switch(n){case"<":r+="&lt;";break;case">":r+="&gt;";break;case"&":r+="&amp;";break;case'"':r+="&quot;";break;default:r+=n}}return r};return f.createASCII=function(t,r){if((t=t||1)<2)return function(t){t=void 0===t?2:t;var r,e,n,o,i,a=1*f.getModuleCount()+2*t,u=t,c=a-t,g={"██":"█","█ ":"▀"," █":"▄","  ":" "},l={"██":"▀","█ ":"▀"," █":" ","  ":" "},h="";for(r=0;r<a;r+=2){for(n=Math.floor((r-u)/1),o=Math.floor((r+1-u)/1),e=0;e<a;e+=1)i="█",u<=e&&e<c&&u<=r&&r<c&&f.isDark(n,Math.floor((e-u)/1))&&(i=" "),u<=e&&e<c&&u<=r+1&&r+1<c&&f.isDark(o,Math.floor((e-u)/1))?i+=" ":i+="█",h+=t<1&&r+1>=c?l[i]:g[i];h+="\n"}return a%2&&t>0?h.substring(0,h.length-a-1)+Array(a+1).join("▀"):h.substring(0,h.length-1)}(r);t-=1,r=void 0===r?2*t:r;var e,n,o,i,a=f.getModuleCount()*t+2*r,u=r,c=a-r,g=Array(t+1).join("██"),l=Array(t+1).join("  "),h="",s="";for(e=0;e<a;e+=1){for(o=Math.floor((e-u)/t),s="",n=0;n<a;n+=1)i=1,u<=n&&n<c&&u<=e&&e<c&&f.isDark(o,Math.floor((n-u)/t))&&(i=0),s+=i?g:l;for(o=0;o<t;o+=1)h+=s+"\n"}return h.substring(0,h.length-1)},f.renderTo2dContext=function(t,r){r=r||2;for(var e=f.getModuleCount(),n=0;n<e;n++)for(var o=0;o<e;o++)t.fillStyle=f.isDark(n,o)?"black":"white",t.fillRect(o*r,n*r,r,r)},f};t.stringToBytes=(t.stringToBytesFuncs={default:function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);r.push(255&n)}return r}}).default,t.createStringToBytes=function(t,r){var e=function(){for(var e=S(t),n=function(){var t=e.read();if(-1==t)throw"eof";return t},o=0,i={};;){var a=e.read();if(-1==a)break;var u=n(),f=n()<<8|n();i[String.fromCharCode(a<<8|u)]=f,o+=1}if(o!=r)throw o+" != "+r;return i}(),n="?".charCodeAt(0);return function(t){for(var r=[],o=0;o<t.length;o+=1){var i=t.charCodeAt(o);if(i<128)r.push(i);else{var a=e[t.charAt(o)];"number"==typeof a?(255&a)==a?r.push(a):(r.push(a>>>8),r.push(255&a)):r.push(n)}}return r}};var r,e,n,o,i,a=1,u=2,f=4,c=8,g={L:1,M:0,Q:3,H:2},l=0,h=1,s=2,v=3,d=4,w=5,p=6,y=7,B=(r=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],e=1335,n=7973,i=function(t){for(var r=0;0!=t;)r+=1,t>>>=1;return r},(o={}).getBCHTypeInfo=function(t){for(var r=t<<10;i(r)-i(e)>=0;)r^=e<<i(r)-i(e);return 21522^(t<<10|r)},o.getBCHTypeNumber=function(t){for(var r=t<<12;i(r)-i(n)>=0;)r^=n<<i(r)-i(n);return t<<12|r},o.getPatternPosition=function(t){return r[t-1]},o.getMaskFunction=function(t){switch(t){case l:return function(t,r){return(t+r)%2==0};case h:return function(t,r){return t%2==0};case s:return function(t,r){return r%3==0};case v:return function(t,r){return(t+r)%3==0};case d:return function(t,r){return(Math.floor(t/2)+Math.floor(r/3))%2==0};case w:return function(t,r){return t*r%2+t*r%3==0};case p:return function(t,r){return(t*r%2+t*r%3)%2==0};case y:return function(t,r){return(t*r%3+(t+r)%2)%2==0};default:throw"bad maskPattern:"+t}},o.getErrorCorrectPolynomial=function(t){for(var r=k([1],0),e=0;e<t;e+=1)r=r.multiply(k([1,C.gexp(e)],0));return r},o.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case a:return 10;case u:return 9;case f:case c:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case a:return 12;case u:return 11;case f:return 16;case c:return 10;default:throw"mode:"+t}else{if(!(r<41))throw"type:"+r;switch(t){case a:return 14;case u:return 13;case f:return 16;case c:return 12;default:throw"mode:"+t}}},o.getLostPoint=function(t){for(var r=t.getModuleCount(),e=0,n=0;n<r;n+=1)for(var o=0;o<r;o+=1){for(var i=0,a=t.isDark(n,o),u=-1;u<=1;u+=1)if(!(n+u<0||r<=n+u))for(var f=-1;f<=1;f+=1)o+f<0||r<=o+f||0==u&&0==f||a==t.isDark(n+u,o+f)&&(i+=1);i>5&&(e+=3+i-5)}for(n=0;n<r-1;n+=1)for(o=0;o<r-1;o+=1){var c=0;t.isDark(n,o)&&(c+=1),t.isDark(n+1,o)&&(c+=1),t.isDark(n,o+1)&&(c+=1),t.isDark(n+1,o+1)&&(c+=1),0!=c&&4!=c||(e+=3)}for(n=0;n<r;n+=1)for(o=0;o<r-6;o+=1)t.isDark(n,o)&&!t.isDark(n,o+1)&&t.isDark(n,o+2)&&t.isDark(n,o+3)&&t.isDark(n,o+4)&&!t.isDark(n,o+5)&&t.isDark(n,o+6)&&(e+=40);for(o=0;o<r;o+=1)for(n=0;n<r-6;n+=1)t.isDark(n,o)&&!t.isDark(n+1,o)&&t.isDark(n+2,o)&&t.isDark(n+3,o)&&t.isDark(n+4,o)&&!t.isDark(n+5,o)&&t.isDark(n+6,o)&&(e+=40);var g=0;for(o=0;o<r;o+=1)for(n=0;n<r;n+=1)t.isDark(n,o)&&(g+=1);return e+=Math.abs(100*g/r/r-50)/5*10},o),C=function(){for(var t=new Array(256),r=new Array(256),e=0;e<8;e+=1)t[e]=1<<e;for(e=8;e<256;e+=1)t[e]=t[e-4]^t[e-5]^t[e-6]^t[e-8];for(e=0;e<255;e+=1)r[t[e]]=e;var n={glog:function(t){if(t<1)throw"glog("+t+")";return r[t]},gexp:function(r){for(;r<0;)r+=255;for(;r>=256;)r-=255;return t[r]}};return n}();function k(t,r){if(void 0===t.length)throw t.length+"/"+r;var e=function(){for(var e=0;e<t.length&&0==t[e];)e+=1;for(var n=new Array(t.length-e+r),o=0;o<t.length-e;o+=1)n[o]=t[o+e];return n}(),n={getAt:function(t){return e[t]},getLength:function(){return e.length},multiply:function(t){for(var r=new Array(n.getLength()+t.getLength()-1),e=0;e<n.getLength();e+=1)for(var o=0;o<t.getLength();o+=1)r[e+o]^=C.gexp(C.glog(n.getAt(e))+C.glog(t.getAt(o)));return k(r,0)},mod:function(t){if(n.getLength()-t.getLength()<0)return n;for(var r=C.glog(n.getAt(0))-C.glog(t.getAt(0)),e=new Array(n.getLength()),o=0;o<n.getLength();o+=1)e[o]=n.getAt(o);for(o=0;o<t.getLength();o+=1)e[o]^=C.gexp(C.glog(t.getAt(o))+r);return k(e,0).mod(t)}};return n}var A=function(){var t=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],r=function(t,r){var e={};return e.totalCount=t,e.dataCount=r,e},e={};return e.getRSBlocks=function(e,n){var o=function(r,e){switch(e){case g.L:return t[4*(r-1)+0];case g.M:return t[4*(r-1)+1];case g.Q:return t[4*(r-1)+2];case g.H:return t[4*(r-1)+3];default:return}}(e,n);if(void 0===o)throw"bad rs block @ typeNumber:"+e+"/errorCorrectionLevel:"+n;for(var i=o.length/3,a=[],u=0;u<i;u+=1)for(var f=o[3*u+0],c=o[3*u+1],l=o[3*u+2],h=0;h<f;h+=1)a.push(r(c,l));return a},e}(),b=function(){var t=[],r=0,e={getBuffer:function(){return t},getAt:function(r){var e=Math.floor(r/8);return 1==(t[e]>>>7-r%8&1)},put:function(t,r){for(var n=0;n<r;n+=1)e.putBit(1==(t>>>r-n-1&1))},getLengthInBits:function(){return r},putBit:function(e){var n=Math.floor(r/8);t.length<=n&&t.push(0),e&&(t[n]|=128>>>r%8),r+=1}};return e},M=function(t){var r=a,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+2<r.length;)t.put(o(r.substring(n,n+3)),10),n+=3;n<r.length&&(r.length-n==1?t.put(o(r.substring(n,n+1)),4):r.length-n==2&&t.put(o(r.substring(n,n+2)),7))}},o=function(t){for(var r=0,e=0;e<t.length;e+=1)r=10*r+i(t.charAt(e));return r},i=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);throw"illegal char :"+t};return n},x=function(t){var r=u,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+1<r.length;)t.put(45*o(r.charAt(n))+o(r.charAt(n+1)),11),n+=2;n<r.length&&t.put(o(r.charAt(n)),6)}},o=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);if("A"<=t&&t<="Z")return t.charCodeAt(0)-"A".charCodeAt(0)+10;switch(t){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+t}};return n},m=function(r){var e=f,n=t.stringToBytes(r),o={getMode:function(){return e},getLength:function(t){return n.length},write:function(t){for(var r=0;r<n.length;r+=1)t.put(n[r],8)}};return o},L=function(r){var e=c,n=t.stringToBytesFuncs.SJIS;if(!n)throw"sjis not supported.";!function(){var t=n("友");if(2!=t.length||38726!=(t[0]<<8|t[1]))throw"sjis not supported."}();var o=n(r),i={getMode:function(){return e},getLength:function(t){return~~(o.length/2)},write:function(t){for(var r=o,e=0;e+1<r.length;){var n=(255&r[e])<<8|255&r[e+1];if(33088<=n&&n<=40956)n-=33088;else{if(!(57408<=n&&n<=60351))throw"illegal char at "+(e+1)+"/"+n;n-=49472}n=192*(n>>>8&255)+(255&n),t.put(n,13),e+=2}if(e<r.length)throw"illegal char at "+(e+1)}};return i},D=function(){var t=[],r={writeByte:function(r){t.push(255&r)},writeShort:function(t){r.writeByte(t),r.writeByte(t>>>8)},writeBytes:function(t,e,n){e=e||0,n=n||t.length;for(var o=0;o<n;o+=1)r.writeByte(t[o+e])},writeString:function(t){for(var e=0;e<t.length;e+=1)r.writeByte(t.charCodeAt(e))},toByteArray:function(){return t},toString:function(){var r="";r+="[";for(var e=0;e<t.length;e+=1)e>0&&(r+=","),r+=t[e];return r+="]"}};return r},S=function(t){var r=t,e=0,n=0,o=0,i={read:function(){for(;o<8;){if(e>=r.length){if(0==o)return-1;throw"unexpected end of file./"+o}var t=r.charAt(e);if(e+=1,"="==t)return o=0,-1;t.match(/^\s$/)||(n=n<<6|a(t.charCodeAt(0)),o+=6)}var i=n>>>o-8&255;return o-=8,i}},a=function(t){if(65<=t&&t<=90)return t-65;if(97<=t&&t<=122)return t-97+26;if(48<=t&&t<=57)return t-48+52;if(43==t)return 62;if(47==t)return 63;throw"c:"+t};return i},I=function(t,r,e){for(var n=function(t,r){var e=t,n=r,o=new Array(t*r),i={setPixel:function(t,r,n){o[r*e+t]=n},write:function(t){t.writeString("GIF87a"),t.writeShort(e),t.writeShort(n),t.writeByte(128),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(255),t.writeByte(255),t.writeByte(255),t.writeString(","),t.writeShort(0),t.writeShort(0),t.writeShort(e),t.writeShort(n),t.writeByte(0);var r=a(2);t.writeByte(2);for(var o=0;r.length-o>255;)t.writeByte(255),t.writeBytes(r,o,255),o+=255;t.writeByte(r.length-o),t.writeBytes(r,o,r.length-o),t.writeByte(0),t.writeString(";")}},a=function(t){for(var r=1<<t,e=1+(1<<t),n=t+1,i=u(),a=0;a<r;a+=1)i.add(String.fromCharCode(a));i.add(String.fromCharCode(r)),i.add(String.fromCharCode(e));var f,c,g,l=D(),h=(f=l,c=0,g=0,{write:function(t,r){if(t>>>r!=0)throw"length over";for(;c+r>=8;)f.writeByte(255&(t<<c|g)),r-=8-c,t>>>=8-c,g=0,c=0;g|=t<<c,c+=r},flush:function(){c>0&&f.writeByte(g)}});h.write(r,n);var s=0,v=String.fromCharCode(o[s]);for(s+=1;s<o.length;){var d=String.fromCharCode(o[s]);s+=1,i.contains(v+d)?v+=d:(h.write(i.indexOf(v),n),i.size()<4095&&(i.size()==1<<n&&(n+=1),i.add(v+d)),v=d)}return h.write(i.indexOf(v),n),h.write(e,n),h.flush(),l.toByteArray()},u=function(){var t={},r=0,e={add:function(n){if(e.contains(n))throw"dup key:"+n;t[n]=r,r+=1},size:function(){return r},indexOf:function(r){return t[r]},contains:function(r){return void 0!==t[r]}};return e};return i}(t,r),o=0;o<r;o+=1)for(var i=0;i<t;i+=1)n.setPixel(i,o,e(i,o));var a=D();n.write(a);for(var u=function(){var t=0,r=0,e=0,n="",o={},i=function(t){n+=String.fromCharCode(a(63&t))},a=function(t){if(t<0);else{if(t<26)return 65+t;if(t<52)return t-26+97;if(t<62)return t-52+48;if(62==t)return 43;if(63==t)return 47}throw"n:"+t};return o.writeByte=function(n){for(t=t<<8|255&n,r+=8,e+=1;r>=6;)i(t>>>r-6),r-=6},o.flush=function(){if(r>0&&(i(t<<6-r),t=0,r=0),e%3!=0)for(var o=3-e%3,a=0;a<o;a+=1)n+="="},o.toString=function(){return n},o}(),f=a.toByteArray(),c=0;c<f.length;c+=1)u.writeByte(f[c]);return u.flush(),"data:image/gif;base64,"+u};return t}();qrcode.stringToBytesFuncs["UTF-8"]=function(t){return function(t){for(var r=[],e=0;e<t.length;e++){var n=t.charCodeAt(e);n<128?r.push(n):n<2048?r.push(192|n>>6,128|63&n):n<55296||n>=57344?r.push(224|n>>12,128|n>>6&63,128|63&n):(e++,n=65536+((1023&n)<<10|1023&t.charCodeAt(e)),r.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|63&n))}return r}(t)},function(t){"function"==typeof define&&define.amd?define([],t):"object"==typeof exports&&(module.exports=t())}(function(){return qrcode});
+
+/* ---------- Établissement ---------- */
+const EST={name:"Domaine des Pins",place:"Saint-Jean-de-Monts",type:"camping",stayStart:daysFrom(0),stayEnd:daysFrom(7),joinCode:"PINS-2607"};
+EST.joinUrl=()=>`https://cotea.app/j?etab=domaine-des-pins&code=${encodeURIComponent(EST.joinCode)}`;
+
+/* ---------- Icônes SVG (outline, 24x24) ---------- */
+const IC={
+  run:'<path d="M13 4a2 2 0 1 0 .1 0M6 20l4-6 3 2 1 5M8 12l3-3 4 2 3-1" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  boat:'<path d="M4 17h16l-2 3H6zM12 4v11M12 5c4 1 6 4 6 8M12 15H6c0-5 3-9 6-10z" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  sun:'<circle cx="12" cy="12" r="4.2" fill="none" stroke-width="1.8"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7" stroke-width="1.7" stroke-linecap="round"/>',
+  dice:'<rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>',
+  bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.2 1 2.1h5c0-.9.4-1.7 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  photo:'<rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke-width="1.7"/><circle cx="8.5" cy="10" r="1.6" fill="none" stroke-width="1.6"/><path d="M3 16l5-4 4 3 3-2.5 6 5" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  cal:'<rect x="4" y="5" width="16" height="16" rx="3" fill="none" stroke-width="1.7"/><path d="M4 10h16M8 3v4M16 3v4" stroke-width="1.7" stroke-linecap="round"/>',
+  clock:'<circle cx="12" cy="12" r="8.5" fill="none" stroke-width="1.6"/><path d="M12 7.5V12l3 2" fill="none" stroke-width="1.6" stroke-linecap="round"/>',
+  pin:'<path d="M12 21s-6.5-5.5-6.5-10.5a6.5 6.5 0 1 1 13 0C18.5 15.5 12 21 12 21z" fill="none" stroke-width="1.6"/><circle cx="12" cy="10.5" r="2.2" fill="none" stroke-width="1.6"/>',
+  user:'<circle cx="12" cy="8.5" r="3.5" fill="none" stroke-width="1.7"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" fill="none" stroke-width="1.7" stroke-linecap="round"/>',
+  users:'<circle cx="9" cy="9" r="3" fill="none" stroke-width="1.6"/><path d="M3.5 19c1-3 3-4.5 5.5-4.5s4.5 1.5 5.5 4.5M15.5 6.5a3 3 0 1 1 0 5.5M17 14.7c2 .5 3.2 1.9 4 4.3" fill="none" stroke-width="1.6" stroke-linecap="round"/>',
+  chat:'<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4z" fill="none" stroke-width="1.7" stroke-linejoin="round"/>',
+  send:'<path d="M4 12l16-7-5 16-3.5-6.5z" fill="none" stroke-width="1.7" stroke-linejoin="round"/>',
+  back:'<path d="M14 5l-7 7 7 7" fill="none" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  close:'<path d="M6 6l12 12M18 6L6 18" fill="none" stroke-width="2" stroke-linecap="round"/>',
+  play:'<circle cx="12" cy="12" r="9" fill="none" stroke-width="1.6"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/>',
+  chevR:'<path d="M9 5l7 7-7 7" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  heart:'<path d="M12 20s-7-4.4-9.3-8.8C1.2 8 2.6 4.7 6 4.1c2-.4 3.8.6 6 3 2.2-2.4 4-3.4 6-3 3.4.6 4.8 3.9 3.3 7.1C19 15.6 12 20 12 20z" fill="none" stroke-width="1.6" stroke-linejoin="round"/>',
+  share:'<path d="M12 3v12M8 7l4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  bookmark:'<path d="M6 4h12v16l-6-4-6 4z" fill="none" stroke-width="1.7" stroke-linejoin="round"/>',
+  bell:'<path d="M6 17v-5a6 6 0 0 1 12 0v5l1.5 2.5h-15z" fill="none" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 20a2 2 0 0 0 4 0" fill="none" stroke-width="1.6" stroke-linecap="round"/>',
+  plus:'<path d="M12 5v14M5 12h14" fill="none" stroke-width="2.2" stroke-linecap="round"/>',
+  search:'<circle cx="11" cy="11" r="6.5" fill="none" stroke-width="1.7"/><path d="M20 20l-4.5-4.5" stroke-width="1.7" stroke-linecap="round"/>',
+  sliders:'<path d="M4 7h10M17 7h3M4 17h3M9 17h11" stroke-width="1.7" stroke-linecap="round"/><circle cx="14" cy="7" r="2.2" fill="#fff" stroke-width="1.7"/><circle cx="7" cy="17" r="2.2" fill="#fff" stroke-width="1.7"/>',
+  eye:'<path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" fill="none" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke-width="1.6"/>',
+  eyeOff:'<path d="M3 3l18 18M10.6 5.6C11.06 5.5 11.5 5.5 12 5.5c6.5 0 10 6.5 10 6.5a15 15 0 0 1-3.2 4M6.5 7.8A15 15 0 0 0 2 12s3.5 6.5 10 6.5c1.3 0 2.5-.3 3.6-.7" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.9 10a3 3 0 0 0 4.2 4.2" fill="none" stroke-width="1.6"/>',
+  shield:'<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" fill="none" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  scan:'<path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2" fill="none" stroke-width="1.9" stroke-linecap="round"/><path d="M4 12h16" stroke-width="1.6" stroke-linecap="round"/>',
+  camera:'<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13.5" r="3.2" fill="none" stroke-width="1.6"/>',
+  globe:'<circle cx="12" cy="12" r="8.5" fill="none" stroke-width="1.6"/><path d="M3.5 12h17M12 3.5c2.5 2.5 2.5 14.5 0 17M12 3.5c-2.5 2.5-2.5 14.5 0 17" fill="none" stroke-width="1.5"/>',
+  fork:'<path d="M7 3v7m0 0v11M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M15 3c2.5 1 4 3.5 4 6.5 0 2-1 3.5-2.5 3.5V21" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  bike:'<circle cx="6" cy="17" r="3.2" fill="none" stroke-width="1.7"/><circle cx="18" cy="17" r="3.2" fill="none" stroke-width="1.7"/><path d="M6 17l4-8h5l3 8M10 9H8m2.5 0L15 14h3" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  paw:'<circle cx="7" cy="9" r="1.6" fill="none" stroke-width="1.5"/><circle cx="12" cy="6.5" r="1.6" fill="none" stroke-width="1.5"/><circle cx="17" cy="9" r="1.6" fill="none" stroke-width="1.5"/><path d="M12 12c-3 0-5 2-5 4.3 0 1.7 1.4 2.7 3 2.2 1-.3 1.4-.3 2-.3s1 .1 2 .3c1.6.5 3-.5 3-2.2 0-2.3-2-4.3-5-4.3z" fill="none" stroke-width="1.5" stroke-linejoin="round"/>',
+  basket:'<path d="M4 9h16l-1.5 10a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 9z" fill="none" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 9V7a4 4 0 0 1 8 0v2M10 13v4M14 13v4" fill="none" stroke-width="1.6" stroke-linecap="round"/>',
+  village:'<path d="M3 20h18M5 20V11l4-3 4 3v9M13 20v-6l3-2 3 2v6" fill="none" stroke-width="1.6" stroke-linejoin="round"/>',
+  cards:'<rect x="3" y="8" width="12" height="13" rx="2" transform="rotate(-8 9 14)" fill="none" stroke-width="1.5"/><rect x="7" y="6" width="12" height="15" rx="2" fill="none" stroke-width="1.6"/>',
+  palette:'<path d="M12 3a9 8.5 0 1 0 0 17c1.5 0 2-1 1.3-2.1-.5-.8 0-1.9 1-1.9H16a4 4 0 0 0 4-4c0-5-3.5-9-8-9z" fill="none" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="7.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="7.5" r="1.1" fill="currentColor" stroke="none"/>',
+  book:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v18H6.5A2.5 2.5 0 0 1 4 18.5z" fill="none" stroke-width="1.6" stroke-linejoin="round"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H12v18h5.5a2.5 2.5 0 0 0 2.5-2.5z" fill="none" stroke-width="1.6" stroke-linejoin="round"/>',
+  music:'<circle cx="7" cy="17.5" r="2.4" fill="none" stroke-width="1.6"/><circle cx="17" cy="15.5" r="2.4" fill="none" stroke-width="1.6"/><path d="M9.4 17.5V5.5L19.4 3v12" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  film:'<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke-width="1.6"/><path d="M7 5v14M17 5v14M3 9.5h4M17 9.5h4M3 14.5h4M17 14.5h4" stroke-width="1.5"/>',
+  dots:'<circle cx="6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
+  route:'<path d="M4 20l6-16 4 10 6-14" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="20" cy="4" r="1.4" fill="currentColor" stroke="none"/>',
+  info:'<circle cx="12" cy="12" r="9" fill="none" stroke-width="1.6"/><path d="M12 11v6M12 7.5v.1" stroke-width="2" stroke-linecap="round"/>',
+  star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.9z" fill="currentColor" stroke="none"/>',
+  grid:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.6" fill="none" stroke-width="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" fill="none" stroke-width="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6" fill="none" stroke-width="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6" fill="none" stroke-width="1.6"/>',
+  gear:'<circle cx="12" cy="12" r="3" fill="none" stroke-width="1.6"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18 6l-1.5 1.5M7.5 16.5L6 18M18 18l-1.5-1.5M7.5 7.5L6 6" stroke-width="1.6" stroke-linecap="round"/>',
+  bar:'<path d="M5 20V10M12 20V4M19 20v-7" stroke-width="2" stroke-linecap="round"/>',
+  handshake:'<path d="M2 12l4-3 4 2 3-2 3 2 4-2 2 3-3 5-3 2-3-2-3 2-3-2z" fill="none" stroke-width="1.5" stroke-linejoin="round"/>',
+  download:'<path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+};
+const svg=(n,cls="")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]||IC.sun}</svg>`;
+
+/* ---------- Catégories ---------- */
+const TOPCATS=[
+  {id:"sport",label:"Sport",icon:"run",color:"blue",cover:"assets/hero-sport.jpg?v=2",desc:"Toutes les activités sportives proposées par les voyageurs et par votre établissement."},
+  {id:"decouverte",label:"Découverte & Sortie",icon:"boat",color:"teal",cover:"assets/hero-decouverte.jpg?v=2",desc:"Partez à la découverte des alentours et vivez de belles expériences ensemble."},
+  {id:"moments",label:"Moments conviviaux",icon:"sun",color:"coral",cover:"assets/hero-moments.jpg?v=2",desc:"Partagez des instants chaleureux et créez de beaux souvenirs ensemble."},
+  {id:"loisirs",label:"Loisirs",icon:"dice",color:"purple",cover:"assets/hero-loisirs.jpg?v=2",desc:"Amusez-vous, partagez et créez de beaux souvenirs ensemble."}
+];
+const SUBCATS={
+  sport:[{id:"running",label:"Running",icon:"run"},{id:"rando",label:"Randonnée",icon:"route"},{id:"velo",label:"Vélo",icon:"bike"},{id:"petanque",label:"Pétanque",icon:"dice"},{id:"tennis",label:"Tennis",icon:"star"},{id:"paddle",label:"Paddle",icon:"boat"},{id:"autre",label:"Autre",icon:"dots"}],
+  decouverte:[{id:"bateau",label:"Excursion bateau",icon:"boat",color:"blue"},{id:"visite",label:"Visite",icon:"village",color:"purple"},{id:"plage",label:"Plage",icon:"sun",color:"orange"},{id:"chien",label:"Promenade chien",icon:"paw",color:"green"},{id:"veloD",label:"Balade à vélo",icon:"bike",color:"blue"},{id:"marche",label:"Marché",icon:"basket",color:"orange"},{id:"village",label:"Village",icon:"village",color:"pink"}],
+  loisirs:[{id:"cartes",label:"Jeux de cartes",icon:"cards",color:"purple"},{id:"societe",label:"Jeux de société",icon:"dice",color:"orange"},{id:"creatives",label:"Activités créatives",icon:"palette",color:"pink"},{id:"lecture",label:"Lecture & culture",icon:"book",color:"blue"},{id:"musique",label:"Musique",icon:"music",color:"amber"},{id:"cinema",label:"Cinéma",icon:"film",color:"navy"},{id:"autresL",label:"Autres loisirs",icon:"dots",color:"green"}],
+  moments:[{id:"barbecue",label:"Barbecue",icon:"sun",color:"orange"},{id:"soiree",label:"Soirée / Apéro",icon:"music",color:"purple"},{id:"restaurant",label:"Restaurant",icon:"fork",color:"green"},{id:"autreM",label:"Autre moment",icon:"users",color:"blue"}]
+};
+const catLabel=id=>{const t=TOPCATS.find(c=>c.id===id);if(t)return t.label;for(const k in SUBCATS){const s=SUBCATS[k].find(x=>x.id===id);if(s)return s.label;}return id;};
+const subcatOf=(top,sub)=>((SUBCATS[top]||[]).find(s=>s.id===sub)||{});
+const CATCOLORS={
+  blue:{bg:"var(--blue-bg)",fg:"var(--blue)",solid:"var(--blue)"},
+  teal:{bg:"var(--teal-bg)",fg:"var(--teal)",solid:"var(--teal)"},
+  coral:{bg:"var(--coral-bg)",fg:"var(--coral-d)",solid:"var(--coral)"},
+  purple:{bg:"var(--purple-bg)",fg:"var(--purple)",solid:"var(--purple)"},
+  amber:{bg:"var(--amber-bg)",fg:"var(--amber)",solid:"var(--amber-solid)"},
+  pink:{bg:"var(--pink-bg)",fg:"var(--pink)",solid:"var(--pink)"},
+  green:{bg:"var(--green-bg)",fg:"var(--green)",solid:"var(--green-solid)"},
+  navy:{bg:"var(--navy-bg)",fg:"var(--ink2)",solid:"var(--ink2)"},
+  orange:{bg:"var(--orange-bg)",fg:"var(--orange)",solid:"#F0904D"}
+};
+function colorOf(a){
+  const sc=subcatOf(a.topcat,a.subcat);
+  if(sc.color)return CATCOLORS[sc.color];
+  return CATCOLORS[(TOPCATS.find(t=>t.id===a.topcat)||{}).color]||CATCOLORS.blue;
+}
+const AVCOLORS=["#2D6FE0","#F0604D","#6C4FE0","#128A82","#E8A93B","#D34D82","#2FA36B"];
+function avatarColor(name){let h=0;for(let i=0;i<name.length;i++)h=name.charCodeAt(i)+((h<<5)-h);return AVCOLORS[Math.abs(h)%AVCOLORS.length];}
+function avatarEl(name,size,extraCls){
+  return `<span class="av ${extraCls||''}" style="width:${size}px;height:${size}px;border-radius:50%;background:${avatarColor(name)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none">${esc(name[0].toUpperCase())}</span>`;
+}
+
+/* ---------- Données seed ---------- */
+function A(o){return Object.assign({status:"ouverte",price:"Gratuit",aPrevoir:[],photo:null},o);}
+function m(who,text){return{who,text};}
+const CREATE_ICONS=[
+  {id:"running",label:"Running",icon:"run"},{id:"rando",label:"Randonnée",icon:"route"},
+  {id:"velo",label:"Vélo",icon:"bike"},{id:"petanque",label:"Pétanque",icon:"dice"},
+  {id:"tennis",label:"Tennis",icon:"star"},{id:"paddle",label:"Paddle",icon:"boat"},
+  {id:"barbecue",label:"Barbecue",icon:"sun"},{id:"autre",label:"Autre",icon:"dots"}
+];
+function seed(){
+  return {
+    user:null, role:"voy", tab:"home", screen:"landing",
+    onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, visDefault:"visible",
+    catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0,
+    dashPeriod:"week", dashPage:"tableau", dashActTab:"all", dashActSearch:"", prefillCode:null,
+    partners:[
+      {id:"pt1",name:"Cap Horizon Location",category:"Excursion bateau",bookings:18,revenue:2340,contact:"04 94 00 00 01"},
+      {id:"pt2",name:"Porquerolles Bike",category:"Location de vélos",bookings:12,revenue:780,contact:"04 94 00 00 02"},
+      {id:"pt3",name:"Kayak Méditerranée",category:"Sortie kayak",bookings:8,revenue:540,contact:"06 00 00 00 03"}
+    ],
+    announcements:[
+      {id:"an1",title:"Piscine fermée mardi matin",body:"Entretien annuel de 8h à 11h. Merci de votre compréhension !",at:Date.now()-1000*60*60*20}
+    ],
+    activities:[],
+    tips:[],
+    chats:{},
+    notifs:{push:true,rappels:true}
+  };
+}
+const PAST_EXPERIENCES=[
+  {id:"p1",topcat:"sport",title:"Running du sentier côtier",subcat:"running",distance:"8,2 km",duree:"48 min",denivele:"+120 m",by:"Julie",n:7,rating:4.8},
+  {id:"p2",topcat:"sport",title:"Randonnée des crêtes",subcat:"rando",distance:"12,4 km",duree:"3h10",denivele:"+540 m",by:"Thomas",n:12,rating:4.9},
+  {id:"p3",topcat:"sport",title:"Paddle au coucher du soleil",subcat:"paddle",distance:"6,1 km",duree:"1h30",denivele:"",by:"Maxime",n:9,rating:4.7},
+  {id:"p4",topcat:"sport",title:"Canyoning du vallon",subcat:"autre",distance:"2,8 km",duree:"2h00",denivele:"",by:"Laura",n:9,rating:4.6}
+];
+let S=seed();
+
+/* ---------- Supabase (backend réel, partagé entre tous les voyageurs) ---------- */
+const SB_URL="https://ileicboyfrmhxhqbywzw.supabase.co";
+const SB_KEY="sb_publishable_KcKpcDJYZp00irEfHfm0yw_m9Jhz3qe";
+const sb=window.supabase.createClient(SB_URL,SB_KEY);
+let UID=null;
+const DEFAULT_CODE="PINS-2607";
+
+function relTime(iso){
+  const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);
+  if(s<60)return "à l'instant";
+  if(s<3600)return `il y a ${Math.floor(s/60)} min`;
+  if(s<86400)return "il y a "+Math.floor(s/3600)+"h";
+  const d=Math.floor(s/86400);
+  if(d===1)return "hier";
+  return `il y a ${d} jours`;
+}
+function mapActivity(row){
+  return {
+    id:row.id,topcat:row.topcat,subcat:row.subcat,title:row.title,desc:row.description,
+    date:row.date,time:row.time,lieu:row.lieu,type:row.type,cap:row.cap,price:row.price,
+    status:row.status,stats:row.stats,aPrevoir:row.a_prevoir||[],photo:row.photo,
+    orga:row.orga_name,orgaId:row.orga_id,
+    parts:(row.activity_participants||[]).map(p=>p.user_name)
+  };
+}
+async function loadEstablishmentData(){
+  const {data:acts,error:e1}=await sb.from("activities").select("*, activity_participants(user_name)").eq("establishment_id",EST.id).order("date").order("time");
+  if(e1)console.error(e1);
+  S.activities=(acts||[]).map(mapActivity);
+  const {data:tps}=await sb.from("tips").select("*").eq("establishment_id",EST.id).order("created_at",{ascending:false});
+  S.tips=(tps||[]).map(t=>({id:t.id,title:t.title,body:t.body,by:`${t.user_name} · ${relTime(t.created_at)}`}));
+  const {data:reps}=await sb.from("reports").select("*").eq("establishment_id",EST.id).order("created_at",{ascending:false});
+  S.reports=(reps||[]).map(r=>({id:r.id,what:r.what,ref:r.ref,at:new Date(r.created_at).getTime(),resolved:r.resolved}));
+}
+function bootError(msg){
+  $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center;text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:18px;margin-bottom:8px">Connexion impossible</p><p class="small muted">${esc(msg)}</p><button class="btn btn-outline" style="margin-top:16px;max-width:220px" onclick="location.reload()">Réessayer</button></div>`;
+}
+async function boot(){
+  $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center"><p class="small muted">Connexion à la communauté…</p></div>`;
+  try{
+    let {data:{session}}=await sb.auth.getSession();
+    if(!session){
+      const {data,error}=await sb.auth.signInAnonymously();
+      if(error)return bootError("Connexion anonyme désactivée sur ce projet Supabase. Active-la dans Authentication > Sign In / Providers > Anonymous Sign-Ins.");
+      session=data.session;
+    }
+    UID=session.user.id;
+    const {data:prof}=await sb.from("profiles").select("*, establishments(*)").eq("id",UID).maybeSingle();
+    if(prof&&prof.establishments){
+      EST.id=prof.establishment_id;EST.name=prof.establishments.name;EST.place=prof.establishments.place;EST.joinCode=prof.establishments.join_code;
+      S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility};
+      S.screen="home";S.tab="home";
+      await loadEstablishmentData();
+    }else{
+      const p=new URLSearchParams(location.search);
+      const urlCode=p.get("code");
+      const code=(urlCode||DEFAULT_CODE).toUpperCase();
+      const {data:est}=await sb.from("establishments").select("*").eq("join_code",code).maybeSingle();
+      if(est){EST.id=est.id;EST.name=est.name;EST.place=est.place;EST.joinCode=est.join_code;S.prefillCode=urlCode?code:null;}
+      else return bootError("Établissement introuvable pour ce code. Vérifiez le lien ou le QR utilisé.");
+      S.screen="landing";
+    }
+    render();
+  }catch(err){console.error(err);bootError("Une erreur réseau est survenue. Vérifiez votre connexion.");}
+}
+
+/* ---------- Toast / Modale ---------- */
+let toastT=null;
+function toast(txt){
+  const h=$("toasthost");
+  h.innerHTML=`<div class="toast" role="status"><span class="ic">${svg("check")}</span><span>${txt}</span></div>`;
+  clearTimeout(toastT);toastT=setTimeout(()=>h.innerHTML="",3400);
+}
+function openModal(html){
+  $("modalHost").innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal-card" role="dialog" aria-modal="true">${html}</div></div>`;
+}
+function closeModal(){$("modalHost").innerHTML="";}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+
+/* ---------- QR code (réel, scannable, hors-ligne) ---------- */
+function qrSvg(text,cell){
+  try{
+    const q=qrcode(0,"M");q.addData(text);q.make();
+    return q.createSvgTag({cellSize:cell||4,margin:2,scalable:true});
+  }catch(e){return "";}
+}
+async function regenCode(){
+  const newCode="PINS-"+Math.random().toString(36).slice(2,6).toUpperCase();
+  const {error}=await sb.from("establishments").update({join_code:newCode}).eq("id",EST.id);
+  if(error){toast("Impossible de régénérer le code pour le moment.");console.error(error);return;}
+  EST.joinCode=newCode;
+  toast("Nouveau code de séjour généré — l'ancien QR n'est plus valide.");
+  render();
+}
+function copyJoinLink(){
+  const url=EST.joinUrl();
+  if(navigator.clipboard?.writeText)navigator.clipboard.writeText(url).then(()=>toast("Lien copié dans le presse-papiers.")).catch(()=>toast(url));
+  else toast(url);
+}
+
+/* ---------- Rendu ---------- */
+function render(){renderInner();}
+function go(screen,tab){S.screen=screen;if(tab)S.tab=tab;render();}
+function renderInner(){
+  $("phone").style.display=S.role==="voy"?"flex":"none";
+  $("dash").style.display=S.role==="dir"?"flex":"none";
+  $("segVoy").classList.toggle("on",S.role==="voy");
+  $("segDir").classList.toggle("on",S.role==="dir");
+  if(S.role==="dir"){renderDash();return;}
+  const el=$("screen");
+  if(S.ended){el.innerHTML=vEnded();$("tabbar").innerHTML="";return;}
+  if(!S.user){el.innerHTML=S.screen==="explainer"?vExplainer():(S.screen==="onboard"?vOnboard():vLanding());$("tabbar").innerHTML="";return;}
+  const views={home:vHome,category:vCategory,detail:vDetail,confirm:vConfirm,create:vCreate,myactivities:vMyActivities,messages:vMessages,chat:vChat,profile:vProfile,tips:vTips};
+  const noTabs=["detail","confirm","create","chat"];
+  el.innerHTML=(views[S.screen]||vHome)();
+  $("tabbar").innerHTML=noTabs.includes(S.screen)?"":vTabs();
+  if(S.screen==="chat"){const box=$("msgs");if(box)box.scrollTop=box.scrollHeight;}
+  el.scrollTop=0;
+}
+function setRole(r){S.role=r;render();}
+async function resetDemo(){
+  closeModal();
+  await sb.auth.signOut();
+  location.href=location.pathname;
+}
+const isIn=a=>S.user&&(a.parts.includes(S.user.name)||a.orga===S.user.name);
+function findA(id){return S.activities.find(a=>a.id===id);}
+
+/* ---------- Header + tabs ---------- */
+function vTopbar(back,title){
+  if(back)return `<header class="topbar"><button class="iconbtn" onclick="${back}">${svg("back")}</button><span class="brand" style="font-size:16px">${title||""}</span><span style="width:38px"></span></header>`;
+  const myChats=S.activities.filter(a=>isIn(a)&&a.status!=="annulée").length;
+  return `<header class="topbar">
+    <span class="brand logo" style="font-size:19px">côté<span style="color:var(--coral)">a</span></span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="iconbtn" onclick="toast('Aucune nouvelle notification pour le moment.')">${svg("bell")}${myChats?'<span class="dot"></span>':''}</button>
+      <button class="avatar" style="width:38px;height:38px;font-size:13px" onclick="go('profile','profile')">${esc(S.user.name[0].toUpperCase())}</button>
+    </div>
+  </header>`;
+}
+function vTabs(){
+  const myChats=S.activities.filter(a=>isIn(a)&&a.status!=="annulée").length;
+  const t=(id,icon,label,scr,bub)=>`<button class="tab ${S.tab===id?"on":""}" onclick="go('${scr}','${id}')">${svg(icon)}${label}${bub?`<span class="bub">${bub}</span>`:""}</button>`;
+  const showFab=S.screen==="category";
+  return `<nav class="tabs" aria-label="Navigation">
+    ${t("home","cal","Accueil","home")}
+    ${t("myactivities","route","Mes activités","myactivities")}
+    <span style="flex:1"></span>
+    ${t("messages","chat","Messages","messages",myChats||"")}
+    ${t("profile","user","Profil","profile")}
+  </nav>${showFab?`<button class="fab" aria-label="Proposer une activité" onclick="openCreate()">${svg("plus")}</button>`:""}`;
+}
+
+/* ---------- Landing ---------- */
+function vLanding(){
+  return `<div class="landing">
+    <div class="heroTop">
+      <div class="logo-big brand">côté<span style="color:var(--coral)">a</span></div>
+      <div class="tagline">Même envie. Même moment. Même endroit.</div>
+      <div class="subtag">Des voyageurs créent des souvenirs ensemble.</div>
+    </div>
+    <div class="hero"><img src="assets/hero-landing.jpg?v=2" alt=""></div>
+    <div class="body">
+      <button class="explainer-card" onclick="go('explainer')" style="width:100%">
+        <span class="play" style="color:var(--ink2)">${svg("play")}</span>
+        <span style="flex:1;text-align:left"><b style="display:block;font-size:13.5px">Côtéa en 30 secondes</b><span class="small muted">On vous explique tout</span></span>
+        ${svg("chevR")}
+      </button>
+      <div class="estab-card">
+        <span class="ic">${svg("sun")}</span>
+        <span style="flex:1;text-align:left"><span class="small muted" style="display:block">Vous séjournez à</span><b style="font-size:15px;display:block">${esc(EST.name)}</b><span class="small muted">${esc(EST.place)}</span></span>
+      </div>
+      <button class="btn btn-coral" onclick="go('onboard')">${svg("scan")} Rejoindre la communauté ${svg("chevR")}</button>
+      <div class="feat-row">
+        <div class="feat"><span class="ic" style="background:var(--green-bg)">${svg("users")}</span><span>Rencontrez</span><small>d'autres voyageurs</small></div>
+        <div class="feat"><span class="ic" style="background:var(--amber-bg)">${svg("cal")}</span><span>Partagez</span><small>des activités</small></div>
+        <div class="feat"><span class="ic" style="background:var(--pink-bg)">${svg("pin")}</span><span>Découvrez</span><small>les bons plans</small></div>
+        <div class="feat"><span class="ic" style="background:var(--blue-bg)">${svg("chat")}</span><span>Échangez</span><small>et profitez</small></div>
+      </div>
+      <p class="footline">Des activités, des rencontres,<em>des souvenirs qui commencent ici.</em></p>
+    </div>
+  </div>`;
+}
+function vExplainer(){
+  const steps=[
+    {icon:"scan",t:"Scannez le QR à la réception",p:"Il vous connecte directement à la communauté de votre établissement."},
+    {icon:"user",t:"Créez votre profil en 30 secondes",p:"Prénom, envies, préférences — tout est modifiable à tout moment."},
+    {icon:"cal",t:"Rejoignez ou proposez une activité",p:"Sport, découverte, moments conviviaux... il y en a pour tous les goûts."},
+    {icon:"chat",t:"Échangez avec le groupe",p:"Un chat dédié pour organiser les détails avec les participants."}
+  ];
+  return `<div class="screen">
+    <header class="topbar"><button class="iconbtn" onclick="go('landing')">${svg("back")}</button><span class="brand" style="font-size:16px">Côtéa en 30 secondes</span><span style="width:38px"></span></header>
+    <div class="expl-hero">
+      <img src="assets/hero-home.jpg?v=2" alt="">
+      <div><h2 style="font-size:19px">Bienvenue dans<br>votre communauté</h2><p class="small muted" style="margin-top:6px;line-height:1.5">Côtéa met en relation les voyageurs d'un même établissement qui partagent les mêmes envies.</p></div>
+    </div>
+    ${steps.map((s,i)=>`<div class="step-row"><span class="icon-circle" style="background:var(--purple-bg)">${svg(s.icon)}</span><div><h4>${i+1}. ${s.t}</h4><p>${s.p}</p></div></div>`).join("")}
+    <div class="notice-box">${svg("shield")}<p class="small" style="line-height:1.4">Vos données restent les vôtres : jamais revendues, modifiables à tout moment.</p></div>
+    <div style="padding:16px 20px 24px"><button class="btn btn-coral" onclick="go('onboard')">Rejoindre la communauté</button></div>
+  </div>`;
+}
+
+/* ---------- Onboarding (5 étapes) ---------- */
+const ONB_TOTAL=5;
+function vOnboard(){
+  const prog=`<div class="top-progress">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${S.onbStep>=i+1?"on":""}"></i>`).join("")}</div>`;
+  const back=`<button class="iconbtn" onclick="${S.onbStep>1?`S.onbStep--;render()`:`go('landing')`}">${svg("back")}</button>`;
+  const wrap=inner=>`<div class="onb">${prog}<div class="back-x">${back}<span class="small muted">Étape ${S.onbStep}/${ONB_TOTAL}</span></div>${inner}</div>`;
+
+  if(S.onbStep===1){
+    return wrap(`
+      <div style="text-align:center">
+        <div class="avatar-upload" onclick="toast('Sélection de photo (démo).')">${svg("camera")}<span>Ajouter</span></div>
+        <h2 style="margin-top:10px">Bienvenue au<br>${esc(EST.name)} 🌴</h2>
+        <p class="sub">Rejoignez la communauté de votre séjour et partagez de beaux moments ensemble.</p>
+      </div>
+      <div class="field"><label>Prénom <span style="color:var(--coral)">*</span></label><input id="fp" placeholder="Votre prénom" value="${esc(S.pendingName||"")}" autocomplete="off"></div>
+      <div class="field"><label>Langue</label><select id="flang"><option>Français</option><option>English</option><option>Deutsch</option><option>Español</option></select></div>
+      <div class="foot"><button class="btn btn-purple" onclick="onbNext1()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===0?"on":""}"></i>`).join("")}</div></div>
+    `);
+  }
+  if(S.onbStep===2){
+    return wrap(`
+      <h2>Votre visibilité<br>par défaut</h2>
+      <p class="sub">Choisissez comment les autres voyageurs pourront vous voir par défaut.</p>
+      <button class="choice-card ${S.visDefault==="visible"?"on":""}" style="width:100%" onclick="S.visDefault='visible';render()">
+        <div style="flex:1"><b>Visible par défaut</b><p>Les autres voyageurs pourront voir votre profil (pseudo, photo si ajoutée) et vos activités par défaut.</p></div>
+        <span class="radio">${S.visDefault==="visible"?svg("check"):""}</span>
+      </button>
+      <button class="choice-card ${S.visDefault==="discret"?"on":""}" style="width:100%" onclick="S.visDefault='discret';render()">
+        <div style="flex:1"><b>Discret par défaut</b><p>Les autres voyageurs ne verront pas votre profil. Ils verront uniquement le nombre de participants aux activités auxquelles vous participez.</p></div>
+        <span class="radio">${S.visDefault==="discret"?svg("check"):""}</span>
+      </button>
+      <p class="small muted" style="margin-top:6px">Vous pourrez changer cette visibilité à tout moment dans les paramètres ou pour chaque activité.</p>
+      <div class="foot"><button class="btn btn-purple" onclick="S.onbStep=3;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===1?"on":""}"></i>`).join("")}</div></div>
+    `);
+  }
+  if(S.onbStep===3){
+    const opts=[{id:"sport",label:"Sport",icon:"run"},{id:"gastronomie",label:"Gastronomie",icon:"fork"},{id:"velo",label:"Vélo",icon:"bike"},{id:"randonnee",label:"Randonnée",icon:"route"},{id:"plage",label:"Mer / Plage",icon:"sun"},{id:"vins",label:"Dégustation & vins",icon:"star"},{id:"jeux",label:"Jeux",icon:"dice"},{id:"musique",label:"Musique",icon:"music"},{id:"bienetre",label:"Bien-être",icon:"heart"},{id:"enfants",label:"Activités enfants",icon:"users"}];
+    return wrap(`
+      <h2>Vos centres<br>d'intérêt</h2>
+      <p class="sub">Sélectionnez ce qui vous passionne (pour des suggestions adaptées).</p>
+      <div class="interest-grid">
+        ${opts.map(o=>`<button class="interest ${S.selEnvies.includes(o.id)?"on":""}" onclick="togEnvie('${o.id}')">${S.selEnvies.includes(o.id)?`<span class="badge-ok">${svg("check")}</span>`:""}${svg(o.icon)}${o.label}</button>`).join("")}
+      </div>
+      <p class="small muted" style="margin-top:12px">Vous pourrez modifier ces centres d'intérêt à tout moment dans votre profil.</p>
+      <div class="foot"><button class="btn btn-purple" ${S.selEnvies.length?"":"disabled"} onclick="S.onbStep=4;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===2?"on":""}"></i>`).join("")}</div></div>
+    `);
+  }
+  if(S.onbStep===4){
+    const moments=[{id:"matin",label:"Matin (6h – 12h)"},{id:"apresmidi",label:"Après-midi (12h – 18h)"},{id:"soiree",label:"Soirée (18h – 23h)"}];
+    const roles=[{id:"organiser",label:"Organiser des activités",p:"Proposez et créez des activités"},{id:"participer",label:"Participer aux activités",p:"Rejoignez les activités proposées"},{id:"deux",label:"Les deux",p:"Organiser et participer"}];
+    return wrap(`
+      <h2>Vos préférences <span class="small muted" style="font-weight:600">(facultatif)</span></h2>
+      <p class="sub">À quels moments aimez-vous participer à des activités ?</p>
+      ${moments.map(mo=>{const on=S.selMoments.includes(mo.id);return `<button type="button" class="check-row" style="width:100%;cursor:pointer" onclick="togMoment('${mo.id}')"><b>${mo.label}</b><span class="switch ${on?"on":""}"><i></i></span></button>`;}).join("")}
+      <p class="sub" style="margin-top:16px">Vous préférez…</p>
+      ${roles.map(r=>`<button class="choice-card ${S.selRole===r.id?"on":""}" style="width:100%" onclick="S.selRole='${r.id}';render()"><div style="flex:1"><b>${r.label}</b><p>${r.p}</p></div><span class="radio">${S.selRole===r.id?svg("check"):""}</span></button>`).join("")}
+      <p class="small muted" style="margin-top:6px">Ces informations sont facultatives et modifiables à tout moment.</p>
+      <div class="foot"><button class="btn btn-purple" onclick="S.onbStep=5;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===3?"on":""}"></i>`).join("")}</div></div>
+    `);
+  }
+  return wrap(`
+    <div style="text-align:center;margin-bottom:6px"><span class="icon-circle lg" style="background:var(--purple-bg);margin:0 auto 10px">${svg("bell")}</span>
+    <h2>Recevoir des suggestions<br>d'activités ?</h2>
+    <p class="sub">Nous vous enverrons des idées d'activités adaptées à vos centres d'intérêt et à votre profil.</p></div>
+    <button class="choice-card ${S.notifSuggest?"on":""}" style="width:100%" onclick="S.notifSuggest=true;render()"><div style="flex:1"><b>Oui, je souhaite recevoir des suggestions personnalisées</b><p>Recevez des idées d'activités qui pourraient vous plaire.</p></div><span class="radio">${S.notifSuggest?svg("check"):""}</span></button>
+    <button class="choice-card ${!S.notifSuggest?"on":""}" style="width:100%" onclick="S.notifSuggest=false;render()"><div style="flex:1"><b>Non merci</b><p>Je ne souhaite pas recevoir de suggestions.</p></div><span class="radio">${!S.notifSuggest?svg("check"):""}</span></button>
+    <div class="panel" style="margin-top:14px;box-shadow:none;border-color:var(--line)">
+      <p class="small" style="font-weight:700;display:flex;align-items:center;gap:8px;color:var(--green-solid)">${svg("shield")} Vos données restent les vôtres</p>
+      ${["Elles servent uniquement à améliorer votre expérience pendant votre séjour.","Jamais revendues ni utilisées à des fins publicitaires.","Partagées uniquement sous forme de statistiques anonymisées avec l'établissement.","Modifiables ou supprimables à tout moment depuis votre profil."].map(t=>`<div class="privacy-check">${svg("check")}<span>${t}</span></div>`).join("")}
+    </div>
+    <div class="foot"><button class="btn btn-coral" onclick="finishOnboard()">Rejoindre la communauté 🎉</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===4?"on":""}"></i>`).join("")}</div></div>
+  `);
+}
+function onbNext1(){
+  const name=$("fp").value.trim();
+  if(!name){toast("Indiquez votre prénom pour continuer.");return;}
+  S.pendingName=name;S.onbStep=2;render();
+}
+function togEnvie(id){const i=S.selEnvies.indexOf(id);i>=0?S.selEnvies.splice(i,1):S.selEnvies.push(id);render();}
+function togMoment(id){const i=S.selMoments.indexOf(id);i>=0?S.selMoments.splice(i,1):S.selMoments.push(id);render();}
+async function finishOnboard(){
+  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:S.visDefault});
+  if(error){toast("Impossible de créer votre profil pour le moment. Réessayez.");console.error(error);return;}
+  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:S.visDefault};
+  S.notifs.push=S.notifSuggest;
+  await loadEstablishmentData();
+  go("home","home");
+  setTimeout(()=>toast(`Bienvenue ${esc(S.user.name)} — votre accès est actif jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}.`),300);
+}
+
+/* ---------- Accueil ---------- */
+const HOME_CARDS=[
+  {id:"sport",label:"Sport",desc:"Courir, nager, jouer ensemble",icon:"run",color:"blue"},
+  {id:"decouverte",label:"Découverte & Sortie",desc:"Explorez les environs",icon:"boat",color:"teal"},
+  {id:"moments",label:"Moments conviviaux",desc:"Barbecue, apéro, dîners",icon:"sun",color:"coral"},
+  {id:"loisirs",label:"Loisirs",desc:"Jeux, musique, créations",icon:"dice",color:"purple"},
+  {id:"tips",label:"Conseils & Tips",desc:"Les bons plans partagés",icon:"bulb",color:"amber"},
+  {id:"partages",label:"Moments partagés",desc:"Souvenirs de la communauté",icon:"photo",color:"pink"}
+];
+function vHome(){
+  return vTopbar()+`<div class="home">
+    <div class="home-hero">
+      <img src="assets/hero-home.jpg?v=2" alt="">
+      <div class="txt">
+        <h2>Bienvenue ${esc(S.user.name)} <span class="script">à côté de vous</span></h2>
+        <p>Mêmes envies, même moment, même endroit. Découvrez ce que prépare votre communauté au ${esc(EST.name)}.</p>
+      </div>
+    </div>
+    <div class="cat-grid">
+      ${HOME_CARDS.map(c=>{const cc=CATCOLORS[c.color];return `<button class="cat-card" onclick="${c.id==='tips'?"go('tips','home')":c.id==='partages'?"go('tips','home')":`openCategory('${c.id}')`}">
+        <span class="icon-circle sm" style="background:${cc.bg}">${svg(c.icon)}</span>
+        <span class="txt"><b>${c.label}</b><p>${c.desc}</p></span>
+      </button>`;}).join("")}
+    </div>
+  </div>`;
+}
+function openCategory(id){S.catFilter={topcat:id,tab:"a"};go("category","home");}
+
+/* ---------- Catégorie (liste d'activités) ---------- */
+function vCategory(){
+  const top=TOPCATS.find(t=>t.id===S.catFilter.topcat)||TOPCATS[0];
+  const cc=CATCOLORS[top.color];
+  const tab=S.catFilter.tab;
+  const showSub=!!SUBCATS[top.id]&&top.id!=="sport";
+  const all=S.activities.filter(a=>a.topcat===top.id);
+  let list,banner;
+  if(tab==="a"){
+    list=all.filter(a=>a.status==="ouverte").sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+    banner=`<div class="info-banner g">${svg("cal")}<span>Rejoignez une activité ou proposez la vôtre et partagez de bons moments ensemble !</span></div>`;
+  }else if(tab==="b"){
+    list=all.filter(a=>a.status==="live");
+    banner=`<div class="info-banner g"><span class="live-dot"></span><span><b>Activités en cours maintenant</b>Suivez l'ambiance en direct !</span></div>`;
+  }else{
+    list=PAST_EXPERIENCES.filter(p=>p.topcat===top.id);
+    banner=`<div class="info-banner p">${svg("star")}<span><b>Parcours &amp; expériences partagées</b>Inspirez-vous de ce que d'autres voyageurs ont vécu !</span></div>`;
+  }
+  return vTopbar(`go('home','home')`,top.label)+`<div class="cathead">
+      <p class="small muted" style="margin:2px 0 4px">${top.desc}</p>
+    </div>
+    ${showSub?`<div class="subcat-row">${SUBCATS[top.id].map(s=>`<span class="subcat"><span class="icon-circle sm" style="background:${CATCOLORS[s.color||top.color].bg};color:${CATCOLORS[s.color||top.color].fg}">${svg(s.icon)}</span>${s.label}</span>`).join("")}</div>`:""}
+    <div class="tabseg">
+      <button class="${tab==="a"?"on a":""}" onclick="setCatTab('a')">À venir</button>
+      <button class="${tab==="b"?"on b":""}" onclick="setCatTab('b')">En cours</button>
+      <button class="${tab==="c"?"on c":""}" onclick="setCatTab('c')">Passées</button>
+    </div>
+    <div class="catlist">
+      ${banner}
+      ${tab==="c"?renderPastList(list):(list.length?list.map(a=>tab==="b"?cardLive(a):cardA(a)).join(""):emptyState(top))}
+      ${tab!=="c"?`<div class="safety">${svg("shield")}<span><b>Côtéa met en relation les voyageurs.</b> Les paiements se font directement entre vous et les prestataires ou entre participants. Ne partagez jamais d'informations sensibles.</span></div>`:""}
+    </div>`;
+}
+function setCatTab(t){S.catFilter.tab=t;render();}
+function emptyState(top){
+  return `<div class="panel" style="text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:16px;margin-bottom:6px">Rien ne correspond… encore.</p><p class="small muted">Soyez la première personne à proposer cette envie : d'autres voyageurs l'ont peut-être aussi.</p><button class="btn btn-coral" style="margin-top:16px" onclick="openCreate()">Proposer une activité</button></div>`;
+}
+function cardA(a){
+  const cc=colorOf(a);
+  const full=a.parts.length>=a.cap;
+  const inIt=isIn(a);
+  const label=catLabel(a.subcat)||catLabel(a.topcat);
+  const ctaTxt=inIt?"Voir le groupe":full?"Complet":(a.type==="A"?"Je participe":"Je rejoins le groupe");
+  const ctaAction=inIt?`openChat('${a.id}')`:full?"":`openDetail('${a.id}')`;
+  return `<div class="acard">
+    <div class="media" onclick="openDetail('${a.id}')" style="cursor:pointer">
+      ${a.photo?`<img src="${a.photo}" alt="">`:`<div style="width:100%;height:100%;background:${cc.bg}"></div>`}
+      <div class="grad"></div>
+      <span class="tag" style="background:${cc.solid}">${esc(label)}</span>
+      <button class="fav" onclick="event.stopPropagation();toast('Ajouté aux favoris (démo).')">${svg("heart")}</button>
+      <span class="avstack">${a.parts.slice(0,3).map(p=>avatarEl(p,24)).join("")}${a.parts.length>3?`<span class="more">+${a.parts.length-3}</span>`:""}</span>
+    </div>
+    <div class="body">
+      <h4>${esc(a.title)}</h4>
+      <div class="meta"><span>${svg("cal")}${fmtDate(a.date)}</span><span>${svg("clock")}${a.time}</span></div>
+      ${a.desc?`<p class="desc">${esc(a.desc)}</p>`:""}
+      <div class="row2"><span>${svg("users",'')} <b>${a.parts.length}/${a.cap}</b> participants</span><span>·</span><span>${esc(a.price)}</span></div>
+      <div class="orga">${svg("user")} Proposé par ${esc(a.orga)}</div>
+      <div class="ctarow">
+        <button class="cta" style="background:${full&&!inIt?"var(--line)":cc.solid};color:${full&&!inIt?"var(--muted)":"#fff"}" ${full&&!inIt?"disabled":""} onclick="${ctaAction}">${ctaTxt}</button>
+        <button class="ic" onclick="${inIt?`openChat('${a.id}')`:`openDetail('${a.id}')`}">${svg("chat")}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function cardLive(a){
+  const cc=colorOf(a);
+  return `<button class="acard live" style="text-align:left" onclick="openDetail('${a.id}')">
+    <div class="media">${a.photo?`<img src="${a.photo}" alt="">`:`<div style="width:100%;height:100%;background:${cc.bg}"></div>`}<div class="grad"></div>
+      <span class="tag" style="background:#E23A3A">EN COURS</span>
+      <span class="avstack">${a.parts.slice(0,3).map(p=>avatarEl(p,24)).join("")}${a.parts.length>3?`<span class="more">+${a.parts.length-3}</span>`:""}</span>
+    </div>
+    <div class="body">
+      <h4>${esc(a.title)}</h4>
+      <div class="meta"><span>${svg("clock")}Démarrée à ${a.time}</span><span>${svg("users")}${a.parts.length}/${a.cap}</span></div>
+    </div>
+  </button>`;
+}
+function renderPastList(list){
+  if(!list.length)return `<div class="panel" style="text-align:center;padding:26px"><p class="small muted">Pas encore d'expérience partagée dans cette catégorie.</p></div>`;
+  return list.map(p=>`<button class="acard past" style="text-align:left" onclick="toast('Détail de l\\'expérience (démo).')">
+    <div class="body">
+      <div class="stats">
+        <span class="tag" style="position:static;display:inline-block;background:var(--purple);margin-bottom:8px">Expérience communauté</span>
+        <h4>${esc(p.title)}</h4>
+        <div class="row3"><span>${p.distance}</span>${p.duree?`<span>· ${p.duree}</span>`:""}${p.denivele?`<span>· ${p.denivele}</span>`:""}</div>
+        <p class="small muted">Partagé par ${esc(p.by)}</p>
+        <p class="small muted">${svg("users",'')} ${p.n} voyageurs ont participé</p>
+        <p class="rating">${svg("star",'')} ${p.rating}/5</p>
+      </div>
+      <div class="mini-map"></div>
+    </div>
+  </button>`).join("");
+}
+
+/* ---------- Détail ---------- */
+function openDetail(id){S.currentId=id;go("detail");}
+function vDetail(){
+  const a=findA(S.currentId);if(!a)return vHome();
+  const cc=colorOf(a);
+  const inIt=isIn(a),mine=a.orga===S.user.name,full=a.parts.length>=a.cap;
+  const canceled=a.status==="annulée";
+  const label=catLabel(a.subcat)||catLabel(a.topcat);
+  return `<div class="screen"><div class="detail">
+    <div class="dethero">
+      ${a.photo?`<img src="${a.photo}" alt="">`:`<div style="width:100%;height:100%;background:${cc.bg}"></div>`}
+      <div class="grad"></div>
+      <div class="top-row">
+        <button class="circ" onclick="go('category','home')">${svg("back")}</button>
+        <span class="r"><button class="circ" onclick="toast('Lien copié (démo).')">${svg("share")}</button><button class="circ" onclick="toast('Ajouté aux favoris (démo).')">${svg("bookmark")}</button></span>
+      </div>
+      <div class="bottom">
+        <h2>${esc(a.title)}</h2>
+        <div class="creator">${avatarEl(a.orga,26,'')}<span>Créé par ${esc(a.orga)}</span>${a.type==="A"?`<span class="voybadge">${svg("user")} Activité voyageur</span>`:""}</div>
+      </div>
+    </div>
+    <div class="det-body">
+      ${canceled?`<div class="info-banner o">${svg("info")}<span>Cette activité a été annulée par son organisateur. Les participants ont été notifiés.</span></div>`:""}
+      <div class="statgrid">
+        <div class="st">${svg("cal")}<div><b>${fmtDate(a.date)}</b><span>Date</span></div></div>
+        <div class="st">${svg("clock")}<div><b>${a.time}</b><span>Heure de départ</span></div></div>
+        <div class="st">${svg("pin")}<div><b>${esc(a.lieu)}</b><span>Point de rendez-vous</span></div></div>
+        ${a.stats?.duree?`<div class="st">${svg("clock")}<div><b>${a.stats.duree}</b><span>Durée estimée</span></div></div>`:""}
+        ${a.stats?.distance?`<div class="st">${svg("route")}<div><b>${a.stats.distance}</b><span>Distance</span></div></div>`:""}
+        ${a.stats?.niveau?`<div class="st">${svg("bar")}<div><b>${a.stats.niveau}</b><span>Niveau</span></div></div>`:""}
+        <div class="st">${svg("users")}<div><b>${a.parts.length} / ${a.cap}</b><span>Participants</span></div></div>
+        <div class="st">${svg("info")}<div><b>${esc(a.price)}</b><span>Tarif</span></div></div>
+      </div>
+      <div class="det-panel">
+        <h5>${svg("users")}Participants (${a.parts.length} / ${a.cap})<button class="link" onclick="toast('Liste complète (démo).')">Voir tous</button></h5>
+        <div style="display:flex;flex-wrap:wrap;gap:12px 6px">${a.parts.slice(0,6).map(p=>`<div class="avrow-item">${avatarEl(p,44,'')}<span>${esc(p.split(' ')[0])}</span></div>`).join("")}${a.parts.length>6?`<div class="avrow-item"><span class="av" style="width:44px;height:44px;border-radius:50%;background:var(--cream);color:var(--muted);display:flex;align-items:center;justify-content:center;font-weight:700">+${a.parts.length-6}</span></div>`:""}</div>
+      </div>
+      ${!a.official&&!canceled?`<div class="vis-toggle">
+        <div class="top">${svg("eye")}<b>Ma visibilité pour cette activité</b><button class="switch on" style="cursor:default"><i></i></button></div>
+        <p>Visible par les autres participants (défaut). Les autres verront votre profil (pseudo, photo si ajoutée) et pourront vous reconnaître dans la liste des participants.</p>
+        <button class="modify" onclick="toast('Modification de la visibilité (démo).')">Modifier</button>
+      </div>`:""}
+      ${a.desc?`<div class="det-panel"><h5>${svg("chat")}Description</h5><p style="font-size:13.5px;line-height:1.55;color:var(--ink)">${esc(a.desc)}</p></div>`:""}
+      ${a.aPrevoir?.length?`<div class="det-panel"><h5>${svg("info")}À prévoir</h5><div class="tagpills">${a.aPrevoir.map(t=>`<span class="tagpill">${svg("check")}${esc(t)}</span>`).join("")}</div></div>`:""}
+      <div class="det-panel">
+        <h5>${svg("pin")}Point de rendez-vous</h5>
+        <div class="minimap"><div class="pin">${svg("pin")}</div></div>
+        <div class="addr" style="margin-bottom:10px"><b>${esc(a.lieu)}</b><span>${esc(EST.place)}</span></div>
+        <button class="btn btn-outline" onclick="toast('Ouverture de l\\'itinéraire (démo).')">${svg("route")} Ouvrir l'itinéraire</button>
+      </div>
+      ${!canceled?(inIt?`<div style="display:flex;flex-direction:column;gap:10px">
+            <button class="btn btn-navy" onclick="openChat('${a.id}')">${svg("chat")} Ouvrir le chat du groupe</button>
+            ${mine?`<button class="btn btn-outline" onclick="cancelA('${a.id}')">Annuler l'activité</button>`:`<button class="btn btn-outline" onclick="leaveA('${a.id}')">Quitter l'activité</button>`}
+          </div>`
+        :(full?`<div class="info-banner o">${svg("info")}<span>Cette activité est complète. Créez la vôtre : d'autres voyageurs partagent sûrement la même envie.</span></div><button class="btn btn-outline" onclick="openCreate()">Proposer une activité similaire</button>`
+              :`<button class="btn btn-coral" style="background:${cc.solid}" onclick="joinA('${a.id}')">${svg("users")} Rejoindre cette activité</button>`)
+      ):""}
+      ${!canceled?`<p style="text-align:center;margin-top:16px"><button class="link-danger" onclick="report('activité','${a.id}')">Signaler cette activité</button></p>`:""}
+    </div>
+  </div></div>`;
+}
+async function joinA(id){
+  const a=findA(id);
+  if(a.parts.length>=a.cap){toast("La dernière place vient d'être prise. Aucune surcapacité possible.");render();return;}
+  const {error}=await sb.from("activity_participants").insert({activity_id:id,user_id:UID,user_name:S.user.name});
+  if(error){toast("Impossible de rejoindre pour le moment. Réessayez.");console.error(error);return;}
+  if(a.parts.length+1>=a.cap)await sb.from("activities").update({status:"complete"}).eq("id",id);
+  await loadEstablishmentData();
+  S.currentId=id;go("confirm");
+}
+async function leaveA(id){
+  const a=findA(id);
+  await sb.from("activity_participants").delete().eq("activity_id",id).eq("user_id",UID);
+  if(a.status==="complete")await sb.from("activities").update({status:"ouverte"}).eq("id",id);
+  await loadEstablishmentData();
+  toast(`Vous avez quitté l'activité. ${esc(a.orga)} est notifié·e.`);
+  render();
+}
+function cancelA(id){
+  const a=findA(id);
+  openModal(`
+    <h3>Annuler l'activité</h3>
+    <p class="small muted" style="margin:6px 0 14px">« ${esc(a.title)} » — les participants seront notifiés immédiatement.</p>
+    <div class="field"><label>Motif <span class="muted">(optionnel)</span></label><textarea id="mcm" placeholder="Ex. météo, contretemps…"></textarea></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Retour</button>
+      <button class="btn btn-navy" onclick="confirmCancel('${id}')">Confirmer</button>
+    </div>`);
+}
+async function confirmCancel(id){
+  const a=findA(id);
+  const motif=($("mcm").value||"").trim();
+  const {error}=await sb.from("activities").update({status:"annulée"}).eq("id",id);
+  closeModal();
+  if(error){toast("Impossible d'annuler pour le moment.");console.error(error);return;}
+  await loadEstablishmentData();
+  const n=a.parts.filter(p=>p!==a.orga).length;
+  toast(`Activité annulée${motif?" — motif transmis":""}. ${n>0?n+" participant"+(n>1?"s":"")+" "+(n>1?"sont":"est")+" notifié"+(n>1?"s":"")+".":"Aucun autre participant à notifier."}`);
+  render();
+}
+async function report(what,ref){
+  await sb.from("reports").insert({establishment_id:EST.id,what,ref:ref||null,by_user_id:UID});
+  toast(`Signalement transmis à la modération (${what}). Il apparaît dans l'administration avec son contexte.`);
+  loadEstablishmentData();
+}
+async function resolveReport(id){
+  await sb.from("reports").update({resolved:true}).eq("id",id);
+  await loadEstablishmentData();
+  render();
+}
+function refLabel(what,ref){
+  if(!ref)return "";
+  if(what==="conseil"){const t=S.tips.find(x=>x.id===ref);return t?t.title:"";}
+  const a=findA(ref);return a?a.title:"";
+}
+
+/* ---------- Confirmation de participation ---------- */
+function vConfirm(){
+  const a=findA(S.currentId);if(!a)return vHome();
+  const idx=a.parts.indexOf(S.user.name)+1;
+  return `<div class="screen"><div class="confirm">
+    <div class="hero"><img src="assets/hero-confirm.jpg?v=2" alt=""><button class="back" onclick="go('category','home')">${svg("back")}</button></div>
+    <div class="checkbadge">${svg("check")}</div>
+    <div class="body">
+      <h2>Vous participez !</h2>
+      <div class="confirm-card">
+        ${a.photo?`<img class="ic" src="${a.photo}" alt="">`:`<span class="icon-circle" style="background:${colorOf(a).bg}">${svg("run")}</span>`}
+        <div><h4>${esc(a.title)}</h4><div class="meta">
+          <span>${svg("cal")}${fmtDate(a.date)}</span>
+          <span>${svg("clock")}${a.time} · Heure de départ</span>
+          <span>${svg("pin")}${esc(a.lieu)}</span>
+        </div></div>
+      </div>
+      <div class="part-banner">
+        <div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b>Vous êtes le ${idx}${idx===1?"er":"e"} participant.</b><span>${a.cap-a.parts.length} places disponibles au total</span></div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px 6px">
+          ${a.parts.filter(p=>p!==S.user.name).slice(0,4).map(p=>`<div class="avrow-item">${avatarEl(p,44,'')}<span>${esc(p.split(' ')[0])}</span></div>`).join("")}
+          <div class="avrow-item me">${avatarEl(S.user.name,44,'')}<span>Vous</span></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-navy" onclick="openChat('${a.id}')">${svg("chat")} Accéder à la discussion</button>
+        <button class="btn btn-outline" onclick="toast('Ouverture de l\\'itinéraire GPS (démo).')">${svg("pin")} Voir le point de rendez-vous</button>
+        <button class="btn" style="color:var(--muted)" onclick="go('category','home')">${svg("back")} Retour aux activités</button>
+      </div>
+    </div>
+  </div></div>`;
+}
+
+/* ---------- Créer une activité ---------- */
+let draft={};
+function openCreate(){
+  draft={step:1,icon:CREATE_ICONS[0].id,title:"",date:iso(daysFrom(0)),time:"",lieu:"",cap:6,desc:""};
+  go("create");
+}
+function vCreate(){
+  if(draft.step===1)return vCreateStep1();
+  return vCreateStep2();
+}
+function vCreateStep1(){
+  return `<div class="screen"><div class="create">
+    <button class="iconbtn" onclick="go('category','home')" style="margin-bottom:14px">${svg("back")}</button>
+    <p class="eyebrow" style="color:var(--purple)">Nouvelle activité</p>
+    <h2 style="font-size:23px;margin:4px 0 2px">Quel est votre projet ?</h2>
+    <div class="icon-grid">
+      ${CREATE_ICONS.map(c=>`<button class="icon-opt ${draft.icon===c.id?"on":""}" onclick="draft.icon='${c.id}';render()">${svg(c.icon)}${c.label}</button>`).join("")}
+    </div>
+    <div class="field"><label>Nom de l'activité <span class="cnt" id="cnttitle">${draft.title.length}/60</span></label><input id="ntitle" maxlength="60" value="${esc(draft.title)}" placeholder="Ex. Sunset run sur la plage" oninput="draft.title=this.value;$('cnttitle').textContent=this.value.length+'/60'"></div>
+    <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field"><label>Date</label><input type="date" min="${iso(daysFrom(0))}" max="${iso(EST.stayEnd)}" value="${draft.date}" onchange="draft.date=this.value"></div>
+      <div class="field"><label>Heure</label><input type="time" value="${draft.time}" onchange="draft.time=this.value"></div>
+    </div>
+    <div class="field"><label>Lieu de rendez-vous</label><input value="${esc(draft.lieu)}" placeholder="Ex. Réception du camping" oninput="draft.lieu=this.value"></div>
+    <div class="field"><label>Participants max</label><input type="number" min="2" max="30" value="${draft.cap}" onchange="draft.cap=+this.value"></div>
+    <div class="field"><label>Message <span class="muted">(optionnel)</span></label><textarea placeholder="Niveau, matériel, ambiance…" oninput="draft.desc=this.value">${esc(draft.desc)}</textarea></div>
+    <button class="btn btn-coral" style="margin-top:18px" onclick="createStep2()">Aperçu de mon activité</button>
+  </div></div>`;
+}
+function createStep2(){
+  if(!draft.title.trim()||!draft.date||!draft.time||!draft.lieu.trim()){toast("Nom, date, heure et lieu sont nécessaires.");return;}
+  draft.step=2;render();
+}
+function vCreateStep2(){
+  const ic=CREATE_ICONS.find(c=>c.id===draft.icon)||CREATE_ICONS[0];
+  return `<div class="screen"><div class="create">
+    <button class="iconbtn" onclick="draft.step=1;render()" style="margin-bottom:14px">${svg("back")}</button>
+    <p class="eyebrow" style="color:var(--purple)">Aperçu / Publier l'activité</p>
+    <h2 style="font-size:21px;margin:4px 0 14px">Voici à quoi elle ressemblera pour les autres voyageurs</h2>
+    <div class="preview-wrap">
+      <div class="acard">
+        <div class="media"><div style="width:100%;height:100%;background:var(--purple-bg)"></div><div class="grad"></div>
+          <span class="tag" style="background:var(--purple)">Nouveau</span>
+          <span class="avstack">${avatarEl(S.user.name,24,'')}</span>
+        </div>
+        <div class="body">
+          <h4>${svg(ic.icon)} ${esc(draft.title)||"Titre de l'activité"}</h4>
+          <div class="meta"><span>${svg("cal")}${fmtDate(draft.date)}</span><span>${svg("clock")}${draft.time||"--:--"}</span><span>${svg("pin")}${esc(draft.lieu)||"Lieu"}</span></div>
+          ${draft.desc?`<p class="desc">${esc(draft.desc)}</p>`:""}
+          <div class="orga">${svg("user")} Créé par vous</div>
+          <div class="row2"><span>${svg("users",'')} <b>1/${draft.cap}</b> participants max</span></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-coral" style="margin-top:18px" onclick="publishA()">Publier mon activité</button>
+    <button class="btn btn-outline" style="margin-top:10px" onclick="draft.step=1;render()">${svg("route")} Modifier</button>
+  </div></div>`;
+}
+async function publishA(){
+  const d=draft;
+  const {data,error}=await sb.from("activities").insert({
+    establishment_id:EST.id,topcat:"sport",subcat:d.icon,title:d.title.trim(),
+    description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
+    type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name
+  }).select().single();
+  if(error){toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
+  await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
+  await loadEstablishmentData();
+  toast(`« ${esc(d.title.trim())} » est publiée. Les voyageurs intéressés seront notifiés.`);
+  S.catFilter={topcat:"sport",tab:"a"};
+  openDetail(data.id);
+}
+
+/* ---------- Mes activités ---------- */
+function vMyActivities(){
+  const organized=S.activities.filter(a=>a.orga===S.user.name&&a.status!=="annulée");
+  const joined=S.activities.filter(a=>a.parts.includes(S.user.name)&&a.orga!==S.user.name&&a.status!=="annulée").sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+  return vTopbar()+`<div class="home" style="padding-left:20px;padding-right:20px">
+    <div class="myact-head"><span class="avatar av" style="width:48px;height:48px;font-size:17px;background:${avatarColor(S.user.name)}">${esc(S.user.name[0].toUpperCase())}</span>
+      <div><h2 style="font-size:19px">Mes activités</h2><p class="small muted">Retrouvez vos activités organisées et celles auxquelles vous participez.</p></div>
+    </div>
+    <div class="myact-sec"><h3>Activités que j'organise <span class="n">${organized.length}</span></h3></div>
+    ${organized.length?`<div class="mini-grid">${organized.slice(0,4).map(a=>{
+      const cc=colorOf(a);const badge=a.status==="live"?{t:"EN COURS",c:"#E23A3A"}:{t:"À VENIR",c:cc.solid};
+      return `<button class="mini-card" onclick="openDetail('${a.id}')">${a.photo?`<img src="${a.photo}" alt="">`:`<div style="height:70px;background:${cc.bg}"></div>`}<span class="badge" style="background:${badge.c}">${badge.t}</span><div class="b"><b>${esc(a.title)}</b><div class="meta">${fmtDate(a.date)} · ${a.time} · ${svg("users",'')} ${a.parts.length}/${a.cap}</div></div></button>`;}).join("")}</div>`
+      :`<div class="panel" style="text-align:center;padding:20px;margin-bottom:20px"><p class="small muted">Vous n'organisez aucune activité pour le moment.</p></div>`}
+    <div class="myact-sec"><h3>Activités auxquelles je participe <span class="n">${joined.length}</span></h3></div>
+    ${joined.length?joined.map(a=>`<button class="row-card" onclick="openDetail('${a.id}')">${a.photo?`<img src="${a.photo}" alt="">`:`<div style="width:52px;height:52px;border-radius:12px;background:${colorOf(a).bg}"></div>`}<div class="txt"><b>${esc(a.title)}</b><div class="meta">${fmtDate(a.date)} · ${a.time} · ${svg("users",'')} ${a.parts.length} participants</div></div></button>`).join("")
+      :`<div class="panel" style="text-align:center;padding:20px"><p class="small muted">Rejoignez une activité pour la retrouver ici.</p></div>`}
+  </div>`;
+}
+
+/* ---------- Messages / Chat ---------- */
+function vMessages(){
+  const mine=S.activities.filter(a=>isIn(a)&&a.status!=="annulée");
+  return vTopbar()+`<div class="home" style="padding-left:20px;padding-right:20px">
+    <div class="count-row" style="margin-top:6px"><h3>Messages</h3></div>
+    <p class="small muted" style="margin-bottom:16px">Chaque conversation est liée à une activité et réservée à ses participants.</p>
+    ${mine.length?mine.map(a=>{
+      const last=(S.chats[a.id]||[]).slice(-1)[0];
+      return `<button class="convo-item" onclick="openChat('${a.id}')">${a.photo?`<img class="thumb" src="${a.photo}" alt="">`:`<div class="thumb" style="background:${colorOf(a).bg}"></div>`}
+        <div class="txt"><b>${esc(a.title)}</b><p>${last?esc(last.who)+" : "+esc(last.text):"Aucun message — lancez la conversation."}</p></div>
+      </button>`;}).join("")
+    :`<div class="panel" style="text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:16px;margin-bottom:6px">Pas encore de conversation</p><p class="small muted">Rejoignez ou créez une activité pour accéder au chat de son groupe.</p></div>`}
+  </div>`;
+}
+let chatChannel=null;
+async function openChat(id){
+  const a=findA(id);
+  if(!isIn(a)){toast("Le chat est réservé aux participants de l'activité.");return;}
+  S.currentId=id;go("chat");
+  const {data:msgs}=await sb.from("messages").select("*").eq("activity_id",id).order("created_at");
+  S.chats[id]=(msgs||[]).map(mm=>({who:mm.user_name,text:mm.text}));
+  render();
+  if(chatChannel)sb.removeChannel(chatChannel);
+  chatChannel=sb.channel("chat-"+id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:`activity_id=eq.${id}`},payload=>{
+    (S.chats[id]=S.chats[id]||[]).push({who:payload.new.user_name,text:payload.new.text});
+    if(S.screen==="chat"&&S.currentId===id)render();
+  }).subscribe();
+}
+function vChat(){
+  const a=findA(S.currentId);
+  const msgs=S.chats[a.id]||[];
+  return `<div class="screen chatwrap">
+    ${vTopbar(`go('messages','messages')`,a.title)}
+    <div class="chatmsgs" id="msgs">
+      ${msgs.length?msgs.map(mm=>`<div class="msg ${mm.who===S.user.name?"me":"them"}">${mm.who!==S.user.name?`<div class="who">${esc(mm.who)}</div>`:""}${esc(mm.text)}${mm.who!==S.user.name?`<span class="rep" onclick="report('message','${a.id}')">Signaler</span>`:""}</div>`).join("")
+      :`<p class="small muted" style="text-align:center;margin-top:30px">Le groupe est créé — présentez-vous ou précisez le point de rendez-vous.</p>`}
+    </div>
+    <div class="chatbar">
+      <input id="chin" placeholder="Écrire au groupe…" onkeydown="if(event.key==='Enter')sendMsg()">
+      <button onclick="sendMsg()" aria-label="Envoyer">${svg("send")}</button>
+    </div>
+  </div>`;
+}
+async function sendMsg(){
+  const v=$("chin").value.trim();if(!v)return;
+  $("chin").value="";
+  const {error}=await sb.from("messages").insert({activity_id:S.currentId,user_id:UID,user_name:S.user.name,text:v});
+  if(error){toast("Message non envoyé, réessayez.");console.error(error);}
+}
+
+/* ---------- Conseils & Tips ---------- */
+function cardTip(t){
+  return `<div class="tip"><h4>${esc(t.title)}</h4><p>${esc(t.body)}</p><div class="by"><span>Partagé par ${esc(t.by)}</span><button class="link-danger" onclick="report('conseil','${t.id}')">Signaler</button></div></div>`;
+}
+function vTips(){
+  return vTopbar(`go('home','home')`,"Conseils & Tips")+`<div class="home" style="padding:16px 20px 96px">
+    <div class="count-row"><h3>Conseils &amp; Tips</h3><button class="filter-btn" onclick="addTip()">${svg("plus")} Partager</button></div>
+    <p class="small muted" style="margin-bottom:16px">Les bons plans de la communauté : plages, restaurants, parcours, excursions.</p>
+    ${S.tips.map(cardTip).join("")}
+  </div>`;
+}
+function addTip(){
+  openModal(`
+    <h3>Partager un conseil</h3>
+    <p class="small muted" style="margin:6px 0 14px">Visible par toute la communauté de l'établissement.</p>
+    <div class="field"><label>Titre</label><input id="mtt" placeholder="Ex. La crique cachée après la pointe"></div>
+    <div class="field"><label>Votre conseil</label><textarea id="mtb" placeholder="En quelques mots…"></textarea></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-coral" onclick="submitTip()">Publier</button>
+    </div>`);
+}
+async function submitTip(){
+  const title=$("mtt").value.trim(),body=$("mtb").value.trim();
+  if(!title||!body){toast("Titre et conseil sont nécessaires.");return;}
+  const {error}=await sb.from("tips").insert({establishment_id:EST.id,title,body,user_name:S.user.name});
+  closeModal();
+  if(error){toast("Impossible de publier pour le moment.");console.error(error);return;}
+  await loadEstablishmentData();
+  toast("Merci ! Votre conseil est publié pour la communauté.");
+  render();
+}
+
+/* ---------- Profil ---------- */
+function vProfile(){
+  const u=S.user;
+  const allInterests=[{id:"sport",label:"Sport"},{id:"gastronomie",label:"Gastronomie"},{id:"velo",label:"Vélo"},{id:"randonnee",label:"Randonnée"},{id:"plage",label:"Mer / Plage"},{id:"vins",label:"Dégustation & vins"},{id:"jeux",label:"Jeux"},{id:"musique",label:"Musique"},{id:"bienetre",label:"Bien-être"},{id:"enfants",label:"Activités enfants"}];
+  return vTopbar()+`<div class="prof">
+    <div class="idcard">
+      <span class="av" style="width:52px;height:52px;font-size:18px;border-radius:50%;background:${avatarColor(u.name)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">${esc(u.name[0].toUpperCase())}</span>
+      <div><b style="font-family:'Baloo 2',sans-serif;font-size:18px">${esc(u.name)}</b><div class="small muted">Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Mes centres d'intérêt</h5>
+      <div class="tagpills">${allInterests.map(c=>`<button class="tagpill" style="${u.envies.includes(c.id)?"background:var(--purple);color:#fff":""}" onclick="togProfEnvie('${c.id}')">${c.label}</button>`).join("")}</div>
+    </div>
+    <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--purple)">Notifications</h5>
+      <div class="setline"><span>Nouvelles activités selon mes envies</span><button class="switch ${S.notifs.push?"on":""}" onclick="S.notifs.push=!S.notifs.push;render()"><i></i></button></div>
+      <div class="setline"><span>Rappels avant mes activités</span><button class="switch ${S.notifs.rappels?"on":""}" onclick="S.notifs.rappels=!S.notifs.rappels;render()"><i></i></button></div>
+      <div class="setline" style="border:none"><span>Visibilité par défaut</span><button class="switch ${u.visibility==="visible"?"on":""}" onclick="u.visibility=u.visibility==='visible'?'discret':'visible';render()"><i></i></button></div>
+    </div>
+    <div class="panel"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--purple)">Communauté &amp; confidentialité</h5>
+      <div class="setline"><span>Charte de communauté</span><span class="muted">›</span></div>
+      <div class="setline"><span>Politique de confidentialité</span><span class="muted">›</span></div>
+      <div class="setline"><span>Numéros d'urgence de l'établissement</span><span class="muted">›</span></div>
+      <div class="setline" style="border:none"><button class="link-danger" onclick="toast('Compte supprimé côté démo — données personnelles effacées, statistiques anonymisées conservées.')">Supprimer mon compte</button></div>
+    </div>
+    <p class="small muted" style="text-align:center;margin-top:12px">Communauté éphémère — votre accès expire automatiquement à la fin du séjour.</p>
+    <button class="btn btn-outline" style="margin-top:14px" onclick="endStay()">Simuler la fin de séjour</button>
+  </div>`;
+}
+function togProfEnvie(id){const e=S.user.envies,i=e.indexOf(id);i>=0?e.splice(i,1):e.push(id);render();}
+
+/* ---------- Fin de séjour ---------- */
+function endStay(){S.ended=true;render();}
+function vEnded(){
+  return `<div class="landing" style="justify-content:center;text-align:center">
+    <div class="body" style="margin-top:0">
+      <div class="logo-big brand" style="text-align:center">côté<span style="color:var(--coral)">a</span></div>
+      <div class="accent-line" style="margin:14px auto"></div>
+      <h2 style="font-size:21px">Merci ${esc(S.user?.name||"")}, et bonne route.</h2>
+      <p class="small muted" style="margin-top:10px;line-height:1.6">Votre séjour est terminé : l'accès à la communauté est fermé et vos conversations ne sont plus accessibles. Les statistiques anonymisées aident l'établissement à s'améliorer.</p>
+      <p style="margin-top:22px;font-weight:700;font-size:14px">Comment était votre expérience Côtéa ?</p>
+      <div style="display:flex;justify-content:center;gap:8px;margin:14px 0">${[1,2,3,4,5].map(i=>`<button onclick="S.stars=${i};render()" style="font-size:30px;color:${S.stars>=i?"var(--amber-solid)":"#D8DCE6"}">★</button>`).join("")}</div>
+      ${S.stars?`<p style="font-weight:700;color:var(--coral)">Merci pour votre retour !</p>`:""}
+    </div>
+  </div>`;
+}
+/* ---------- Dashboard : mini-graphiques SVG ---------- */
+function sparkline(values,color){
+  const w=140,h=26,max=Math.max(...values,1),min=Math.min(...values,0);
+  const pts=values.map((v,i)=>`${(i/(values.length-1))*w},${h-((v-min)/(max-min||1))*h}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:26px"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function donut(segments,size,strokeW){
+  size=size||120;strokeW=strokeW||16;
+  const r=(size-strokeW)/2,c=size/2,circ=2*Math.PI*r;
+  let offset=0;
+  const total=segments.reduce((s,x)=>s+x.value,0)||1;
+  const arcs=segments.map(seg=>{
+    const frac=seg.value/total,len=frac*circ;
+    const dash=`${len} ${circ-len}`;
+    const el=`<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${strokeW}" stroke-dasharray="${dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${c} ${c})"/>`;
+    offset+=len;return el;
+  }).join("");
+  return `<svg viewBox="0 0 ${size} ${size}" style="width:${size}px;height:${size}px;flex:none">${arcs}</svg>`;
+}
+function linechart(values,labels,w,h){
+  w=w||560;h=h||140;
+  const max=Math.max(...values),min=Math.min(...values,0);
+  const pad=8;
+  const pts=values.map((v,i)=>[pad+(i/(values.length-1))*(w-2*pad), h-pad-((v-min)/(max-min||1))*(h-2*pad)]);
+  const line=pts.map(p=>p.join(",")).join(" ");
+  const dots=pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--purple)"/>`).join("");
+  return {svg:`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px"><polyline points="${line}" fill="none" stroke="var(--purple)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}</svg>`,pts};
+}
+
+/* ---------- Dashboard : données dérivées ---------- */
+function dashPeriodRange(){
+  const today=daysFrom(0);
+  if(S.dashPeriod==="week")return{from:today,to:daysFrom(6)};
+  if(S.dashPeriod==="month")return{from:today,to:daysFrom(29)};
+  return{from:null,to:null};
+}
+function dashActs(){
+  const{from,to}=dashPeriodRange();
+  return S.activities.filter(a=>!from||(a.date>=iso(from)&&a.date<=iso(to)));
+}
+const DASH_DEMO={
+  week:{membres:195,actifs:160,newToday:18,retour:76,qr:195,occ:320},
+  month:{membres:742,actifs:598,newToday:64,retour:71,qr:742,occ:320},
+  season:{membres:2860,actifs:2210,newToday:210,retour:68,qr:2860,occ:320}
+};
+function statusLabel(a){
+  if(a.status==="annulée")return{t:"Annulée",bg:"#eee",fg:"#888"};
+  if(a.status==="live")return{t:"En cours",bg:"var(--coral-bg)",fg:"var(--coral-d)"};
+  if(a.parts.length>=a.cap)return{t:"Complet",bg:"var(--green-bg)",fg:"var(--green)"};
+  if(a.parts.length/a.cap>=0.7)return{t:"Presque complet",bg:"var(--amber-bg)",fg:"var(--amber)"};
+  return{t:"Places disponibles",bg:"var(--blue-bg)",fg:"var(--blue)"};
+}
+
+/* ---------- Dashboard : shell + navigation ---------- */
+const DASH_NAV=[
+  {id:"tableau",label:"Tableau de bord",icon:"grid"},
+  {id:"activites",label:"Activités",icon:"cal"},
+  {id:"voyageurs",label:"Voyageurs",icon:"users"},
+  {id:"partenaires",label:"Partenaires",icon:"handshake"},
+  {id:"messages",label:"Messages",icon:"chat"},
+  {id:"statistiques",label:"Statistiques",icon:"bar"},
+  {id:"parametres",label:"Paramètres",icon:"gear"}
+];
+function setDashPage(id){S.dashPage=id;render();}
+function setDashPeriod(p){S.dashPeriod=p;render();}
+function renderDash(){
+  const pageFns={tableau:vDashTableau,activites:vDashActivites,voyageurs:vDashVoyageurs,partenaires:vDashPartenaires,messages:vDashMessages,statistiques:vDashStatistiques,parametres:vDashParametres};
+  const content=(pageFns[S.dashPage]||vDashStub)();
+  $("dash").innerHTML=`
+    <aside class="sidebar">
+      <div class="slogo">côté<span style="color:var(--coral)">a</span></div>
+      <div class="scamp">
+        <img src="assets/hero-home.jpg?v=2" alt="">
+        <div><b>${esc(EST.name)}</b><div class="stars">★★★★★</div></div>
+      </div>
+      <nav class="snav">
+        ${DASH_NAV.map(n=>`<button class="${S.dashPage===n.id?"on":""}" onclick="setDashPage('${n.id}')">${svg(n.icon)}${n.label}</button>`).join("")}
+      </nav>
+      <div class="shelp"><b>Besoin d'aide ?</b>Consultez notre centre d'aide ou contactez-nous.</div>
+      <div class="suser">${avatarEl("Paul Martin",36,'')}<div><b>Paul Martin</b><span>Directeur</span></div></div>
+    </aside>
+    <main class="dash-main">${content}</main>`;
+}
+function vDashStub(){
+  return `<div class="stub-page"><span class="ic">${svg("info")}</span><p>Cette section arrive bientôt dans le prototype.</p></div>`;
+}
+function dashHeader(title,sub){
+  const demo=DASH_DEMO[S.dashPeriod];
+  const chip=(p,label)=>`<button class="chip ${S.dashPeriod===p?"on":""}" onclick="setDashPeriod('${p}')">${label}</button>`;
+  return `<div class="dash-top">
+    <div><h1>${title}</h1><p>${sub}</p></div>
+    <div class="dsel">${chip("week","Cette semaine")}${chip("month","Ce mois")}${chip("season","Saison")}</div>
+  </div>`;
+}
+
+/* ---------- Dashboard : Tableau de bord ---------- */
+function vDashTableau(){
+  const acts=dashActs();
+  const demo=DASH_DEMO[S.dashPeriod];
+  const created=acts.length;
+  const campingCount=acts.filter(a=>a.orga==="Équipe animation").length;
+  const voyageurCount=created-campingCount;
+  const top=[...acts].sort((a,b)=>b.parts.length-a.parts.length).slice(0,5);
+  const totalParts=acts.reduce((s,a)=>s+a.parts.length,0)||1;
+  const trend=[8,11,9,14,12,16,created||10];
+  return dashHeader("Tableau de bord","Voici le tableau de bord de votre communauté Côtéa.")+`
+    <div class="occ-banner">
+      <div><b>Saisissez l'occupation actuelle <span class="muted" style="font-weight:500">(optionnel)</span></b><p>Indiquez le nombre de voyageurs présents pour calculer vos taux d'adoption et d'activité.</p></div>
+      <div class="in"><input type="number" value="${demo.occ}" id="occInput"><button class="btn btn-navy btn-sm" onclick="toast('Occupation enregistrée (démo).')">Enregistrer</button></div>
+    </div>
+    <div class="sectitle">${svg("users")} LA COMMUNAUTÉ</div>
+    <div class="kgrid">
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b class="num">${demo.membres}</b><span class="lbl">Membres de la communauté</span></div></div><span class="sub">Ont rejoint Côtéa en scannant le QR pendant leur séjour</span>${sparkline([4,6,5,8,7,9,10],"var(--purple)")}</div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${demo.actifs}</b><span class="lbl">Voyageurs actifs</span></div></div><span class="sub">${Math.round(demo.actifs/demo.membres*100)}% des membres de la communauté</span>${sparkline([5,7,6,9,8,10,11],"var(--green-solid)")}</div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("cal")}</span><div><b class="num">${created}</b><span class="lbl">Activités créées</span></div></div><span class="sub">Sur la période sélectionnée</span>${sparkline(trend,"var(--blue)")}</div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">4,8 / 5</b><span class="lbl">Satisfaction moyenne</span></div></div><span class="sub">Basée sur les avis laissés cette période</span>${sparkline([4.5,4.6,4.7,4.6,4.8,4.9,4.8],"var(--amber-solid)")}</div>
+    </div>
+    <div class="dgrid3">
+      <div class="dpanel2"><h3>${svg("scan")} Acquisition</h3>
+        <div class="stat-line"><b class="num" style="color:var(--purple)">${demo.qr}</b><div><div class="lbl">QR codes scannés</div><div class="sub">Depuis le début de la période</div></div></div>
+        <div class="stat-line"><b class="num" style="color:var(--green-solid)">${demo.newToday}</b><div><div class="lbl">Nouveaux membres aujourd'hui</div></div></div>
+        <div class="stat-line"><b class="num" style="color:var(--blue)">${demo.retour}%</b><div><div class="lbl">Voyageurs revenus au moins une deuxième fois</div></div></div>
+        <div class="info-banner p" style="margin-top:14px">${svg("scan")}<span>Le QR code est votre porte d'entrée. Plus il est visible, plus votre communauté grandit ! <button class="link" style="color:var(--purple);font-weight:700" onclick="setDashPage('parametres')">Voir mon QR →</button></span></div>
+      </div>
+      <div class="dpanel2"><h3>${svg("cal")} Activités</h3>
+        <div style="display:flex;justify-content:space-around;text-align:center;margin-bottom:14px">
+          <div><b class="num" style="font-family:'Baloo 2',sans-serif;font-size:22px;display:block">${voyageurCount}</b><span class="small muted">Par les voyageurs</span></div>
+          <div><b class="num" style="font-family:'Baloo 2',sans-serif;font-size:22px;display:block">${campingCount}</b><span class="small muted">Par le camping</span></div>
+          <div><b class="num" style="font-family:'Baloo 2',sans-serif;font-size:22px;display:block">${created}</b><span class="small muted">Au total</span></div>
+        </div>
+        <div class="donut-wrap">
+          ${donut([{value:voyageurCount||1,color:"var(--blue)"},{value:campingCount,color:"var(--green-solid)"}],100,14)}
+          <div>
+            <div class="legend-item"><i style="background:var(--blue)"></i>${Math.round(voyageurCount/created*100)||0}% Activités des voyageurs</div>
+            <div class="legend-item"><i style="background:var(--green-solid)"></i>${Math.round(campingCount/created*100)||0}% Activités du camping</div>
+          </div>
+        </div>
+        <div class="info-banner g" style="margin-top:14px">${svg("check")}<span>Vos voyageurs créent la majorité des activités : votre communauté est engagée !</span></div>
+      </div>
+      <div class="dpanel2"><h3>${svg("star")} Top 5 des activités</h3>
+        ${top.length?top.map((a,i)=>`<div class="leader"><span class="rank">${i+1}</span><span style="flex:1;font-weight:600">${esc(a.title)}</span><span class="pct">${Math.round(a.parts.length/totalParts*100)}%</span></div><div class="track" style="margin:-6px 0 10px 30px"><i style="width:${Math.round(a.parts.length/totalParts*100)}%"></i></div>`).join(""):`<p class="small muted">Aucune activité sur cette période.</p>`}
+      </div>
+    </div>
+    <div class="dgrid2">
+      <div class="dpanel2"><h3>${svg("handshake")} Impact partenaires</h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div class="partner-card"><img src="assets/hero-decouverte.jpg?v=2" alt=""><b>Excursion bateau</b><span class="amt">2 340 €</span><span class="sub">18 réservations</span></div>
+          <div class="partner-card"><img src="assets/hero-sport.jpg?v=2" alt=""><b>Location de vélos</b><span class="amt">780 €</span><span class="sub">12 réservations</span></div>
+          <div class="partner-card"><img src="assets/hero-moments.jpg?v=2" alt=""><b>Sortie kayak</b><span class="amt">540 €</span><span class="sub">8 réservations</span></div>
+        </div>
+        <div class="impact-total"><span>Total généré pour vos partenaires</span><b>3 660 €</b></div>
+      </div>
+      <div class="dpanel2"><h3>${svg("check")} Bénéfices Côtéa</h3>
+        <div class="benefit-grid">
+          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b>${demo.actifs} voyageurs actifs</b><span>soit ${Math.round(demo.actifs/demo.membres*100)}% de l'occupation</span></div></div>
+          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("scan")}</span><div><b>${Math.round(demo.qr/demo.occ*100)}% des voyageurs</b><span>ont rejoint via le QR code</span></div></div>
+          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("cal")}</span><div><b>${created} activités créées</b><span>sans intervention de votre équipe</span></div></div>
+          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b>4,8 / 5 de satisfaction</b><span>sur la période sélectionnée</span></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="small muted" style="margin-top:6px">Les données présentées sont issues uniquement des interactions sur Côtéa.</p>`;
+}
+
+/* ---------- Dashboard : Activités ---------- */
+function setDashActTab(t){S.dashActTab=t;render();}
+function vDashActivites(){
+  const all=dashActs();
+  const created=all.length;
+  const totalParts=all.reduce((s,a)=>s+a.parts.length,0);
+  const avgPer=created?(totalParts/created).toFixed(1):"0";
+  const campingCount=all.filter(a=>a.orga==="Équipe animation").length;
+  const voyageurCount=created-campingCount;
+  let list=all;
+  if(S.dashActTab==="voy")list=list.filter(a=>a.orga!=="Équipe animation");
+  if(S.dashActTab==="camp")list=list.filter(a=>a.orga==="Équipe animation");
+  if(S.dashActSearch.trim())list=list.filter(a=>a.title.toLowerCase().includes(S.dashActSearch.trim().toLowerCase()));
+  const presqueComplet=all.filter(a=>a.status!=="annulée"&&a.parts.length<a.cap&&a.parts.length/a.cap>=0.85);
+  const peuRemplie=all.filter(a=>a.status!=="annulée"&&a.parts.length/a.cap<0.4);
+  const today=iso(daysFrom(0));
+  const ajourdhui=all.filter(a=>a.date===today);
+  const byDate={};all.forEach(a=>{byDate[a.date]=(byDate[a.date]||0)+a.parts.length;});
+  const dates=Object.keys(byDate).sort();
+  const maxDay=Math.max(...dates.map(d=>byDate[d]),1);
+  return dashHeader("Activités","Gérez et suivez toutes les activités proposées dans votre établissement.")+`
+    <div class="kgrid">
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("cal")}</span><div><b class="num">${created}</b><span class="lbl">Activités au total</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${totalParts}</b><span class="lbl">Participations</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("run")}</span><div><b class="num">${avgPer}</b><span class="lbl">Participations / activité</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">4,8 / 5</b><span class="lbl">Satisfaction moyenne</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--pink-bg);color:var(--pink)">${svg("grid")}</span><div><b class="num">${created?Math.round(voyageurCount/created*100):0}%</b><span class="lbl">Activités voyageurs</span></div></div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="dtabs">
+        <button class="${S.dashActTab==="all"?"on":""}" onclick="setDashActTab('all')">Toutes les activités</button>
+        <button class="${S.dashActTab==="voy"?"on":""}" onclick="setDashActTab('voy')">Activités voyageurs</button>
+        <button class="${S.dashActTab==="camp"?"on":""}" onclick="setDashActTab('camp')">Activités du camping</button>
+      </div>
+      <div class="searchbar" style="margin-left:auto">${svg("search")}<input placeholder="Rechercher une activité…" value="${esc(S.dashActSearch)}" oninput="S.dashActSearch=this.value;render()"></div>
+      <button class="chip">${svg("sliders")} Filtres</button>
+    </div>
+    <div class="dgrid2">
+      <div class="dpanel2">
+        <h3>Liste des activités</h3>
+        <div style="overflow-x:auto">
+        <table class="dtable">
+          <thead><tr><th>Activité</th><th>Type</th><th>Date / Heure</th><th>Participants</th><th>Taux de remplissage</th><th>Statut</th></tr></thead>
+          <tbody>
+          ${list.length?list.map(a=>{
+            const st=statusLabel(a);const cc=colorOf(a);const pct=Math.round(a.parts.length/a.cap*100);
+            const isCamp=a.orga==="Équipe animation";
+            return `<tr><td><div class="actrow">${a.photo?`<img src="${a.photo}" alt="">`:`<div style="width:38px;height:38px;border-radius:10px;background:${cc.bg}"></div>`}<div><b>${esc(a.title)}</b><span>${catLabel(a.subcat)||catLabel(a.topcat)}</span></div></div></td>
+              <td><span class="status-pill" style="background:${isCamp?"var(--blue-bg)":"var(--purple-bg)"};color:${isCamp?"var(--blue)":"var(--purple)"}">${isCamp?"Camping":"Voyageurs"}</span></td>
+              <td>${fmtDate(a.date)} · ${a.time}</td>
+              <td>${a.parts.length} / ${a.cap}</td>
+              <td><span class="fillbar"><i style="width:${pct}%;background:${pct>=90?"var(--coral)":pct>=60?"var(--amber-solid)":"var(--green-solid)"}"></i></span>${pct}%</td>
+              <td><span class="status-pill" style="background:${st.bg};color:${st.fg}">${st.t}</span></td>
+            </tr>`;
+          }).join(""):`<tr><td colspan="6" style="text-align:center;padding:20px" class="muted">Aucune activité ne correspond.</td></tr>`}
+          </tbody>
+        </table>
+        </div>
+      </div>
+      <div>
+        <div class="dpanel2" style="margin-bottom:16px">
+          <h3>Répartition des activités</h3>
+          <div class="donut-wrap">
+            ${donut([{value:voyageurCount||1,color:"var(--purple)"},{value:campingCount,color:"var(--blue)"}],96,14)}
+            <div><b style="font-family:'Baloo 2',sans-serif;font-size:22px;display:block">${created}</b><span class="small muted">activités</span></div>
+          </div>
+          <div class="legend-item" style="margin-top:10px"><i style="background:var(--purple)"></i>${voyageurCount} Activités voyageurs</div>
+          <div class="legend-item"><i style="background:var(--blue)"></i>${campingCount} Activités camping</div>
+        </div>
+        <div class="dpanel2" style="margin-bottom:16px">
+          <h3>Activités à surveiller</h3>
+          <div class="watch-item"><span class="n" style="background:var(--amber-bg);color:var(--amber)">${presqueComplet.length}</span><span>Activités presque complètes</span></div>
+          <div class="watch-item"><span class="n" style="background:var(--coral-bg);color:var(--coral-d)">${peuRemplie.length}</span><span>Activité(s) peu remplie(s)</span></div>
+          <div class="watch-item"><span class="n" style="background:var(--blue-bg);color:var(--blue)">${ajourdhui.length}</span><span>Activités à venir aujourd'hui</span></div>
+        </div>
+        <div class="dpanel2">
+          <h3>Création rapide</h3>
+          <p class="small muted" style="margin-bottom:8px">Proposez une nouvelle activité à votre communauté.</p>
+          ${["Activité sportive","Activité détente / bien-être","Sortie / découverte","Soirée / animation","Autre activité"].map(t=>`<button class="quick-item" style="width:100%" onclick="toast('Création côté directeur — bientôt disponible (démo).')">${svg("plus")}${t}</button>`).join("")}
+        </div>
+      </div>
+    </div>
+    <div class="dpanel2" style="margin-top:16px">
+      <h3>Aperçu de la période</h3>
+      ${dates.length?`<div class="trend">${dates.map(d=>`<div class="tbar" title="${fmtDate(d)} · ${byDate[d]} participations"><div class="tbar-col"><i style="height:${Math.max(6,Math.round(byDate[d]/maxDay*70))}px;background:var(--purple)"></i></div><span>${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</span></div>`).join("")}</div>`:`<p class="small muted">Aucune donnée sur cette période.</p>`}
+    </div>`;
+}
+
+/* ---------- Dashboard : Voyageurs ---------- */
+function vDashVoyageurs(){
+  const demo=DASH_DEMO[S.dashPeriod];
+  const acts=dashActs();
+  const interestCounts={};
+  acts.forEach(a=>{const l=catLabel(a.topcat);interestCounts[l]=(interestCounts[l]||0)+a.parts.length;});
+  const interests=Object.entries(interestCounts).sort((a,b)=>b[1]-a[1]);
+  const maxInt=Math.max(...interests.map(i=>i[1]),1);
+  const ageBuckets=[["0-5 ans",4],["6-12 ans",14],["13-17 ans",9],["18-25 ans",8],["26-35 ans",20],["36-50 ans",27],["51-65 ans",14],["+65 ans",4]];
+  const maxAge=Math.max(...ageBuckets.map(a=>a[1]));
+  const evolution=[12,18,16,22,25,23,28,31,29,34,38,36,41,45];
+  const lc=linechart(evolution);
+  const engagement=[...acts].sort((a,b)=>(b.parts.length/b.cap)-(a.parts.length/a.cap)).slice(0,5);
+  return dashHeader("Voyageurs","Aperçu de votre communauté et de son engagement.")+`
+    <div class="kgrid">
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b class="num">${demo.membres}</b><span class="lbl">Membres de la communauté</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${demo.actifs}</b><span class="lbl">Voyageurs actifs</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">76%</b><span class="lbl">Taux d'engagement</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--pink-bg);color:var(--pink)">${svg("heart")}</span><div><b class="num">87 / 100</b><span class="lbl">Indice de communauté</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("cal")}</span><div><b class="num">4,6</b><span class="lbl">Activités / voyageur actif</span></div></div></div>
+    </div>
+    <div class="dgrid3">
+      <div class="dpanel2"><h3>Composition de la communauté</h3>
+        <div class="donut-wrap">
+          ${donut([{value:42,color:"var(--green-solid)"},{value:31,color:"var(--purple)"},{value:18,color:"var(--blue)"},{value:9,color:"var(--amber-solid)"}],100,16)}
+          <div><b style="font-family:'Baloo 2',sans-serif;font-size:20px;display:block">${demo.membres}</b><span class="small muted">membres</span></div>
+        </div>
+        <div class="legend-item" style="margin-top:10px"><i style="background:var(--green-solid)"></i>Familles — 42%</div>
+        <div class="legend-item"><i style="background:var(--purple)"></i>Couples — 31%</div>
+        <div class="legend-item"><i style="background:var(--blue)"></i>Entre amis — 18%</div>
+        <div class="legend-item"><i style="background:var(--amber-solid)"></i>Voyageurs solo — 9%</div>
+      </div>
+      <div class="dpanel2"><h3>Centres d'intérêt</h3>
+        ${interests.length?interests.map(([l,n])=>`<div class="hbar-row"><span class="lbl">${l}</span><span class="track"><i style="width:${Math.round(n/maxInt*100)}%;background:var(--purple)"></i></span><span class="val">${n}</span></div>`).join(""):`<p class="small muted">Aucune donnée sur cette période.</p>`}
+      </div>
+      <div class="dpanel2"><h3>Répartition par âge</h3>
+        ${ageBuckets.map(([l,n])=>`<div class="hbar-row"><span class="lbl" style="width:70px;font-size:11px">${l}</span><span class="track"><i style="width:${Math.round(n/maxAge*100)}%;background:var(--blue)"></i></span><span class="val">${n}%</span></div>`).join("")}
+      </div>
+    </div>
+    <div class="dgrid2">
+      <div class="dpanel2">
+        <h3>Évolution des inscriptions</h3>
+        <div class="linechart-wrap">${lc.svg}</div>
+        <p class="small muted" style="margin-top:6px">Sur les 14 derniers jours — dernier point : ${evolution[evolution.length-1]} inscrits.</p>
+      </div>
+      <div class="dpanel2">
+        <h3>Engagement par activité</h3>
+        ${engagement.length?engagement.map(a=>{const pct=Math.round(a.parts.length/a.cap*100);return `<div class="hbar-row"><span class="lbl" style="width:150px">${esc(a.title)}</span><span class="track"><i style="width:${pct}%;background:var(--green-solid)"></i></span><span class="val">${pct}%</span></div>`;}).join(""):`<p class="small muted">Aucune activité sur cette période.</p>`}
+      </div>
+    </div>
+    <p class="small muted" style="margin-top:6px">Les données sont anonymisées et mises à jour en temps réel.</p>`;
+}
+
+/* ---------- Dashboard : Paramètres (QR & accès communauté) ---------- */
+function vDashParametres(){
+  return dashHeader("Paramètres","Gérez l'accès à la communauté et les informations de votre établissement.")+`
+    <div class="dpanel2" style="margin-bottom:16px">
+      <h3>${svg("scan")} Accès communauté</h3>
+      <div class="qr-card2">
+        <div class="qr-visual2">${qrSvg(EST.joinUrl(),5)}</div>
+        <div style="flex:1;min-width:220px">
+          <p class="small muted">Affichez ce QR à la réception. Les voyageurs le scannent pour rejoindre la communauté, avec le code pré-rempli automatiquement.</p>
+          <div class="qr-code2">${esc(EST.joinCode)}</div>
+          <div style="display:flex;gap:10px;max-width:340px">
+            <button class="btn btn-outline" onclick="copyJoinLink()">${svg("share")} Copier le lien</button>
+            <button class="btn btn-navy" onclick="regenCode()">Régénérer le code</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dpanel2">
+      <h3>${svg("gear")} Établissement</h3>
+      <div class="field"><label>Nom de l'établissement</label><input value="${esc(EST.name)}" onchange="EST.name=this.value;toast('Nom mis à jour (démo).')"></div>
+      <div class="field"><label>Localité</label><input value="${esc(EST.place)}" onchange="EST.place=this.value;toast('Localité mise à jour (démo).')"></div>
+    </div>`;
+}
+
+/* ---------- Dashboard : Partenaires ---------- */
+function vDashPartenaires(){
+  const list=S.partners;
+  const totalBookings=list.reduce((s,p)=>s+p.bookings,0);
+  const totalRevenue=list.reduce((s,p)=>s+p.revenue,0);
+  return dashHeader("Partenaires","Suivez les prestataires locaux recommandés à votre communauté.")+`
+    <div class="kgrid">
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("handshake")}</span><div><b class="num">${list.length}</b><span class="lbl">Partenaires actifs</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("cal")}</span><div><b class="num">${totalBookings}</b><span class="lbl">Réservations générées</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">${totalRevenue.toLocaleString("fr-FR")} €</b><span class="lbl">Chiffre d'affaires généré</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("route")}</span><div><b class="num">${totalBookings?Math.round(totalRevenue/totalBookings):0} €</b><span class="lbl">Panier moyen</span></div></div></div>
+    </div>
+    <div class="dpanel2">
+      <div style="display:flex;align-items:center;margin-bottom:14px"><h3 style="margin:0">Vos partenaires</h3><button class="btn btn-coral btn-sm" style="margin-left:auto" onclick="openAddPartner()">${svg("plus")} Ajouter un partenaire</button></div>
+      <div style="overflow-x:auto"><table class="dtable">
+        <thead><tr><th>Partenaire</th><th>Catégorie</th><th>Réservations</th><th>CA généré</th><th>Contact</th><th></th></tr></thead>
+        <tbody>
+        ${list.length?list.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.category)}</td><td>${p.bookings}</td><td>${p.revenue.toLocaleString("fr-FR")} €</td><td class="muted">${esc(p.contact||"—")}</td><td><button class="link-danger" onclick="removePartner('${p.id}')">Retirer</button></td></tr>`).join(""):`<tr><td colspan="6" style="text-align:center;padding:20px" class="muted">Aucun partenaire pour le moment.</td></tr>`}
+        </tbody>
+      </table></div>
+    </div>
+    <p class="small muted" style="margin-top:10px">Les partenaires recommandés apparaissent automatiquement aux voyageurs dans les activités correspondantes (ex. sortie bateau, location de vélo).</p>`;
+}
+function openAddPartner(){
+  openModal(`
+    <h3>Ajouter un partenaire</h3>
+    <div class="field"><label>Nom</label><input id="pname" placeholder="Ex. Cap Horizon Location"></div>
+    <div class="field"><label>Catégorie</label><input id="pcat" placeholder="Ex. Excursion bateau"></div>
+    <div class="field"><label>Contact <span class="muted">(optionnel)</span></label><input id="pcontact" placeholder="Téléphone ou email"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-coral" onclick="submitPartner()">Ajouter</button>
+    </div>`);
+}
+function submitPartner(){
+  const name=$("pname").value.trim(),cat=$("pcat").value.trim(),contact=$("pcontact").value.trim();
+  if(!name||!cat){toast("Nom et catégorie sont nécessaires.");return;}
+  S.partners.push({id:"pt"+Date.now(),name,category:cat,bookings:0,revenue:0,contact});
+  closeModal();toast(`« ${esc(name)} » ajouté à vos partenaires.`);render();
+}
+function removePartner(id){S.partners=S.partners.filter(p=>p.id!==id);toast("Partenaire retiré.");render();}
+
+/* ---------- Dashboard : Messages (annonces) ---------- */
+function vDashMessages(){
+  const list=[...S.announcements].sort((a,b)=>b.at-a.at);
+  return dashHeader("Messages","Publiez des annonces visibles par toute votre communauté.")+`
+    <div class="info-banner p" style="margin-bottom:18px">${svg("shield")}<span><b>Confidentialité respectée.</b> Vous n'avez pas accès aux conversations privées entre voyageurs — uniquement à la diffusion d'annonces officielles.</span></div>
+    <div class="dpanel2">
+      <div style="display:flex;align-items:center;margin-bottom:14px"><h3 style="margin:0">Annonces à la communauté</h3><button class="btn btn-coral btn-sm" style="margin-left:auto" onclick="openAddAnnouncement()">${svg("plus")} Nouvelle annonce</button></div>
+      ${list.length?list.map(a=>`<div class="mod-row"><div><b style="display:block;font-size:13.5px;margin-bottom:3px">${esc(a.title)}</b><span class="small muted" style="line-height:1.5">${esc(a.body)}</span><div class="small muted" style="margin-top:6px">${new Date(a.at).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</div></div><button class="link-danger" onclick="removeAnnouncement('${a.id}')">Supprimer</button></div>`).join(""):`<p class="small muted">Aucune annonce publiée pour le moment.</p>`}
+    </div>`;
+}
+function openAddAnnouncement(){
+  openModal(`
+    <h3>Nouvelle annonce</h3>
+    <p class="small muted" style="margin:6px 0 14px">Visible par tous les voyageurs de la communauté.</p>
+    <div class="field"><label>Titre</label><input id="antitle" placeholder="Ex. Fermeture piscine demain matin"></div>
+    <div class="field"><label>Message</label><textarea id="anbody" placeholder="Détails de l'annonce…"></textarea></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-coral" onclick="submitAnnouncement()">Publier</button>
+    </div>`);
+}
+function submitAnnouncement(){
+  const title=$("antitle").value.trim(),body=$("anbody").value.trim();
+  if(!title||!body){toast("Titre et message sont nécessaires.");return;}
+  S.announcements.unshift({id:"an"+Date.now(),title,body,at:Date.now()});
+  closeModal();toast("Annonce publiée à toute la communauté.");render();
+}
+function removeAnnouncement(id){S.announcements=S.announcements.filter(a=>a.id!==id);render();}
+
+/* ---------- Dashboard : Statistiques ---------- */
+function reportsPanelDash(){
+  const list=[...S.reports].sort((a,b)=>b.at-a.at);
+  if(!list.length)return `<p class="small muted">Aucun signalement pour le moment.</p>`;
+  return list.map(r=>{
+    const lbl=refLabel(r.what,r.ref);
+    const when=new Date(r.at).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    return `<div class="mod-row ${r.resolved?"resolved":""}">
+      <span><b style="text-transform:capitalize">${esc(r.what)}</b>${lbl?" · "+esc(lbl):""}<br><span class="muted">${when}</span></span>
+      ${r.resolved?`<span class="muted">Résolu</span>`:`<button class="resolve" onclick="resolveReport('${r.id}')">Marquer résolu</button>`}
+    </div>`;
+  }).join("");
+}
+function exportCSV(){
+  const list=S.activities;
+  const head=["Titre","Catégorie","Type","Date","Heure","Lieu","Participants","Capacité","Statut","Organisateur"];
+  const rows=list.map(a=>[a.title,catLabel(a.subcat)||catLabel(a.topcat),a.orga==="Équipe animation"?"Camping":"Voyageurs",a.date,a.time,a.lieu,a.parts.length,a.cap,a.status,a.orga]);
+  const csv=[head,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
+  const bom=String.fromCharCode(0xFEFF);
+  const blob=new Blob([bom+csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url;link.download=`cotea-activites-${iso(daysFrom(0))}.csv`;
+  document.body.appendChild(link);link.click();document.body.removeChild(link);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast(`Export CSV téléchargé (${list.length} activités).`);
+}
+function vDashStatistiques(){
+  const acts=S.activities;
+  const byDate={};acts.forEach(a=>{byDate[a.date]=(byDate[a.date]||0)+1;});
+  const dates=Object.keys(byDate).sort();
+  const maxDay=Math.max(...dates.map(d=>byDate[d]),1);
+  const avgRating=(PAST_EXPERIENCES.reduce((s,p)=>s+p.rating,0)/PAST_EXPERIENCES.length).toFixed(1);
+  const pending=S.reports.filter(r=>!r.resolved).length;
+  const resolved=S.reports.length-pending;
+  const resolutionRate=S.reports.length?Math.round(resolved/S.reports.length*100):100;
+  return dashHeader("Statistiques","Analysez la performance de votre communauté et gérez la modération.")+`
+    <div class="kgrid">
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">${avgRating} / 5</b><span class="lbl">Satisfaction moyenne</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--coral-bg);color:var(--coral-d)">${svg("info")}</span><div><b class="num">${S.reports.length}</b><span class="lbl">Signalements totaux</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("clock")}</span><div><b class="num">${pending}</b><span class="lbl">En attente de modération</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("check")}</span><div><b class="num">${resolutionRate}%</b><span class="lbl">Taux de résolution</span></div></div></div>
+    </div>
+    <div class="dgrid2">
+      <div class="dpanel2">
+        <div style="display:flex;align-items:center;margin-bottom:14px"><h3 style="margin:0">Activité par jour</h3><button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="exportCSV()">${svg("download")} Exporter en CSV</button></div>
+        ${dates.length?`<div class="trend">${dates.map(d=>`<div class="tbar" title="${fmtDate(d)} · ${byDate[d]} activité${byDate[d]>1?"s":""}"><div class="tbar-col"><i style="height:${Math.max(6,Math.round(byDate[d]/maxDay*70))}px;background:var(--purple)"></i></div><span>${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</span></div>`).join("")}</div>`:`<p class="small muted">Aucune activité enregistrée.</p>`}
+        <h3 style="margin-top:22px">Notes des expériences passées</h3>
+        ${PAST_EXPERIENCES.map(p=>`<div class="hbar-row"><span class="lbl" style="width:170px">${esc(p.title)}</span><span class="track"><i style="width:${p.rating/5*100}%;background:var(--amber-solid)"></i></span><span class="val">${p.rating}/5</span></div>`).join("")}
+      </div>
+      <div class="dpanel2">
+        <h3>Modération</h3>
+        ${reportsPanelDash()}
+      </div>
+    </div>`;
+}
+
+boot();
+</script>
+</body>
+</html>

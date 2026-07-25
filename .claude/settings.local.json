@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"/Users/antoinevergnes/V1 Application Margaux/.claude\" && ls -la \"/Users/antoinevergnes/V1 Application Margaux\")",
+      "Bash(cp \"/Users/antoinevergnes/Downloads/cotea-prototype.html\" \"/Users/antoinevergnes/V1 Application Margaux/index.html\" && ls -la \"/Users/antoinevergnes/V1 Application Margaux\")",
+      "Bash(npm -v)",
+      "Bash(npm pack *)",
+      "Bash(tar xzf *)",
+      "Bash(npx --yes terser package/dist/qrcode.js -c -m --comments false -o qrcode.min.js)",
+      "Bash(npm install *)",
+      "Bash(python3)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s http://localhost:8743/assets/hero-detail.jpg -o /tmp/verify_hero.jpg)",
+      "Read(//tmp/**)",
+      "Bash(md5 /tmp/verify_hero.jpg \"/Users/antoinevergnes/V1 Application Margaux/assets/hero-detail.jpg\")",
+      "Bash(node -e ' *)",
+      "Bash(node --check /tmp/_chk0.js)",
+      "mcp__mcp-registry__list_connectors",
+      "mcp__mcp-registry__search_mcp_registry",
+      "mcp__dfe4d4a3-b7b6-4f16-8fcf-6beca4a58102__apply_migration",
+      "mcp__dfe4d4a3-b7b6-4f16-8fcf-6beca4a58102__get_advisors",
+      "mcp__dfe4d4a3-b7b6-4f16-8fcf-6beca4a58102__get_project_url",
+      "mcp__dfe4d4a3-b7b6-4f16-8fcf-6beca4a58102__get_publishable_keys",
+      "Bash(rm -f \"/Users/antoinevergnes/V1 Application Margaux/assets/thumb-\"*.jpg *)",
+      "Bash(curl -sI \"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js\")",
+      "mcp__dfe4d4a3-b7b6-4f16-8fcf-6beca4a58102__execute_sql",
+      "Bash(/tmp/gh-cli/extracted/gh_2.96.0_macOS_arm64/bin/gh --version)"
+    ]
+  }
+}
