@@ -567,7 +567,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
 /* ---------- Établissement ---------- */
 const EST={name:"Domaine des Pins",place:"Saint-Jean-de-Monts",type:"camping",stayStart:daysFrom(0),stayEnd:daysFrom(7),joinCode:"PINS-2607"};
-EST.joinUrl=()=>`https://cotea.app/j?etab=domaine-des-pins&code=${encodeURIComponent(EST.joinCode)}`;
+EST.joinUrl=()=>{
+  const base=location.origin+location.pathname;
+  return `${base}?code=${encodeURIComponent(EST.joinCode)}`;
+};
 
 /* ---------- Icônes SVG (outline, 24x24) ---------- */
 const IC={
