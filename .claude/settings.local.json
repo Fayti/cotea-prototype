@@ -24,7 +24,11 @@
       "Bash(rm -f \"/Users/antoinevergnes/V1 Application Margaux/assets/thumb-\"*.jpg *)",
       "Bash(curl -sI \"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js\")",
       "mcp__dfe4d4a3-b7b6-4f16-8fcf-6beca4a58102__execute_sql",
-      "Bash(/tmp/gh-cli/extracted/gh_2.96.0_macOS_arm64/bin/gh --version)"
+      "Bash(/tmp/gh-cli/extracted/gh_2.96.0_macOS_arm64/bin/gh --version)",
+      "Bash(/tmp/gh-cli/extracted/gh_2.96.0_macOS_arm64/bin/gh api *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
