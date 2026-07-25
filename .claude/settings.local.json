@@ -28,7 +28,8 @@
       "Bash(/tmp/gh-cli/extracted/gh_2.96.0_macOS_arm64/bin/gh api *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(/tmp/gh-cli/extracted/gh_2.96.0_macOS_arm64/bin/gh auth *)"
     ]
   }
 }

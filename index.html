@@ -51,7 +51,7 @@ svg{stroke:currentColor;overflow:visible;width:20px;height:20px;flex:none}
 /* ---------- stage / phone ---------- */
 .stage{display:flex;justify-content:center;align-items:flex-start;padding:28px 12px 60px;min-height:calc(100vh - 42px)}
 .phone{width:100%;max-width:412px;background:var(--cream);border-radius:38px;overflow:hidden;box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;height:min(880px,calc(100vh - 120px));min-height:640px;position:relative}
-@media (max-width:480px){.stage{padding:0}.phone{max-width:none;border-radius:0;height:calc(100vh - 42px);min-height:0;box-shadow:none;border:none}}
+@media (max-width:480px){.stage{padding:0}.phone{max-width:none;border-radius:0;height:calc(100vh - 42px);height:calc(100dvh - 42px);min-height:0;box-shadow:none;border:none}}
 .screen{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:block;position:relative}
 #screen>*{animation:screenIn .2s ease}
 @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -118,7 +118,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .landing .logo-big{font-size:34px}
 .landing .tagline{font-size:13px;font-weight:700;color:var(--ink2);margin-top:6px}
 .landing .subtag{font-size:11px;color:var(--muted);margin-top:2px}
-.landing .body{padding:0 20px 26px;margin-top:-24px;position:relative;z-index:2}
+.landing .body{padding:0 20px calc(26px + env(safe-area-inset-bottom));margin-top:-24px;position:relative;z-index:2}
 .explainer-card{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .explainer-card .play{width:36px;height:36px;border-radius:50%;border:2px solid var(--ink2);display:flex;align-items:center;justify-content:center;flex:none}
 .estab-card{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px}
@@ -143,7 +143,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .notice-box{display:flex;align-items:center;gap:12px;background:var(--green-bg);border-radius:14px;padding:14px 16px;margin:8px 20px}
 
 /* ---------- onboarding ---------- */
-.onb{padding:22px 22px 22px;flex:1;display:flex;flex-direction:column}
+.onb{padding:22px 22px calc(22px + env(safe-area-inset-bottom));flex:1;display:flex;flex-direction:column}
 .onb .top-progress{display:flex;gap:6px;margin-bottom:20px}
 .onb .top-progress i{height:4px;flex:1;background:var(--line);border-radius:2px}
 .onb .top-progress i.on{background:var(--purple)}
@@ -301,7 +301,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .minimap .pin svg{width:30px;height:30px;stroke:var(--coral);fill:var(--coral-bg)}
 .addr b{display:block;font-size:13px}
 .addr span{font-size:12px;color:var(--muted)}
-.sticky-cta{position:sticky;bottom:0;background:linear-gradient(0deg,var(--cream) 60%,rgba(245,246,250,0));padding:16px 18px 8px;margin-top:-8px}
+.sticky-cta{position:sticky;bottom:0;background:linear-gradient(0deg,var(--cream) 60%,rgba(245,246,250,0));padding:16px 18px calc(8px + env(safe-area-inset-bottom));margin-top:-8px}
 
 /* ---------- join confirmation ---------- */
 .confirm{flex:1;display:flex;flex-direction:column}
@@ -311,7 +311,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .confirm .hero .back svg{width:17px;height:17px;stroke:var(--ink)}
 .confirm .checkbadge{width:64px;height:64px;border-radius:50%;background:#fff;box-shadow:var(--shadow-lg);display:flex;align-items:center;justify-content:center;margin:-32px auto 0;position:relative;z-index:2}
 .confirm .checkbadge svg{width:32px;height:32px;stroke:var(--green-solid);stroke-width:2.4}
-.confirm .body{padding:14px 22px 26px;text-align:center;flex:1}
+.confirm .body{padding:14px 22px calc(26px + env(safe-area-inset-bottom));text-align:center;flex:1}
 .confirm h2{font-size:26px;margin-bottom:18px}
 .confirm-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;text-align:left;margin-bottom:16px;display:flex;gap:12px;align-items:flex-start}
 .confirm-card .ic{width:44px;height:44px;border-radius:12px;flex:none;object-fit:cover}
@@ -328,7 +328,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .confirm .actions .btn{margin-bottom:10px}
 
 /* ---------- create ---------- */
-.create{padding:20px 20px 40px}
+.create{padding:20px 20px calc(40px + env(safe-area-inset-bottom))}
 .icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 4px}
 .icon-opt{border:1.5px solid var(--line);border-radius:14px;background:#fff;padding:12px 4px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10.5px;font-weight:700}
 .icon-opt svg{width:22px;height:22px;stroke:var(--ink2)}
@@ -344,7 +344,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .msg.them{background:#fff;border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:5px}
 .msg.me{background:var(--ink2);color:#fff;align-self:flex-end;border-bottom-right-radius:5px}
 .msg .rep{display:block;margin-top:5px;font-size:10.5px;color:var(--muted);text-decoration:underline}
-.chatbar{display:flex;gap:9px;padding:12px 14px;border-top:1px solid var(--line);background:#fff}
+.chatbar{display:flex;gap:9px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#fff}
 .chatbar input{flex:1;border:1px solid var(--line);border-radius:99px;padding:11px 16px;background:var(--cream);font-size:14px}
 .chatbar button{width:42px;height:42px;border-radius:50%;background:var(--coral);color:#fff;flex:none;display:flex;align-items:center;justify-content:center}
 .chatbar button svg{width:17px;height:17px;stroke:#fff}
@@ -896,7 +896,7 @@ function vExplainer(){
     </div>
     ${steps.map((s,i)=>`<div class="step-row"><span class="icon-circle" style="background:var(--purple-bg)">${svg(s.icon)}</span><div><h4>${i+1}. ${s.t}</h4><p>${s.p}</p></div></div>`).join("")}
     <div class="notice-box">${svg("shield")}<p class="small" style="line-height:1.4">Vos données restent les vôtres : jamais revendues, modifiables à tout moment.</p></div>
-    <div style="padding:16px 20px 24px"><button class="btn btn-coral" onclick="go('onboard')">Rejoindre la communauté</button></div>
+    <div style="padding:16px 20px calc(24px + env(safe-area-inset-bottom))"><button class="btn btn-coral" onclick="go('onboard')">Rejoindre la communauté</button></div>
   </div>`;
 }
 
