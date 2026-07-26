@@ -1372,9 +1372,18 @@ async function publishA(){
   if(error){toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
   await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
   await loadEstablishmentData();
-  toast(`« ${esc(d.title.trim())} » est publiée. Les voyageurs intéressés seront notifiés.`);
+  toast(`« ${esc(d.title.trim())} » est publiée. Génération d'une photo par IA en cours…`);
   S.catFilter={topcat:d.topcat,tab:"a"};
   openDetail(data.id);
+  generateActivityPhoto(data.id,d.title.trim(),d.topcat,d.subcat,d.lieu.trim());
+}
+async function generateActivityPhoto(activityId,title,topcat,subcat,lieu){
+  try{
+    const {error}=await sb.functions.invoke("generate-activity-image",{body:{activityId,title,topcat,subcat,lieu}});
+    if(error){console.error(error);return;}
+    await loadEstablishmentData();
+    if(S.screen==="detail"&&S.currentId===activityId){render();toast("Photo générée par IA ajoutée !");}
+  }catch(e){console.error(e);}
 }
 
 /* ---------- Itinéraire (Google Maps, fonctionne réellement) ---------- */
