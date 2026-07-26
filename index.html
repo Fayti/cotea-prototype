@@ -580,6 +580,7 @@ const IC={
   boat:'<path d="M4 17h16l-2 3H6zM12 4v11M12 5c4 1 6 4 6 8M12 15H6c0-5 3-9 6-10z" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   sun:'<circle cx="12" cy="12" r="4.2" fill="none" stroke-width="1.8"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7" stroke-width="1.7" stroke-linecap="round"/>',
   dice:'<rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>',
+  ball:'<circle cx="12" cy="12" r="8.5" fill="none" stroke-width="1.7"/><path d="M4.5 9.5c4 2.5 11 2.5 15 0M4.5 14.5c4-2.5 11-2.5 15 0" fill="none" stroke-width="1.5"/>',
   bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.2 1 2.1h5c0-.9.4-1.7 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   photo:'<rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke-width="1.7"/><circle cx="8.5" cy="10" r="1.6" fill="none" stroke-width="1.6"/><path d="M3 16l5-4 4 3 3-2.5 6 5" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   cal:'<rect x="4" y="5" width="16" height="16" rx="3" fill="none" stroke-width="1.7"/><path d="M4 10h16M8 3v4M16 3v4" stroke-width="1.7" stroke-linecap="round"/>',
@@ -637,7 +638,7 @@ const TOPCATS=[
   {id:"loisirs",label:"Loisirs",icon:"dice",color:"purple",cover:"assets/hero-loisirs.jpg?v=2",desc:"Amusez-vous, partagez et créez de beaux souvenirs ensemble."}
 ];
 const SUBCATS={
-  sport:[{id:"running",label:"Running",icon:"run"},{id:"rando",label:"Randonnée",icon:"route"},{id:"velo",label:"Vélo",icon:"bike"},{id:"petanque",label:"Pétanque",icon:"dice"},{id:"tennis",label:"Tennis",icon:"star"},{id:"paddle",label:"Paddle",icon:"boat"},{id:"autre",label:"Autre",icon:"dots"}],
+  sport:[{id:"running",label:"Running",icon:"run"},{id:"foot",label:"Football",icon:"ball"},{id:"rando",label:"Randonnée",icon:"route"},{id:"velo",label:"Vélo",icon:"bike"},{id:"petanque",label:"Pétanque",icon:"dice"},{id:"tennis",label:"Tennis",icon:"star"},{id:"paddle",label:"Paddle",icon:"boat"},{id:"autre",label:"Autre",icon:"dots"}],
   decouverte:[{id:"bateau",label:"Excursion bateau",icon:"boat",color:"blue"},{id:"visite",label:"Visite",icon:"village",color:"purple"},{id:"plage",label:"Plage",icon:"sun",color:"orange"},{id:"chien",label:"Promenade chien",icon:"paw",color:"green"},{id:"veloD",label:"Balade à vélo",icon:"bike",color:"blue"},{id:"marche",label:"Marché",icon:"basket",color:"orange"},{id:"village",label:"Village",icon:"village",color:"pink"}],
   loisirs:[{id:"cartes",label:"Jeux de cartes",icon:"cards",color:"purple"},{id:"societe",label:"Jeux de société",icon:"dice",color:"orange"},{id:"creatives",label:"Activités créatives",icon:"palette",color:"pink"},{id:"lecture",label:"Lecture & culture",icon:"book",color:"blue"},{id:"musique",label:"Musique",icon:"music",color:"amber"},{id:"cinema",label:"Cinéma",icon:"film",color:"navy"},{id:"autresL",label:"Autres loisirs",icon:"dots",color:"green"}],
   moments:[{id:"barbecue",label:"Barbecue",icon:"sun",color:"orange"},{id:"soiree",label:"Soirée / Apéro",icon:"music",color:"purple"},{id:"restaurant",label:"Restaurant",icon:"fork",color:"green"},{id:"autreM",label:"Autre moment",icon:"users",color:"blue"}]
@@ -1353,6 +1354,12 @@ function vCreateCta(){
   if(draft.step===1)return `<div class="fixedbar"><button class="btn btn-coral" onclick="createStep2()">Aperçu de mon activité</button></div>`;
   return `<div class="fixedbar"><button class="btn btn-coral" onclick="publishA()">Publier mon activité</button><button class="btn btn-outline" onclick="draft.step=1;render()">${svg("route")} Modifier</button></div>`;
 }
+const SUBCAT_PHOTOS={
+  foot:"assets/hero-foot.jpg",petanque:"assets/hero-petanque.jpg",tennis:"assets/hero-tennis.jpg",
+  rando:"assets/hero-rando.jpg",paddle:"assets/hero-paddle.jpg",veloD:"assets/hero-velo.jpg",
+  chien:"assets/hero-chien.jpg",marche:"assets/hero-marche.jpg",visite:"assets/hero-village.jpg",
+  village:"assets/hero-village.jpg",barbecue:"assets/hero-barbecue.jpg"
+};
 async function publishA(){
   const d=draft;
   const top=TOPCATS.find(t=>t.id===d.topcat);
@@ -1360,7 +1367,7 @@ async function publishA(){
     establishment_id:EST.id,topcat:d.topcat,subcat:d.subcat,title:d.title.trim(),
     description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
     type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name,
-    photo:top?.cover||null
+    photo:SUBCAT_PHOTOS[d.subcat]||top?.cover||null
   }).select().single();
   if(error){toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
   await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
