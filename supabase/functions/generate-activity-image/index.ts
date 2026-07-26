@@ -1,6 +1,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const STYLE = "Realistic high-end lifestyle travel photography, golden hour late afternoon light, Mediterranean seaside setting with rocky hills, umbrella pines and turquoise water in the background. People shown from behind or three-quarter angle, never close-up on faces. Casual or sporty outfits, warm natural friendly atmosphere among friends, saturated warm colors, shallow depth of field, wide landscape framing. No text, logo or watermark.";
+const STYLE_SUFFIX = "Realistic high-end lifestyle travel photography, golden hour late-afternoon light, warm saturated colors, candid natural friendly atmosphere among a small group of friends. People shown from behind or three-quarter angle, never close-up on faces. Shallow depth of field, wide landscape framing, no text, no logo, no watermark.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,12 +15,19 @@ function hashSeed(s: string): number {
   return Math.abs(h) % 1000000;
 }
 
+// Only mention a Mediterranean seaside backdrop for activities where it actually fits.
+// Forcing 'turquoise water' into every prompt (e.g. a market, a village visit) produced
+// incoherent images that ignored the actual activity.
+const SEASIDE_SUBCATS = new Set([
+  "running", "paddle", "plage", "bateau", "veloD", "chien", "soiree",
+]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
   try {
-    const { activityId, title, topcat, subcat, lieu } = await req.json();
+    const { activityId, title, topcat, subcat, lieu, desc } = await req.json();
     if (!activityId || !title) {
       return new Response(JSON.stringify({ error: "activityId and title are required" }), {
         status: 400,
@@ -28,7 +35,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const prompt = `${STYLE} Scene: ${title}, category ${topcat}${subcat ? "/" + subcat : ""}${lieu ? ", location: " + lieu : ""}. Show people concretely doing this specific activity, recognizable at a glance.`;
+    const setting = SEASIDE_SUBCATS.has(subcat)
+      ? "Set on a Mediterranean coastline with rocky hills, pine trees and turquoise water."
+      : "Set in a warm Mediterranean coastal town or countryside, matching the activity's real-world setting (do not force a beach or ocean view if it doesn't fit the scene).";
+
+    // Scene description comes FIRST so the model prioritizes the actual subject matter
+    // over the generic style, then style/mood modifiers are appended.
+    const scenePart = `A candid photo of: ${title}${desc ? " — " + desc : ""}. This is a "${topcat}" activity${subcat ? " (" + subcat + ")" : ""}${lieu ? ", taking place at/near " + lieu : ""}. Show people concretely and recognizably doing this specific activity — the scene must clearly match the activity name, not a generic gathering.`;
+    const prompt = `${scenePart} ${setting} ${STYLE_SUFFIX}`;
     const encoded = encodeURIComponent(prompt);
     const seed = hashSeed(activityId);
     const pollinationsUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1536&height=1024&nologo=true&seed=${seed}`;

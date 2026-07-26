@@ -28,7 +28,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-html,body{height:100%}
+html,body{height:100%;overflow:hidden}
 body{font-family:'Inter',sans-serif;color:var(--ink);background:var(--sidebar);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input,select,textarea{font:inherit;color:var(--ink)}
@@ -403,6 +403,8 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .modal-overlay{position:fixed;inset:0;background:rgba(15,20,35,.6);display:flex;align-items:center;justify-content:center;padding:22px;z-index:200}
 .modal-card{background:#fff;border-radius:20px;max-width:380px;width:100%;padding:22px;box-shadow:var(--shadow-lg);max-height:86vh;overflow-y:auto;animation:up .2s ease}
 .modal-card h3{font-size:19px;margin-bottom:4px}
+.spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--coral);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- dashboard (directeur) ---------- */
 .dash-shell{width:100%;max-width:1320px;background:var(--cream);border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);display:flex;min-height:760px;max-height:calc(100vh - 90px)}
@@ -1360,29 +1362,43 @@ const SUBCAT_PHOTOS={
   chien:"assets/hero-chien.jpg",marche:"assets/hero-marche.jpg",visite:"assets/hero-village.jpg",
   village:"assets/hero-village.jpg",barbecue:"assets/hero-barbecue.jpg"
 };
+function showLoadingOverlay(msg){
+  $("modalHost").innerHTML=`<div class="modal-overlay"><div class="modal-card" style="text-align:center">
+    <div class="spinner"></div>
+    <p id="loadingMsg" style="font-weight:700">${esc(msg)}</p>
+  </div></div>`;
+}
+function updateLoadingMsg(msg){
+  const p=$("loadingMsg");
+  if(p)p.textContent=msg;
+}
 async function publishA(){
   const d=draft;
   const top=TOPCATS.find(t=>t.id===d.topcat);
+  showLoadingOverlay("Publication de votre activité…");
   const {data,error}=await sb.from("activities").insert({
     establishment_id:EST.id,topcat:d.topcat,subcat:d.subcat,title:d.title.trim(),
     description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
     type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name,
     photo:SUBCAT_PHOTOS[d.subcat]||top?.cover||null
   }).select().single();
-  if(error){toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
+  if(error){closeModal();toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
   await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
+  updateLoadingMsg("Génération d'une photo par IA…");
+  await generateActivityPhoto(data.id,d.title.trim(),d.topcat,d.subcat,d.lieu.trim(),d.desc.trim());
   await loadEstablishmentData();
-  toast(`« ${esc(d.title.trim())} » est publiée. Génération d'une photo par IA en cours…`);
+  closeModal();
+  toast(`« ${esc(d.title.trim())} » est publiée. Les voyageurs intéressés seront notifiés.`);
   S.catFilter={topcat:d.topcat,tab:"a"};
   openDetail(data.id);
-  generateActivityPhoto(data.id,d.title.trim(),d.topcat,d.subcat,d.lieu.trim());
 }
-async function generateActivityPhoto(activityId,title,topcat,subcat,lieu){
+async function generateActivityPhoto(activityId,title,topcat,subcat,lieu,desc){
   try{
-    const {error}=await sb.functions.invoke("generate-activity-image",{body:{activityId,title,topcat,subcat,lieu}});
-    if(error){console.error(error);return;}
-    await loadEstablishmentData();
-    if(S.screen==="detail"&&S.currentId===activityId){render();toast("Photo générée par IA ajoutée !");}
+    const result=await Promise.race([
+      sb.functions.invoke("generate-activity-image",{body:{activityId,title,topcat,subcat,lieu,desc}}),
+      new Promise(resolve=>setTimeout(()=>resolve({timeout:true}),20000))
+    ]);
+    if(result?.error)console.error(result.error);
   }catch(e){console.error(e);}
 }
 
