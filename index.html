@@ -667,12 +667,6 @@ function avatarEl(name,size,extraCls){
 /* ---------- Données seed ---------- */
 function A(o){return Object.assign({status:"ouverte",price:"Gratuit",aPrevoir:[],photo:null},o);}
 function m(who,text){return{who,text};}
-const CREATE_ICONS=[
-  {id:"running",label:"Running",icon:"run"},{id:"rando",label:"Randonnée",icon:"route"},
-  {id:"velo",label:"Vélo",icon:"bike"},{id:"petanque",label:"Pétanque",icon:"dice"},
-  {id:"tennis",label:"Tennis",icon:"star"},{id:"paddle",label:"Paddle",icon:"boat"},
-  {id:"barbecue",label:"Barbecue",icon:"sun"},{id:"autre",label:"Autre",icon:"dots"}
-];
 function seed(){
   return {
     user:null, role:"voy", tab:"home", screen:"landing",
@@ -851,7 +845,7 @@ function vTabs(){
     <span style="flex:1"></span>
     ${t("messages","chat","Messages","messages",myChats||"")}
     ${t("profile","user","Profil","profile")}
-  </nav>${showFab?`<button class="fab" aria-label="Proposer une activité" onclick="openCreate()">${svg("plus")}</button>`:""}`;
+  </nav>${showFab?`<button class="fab" aria-label="Proposer une activité" onclick="openCreate('${S.catFilter.topcat}')">${svg("plus")}</button>`:""}`;
 }
 
 /* ---------- Landing ---------- */
@@ -1056,7 +1050,7 @@ function vCategory(){
 }
 function setCatTab(t){S.catFilter.tab=t;render();}
 function emptyState(top){
-  return `<div class="panel" style="text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:16px;margin-bottom:6px">Rien ne correspond… encore.</p><p class="small muted">Soyez la première personne à proposer cette envie : d'autres voyageurs l'ont peut-être aussi.</p><button class="btn btn-coral" style="margin-top:16px" onclick="openCreate()">Proposer une activité</button></div>`;
+  return `<div class="panel" style="text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:16px;margin-bottom:6px">Rien ne correspond… encore.</p><p class="small muted">Soyez la première personne à proposer cette envie : d'autres voyageurs l'ont peut-être aussi.</p><button class="btn btn-coral" style="margin-top:16px" onclick="openCreate('${top.id}')">Proposer une activité</button></div>`;
 }
 function cardA(a){
   const cc=colorOf(a);
@@ -1164,13 +1158,13 @@ function vDetail(){
         <h5>${svg("pin")}Point de rendez-vous</h5>
         <div class="minimap"><div class="pin">${svg("pin")}</div></div>
         <div class="addr" style="margin-bottom:10px"><b>${esc(a.lieu)}</b><span>${esc(EST.place)}</span></div>
-        <button class="btn btn-outline" onclick="toast('Ouverture de l\\'itinéraire (démo).')">${svg("route")} Ouvrir l'itinéraire</button>
+        <button class="btn btn-outline" onclick="openItinerary('${a.id}')">${svg("route")} Ouvrir l'itinéraire</button>
       </div>
       ${!canceled?(inIt?`<div style="display:flex;flex-direction:column;gap:10px">
             <button class="btn btn-navy" onclick="openChat('${a.id}')">${svg("chat")} Ouvrir le chat du groupe</button>
             ${mine?`<button class="btn btn-outline" onclick="cancelA('${a.id}')">Annuler l'activité</button>`:`<button class="btn btn-outline" onclick="leaveA('${a.id}')">Quitter l'activité</button>`}
           </div>`
-        :(full?`<div class="info-banner o">${svg("info")}<span>Cette activité est complète. Créez la vôtre : d'autres voyageurs partagent sûrement la même envie.</span></div><button class="btn btn-outline" onclick="openCreate()">Proposer une activité similaire</button>`
+        :(full?`<div class="info-banner o">${svg("info")}<span>Cette activité est complète. Créez la vôtre : d'autres voyageurs partagent sûrement la même envie.</span></div><button class="btn btn-outline" onclick="openCreate('${a.topcat}')">Proposer une activité similaire</button>`
               :`<button class="btn btn-coral" style="background:${cc.solid}" onclick="joinA('${a.id}')">${svg("users")} Rejoindre cette activité</button>`)
       ):""}
       ${!canceled?`<p style="text-align:center;margin-top:16px"><button class="link-danger" onclick="report('activité','${a.id}')">Signaler cette activité</button></p>`:""}
@@ -1258,7 +1252,7 @@ function vConfirm(){
       </div>
       <div class="actions">
         <button class="btn btn-navy" onclick="openChat('${a.id}')">${svg("chat")} Accéder à la discussion</button>
-        <button class="btn btn-outline" onclick="toast('Ouverture de l\\'itinéraire GPS (démo).')">${svg("pin")} Voir le point de rendez-vous</button>
+        <button class="btn btn-outline" onclick="openItinerary('${a.id}')">${svg("pin")} Voir le point de rendez-vous</button>
         <button class="btn" style="color:var(--muted)" onclick="go('category','home')">${svg("back")} Retour aux activités</button>
       </div>
     </div>
@@ -1267,21 +1261,39 @@ function vConfirm(){
 
 /* ---------- Créer une activité ---------- */
 let draft={};
-function openCreate(){
-  draft={step:1,icon:CREATE_ICONS[0].id,title:"",date:iso(daysFrom(0)),time:"",lieu:"",cap:6,desc:""};
+function openCreate(topcat){
+  draft={step:topcat?1:0,topcat:topcat||null,subcat:null,title:"",date:iso(daysFrom(0)),time:"",lieu:"",cap:6,desc:""};
   go("create");
 }
 function vCreate(){
+  if(draft.step===0)return vCreateStep0();
   if(draft.step===1)return vCreateStep1();
   return vCreateStep2();
 }
-function vCreateStep1(){
+function vCreateStep0(){
   return `<div class="screen"><div class="create">
     <button class="iconbtn" onclick="go('category','home')" style="margin-bottom:14px">${svg("back")}</button>
     <p class="eyebrow" style="color:var(--purple)">Nouvelle activité</p>
+    <h2 style="font-size:23px;margin:4px 0 14px">Quel type d'activité ?</h2>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${TOPCATS.map(t=>{const cc=CATCOLORS[t.color];return `<button class="cat-card" style="width:100%" onclick="draft.topcat='${t.id}';draft.step=1;render()">
+        <span class="icon-circle sm" style="background:${cc.bg};color:${cc.fg}">${svg(t.icon)}</span>
+        <span class="txt"><b>${t.label}</b><p>${t.desc}</p></span>
+        ${svg("chevR",'chev')}
+      </button>`;}).join("")}
+    </div>
+  </div></div>`;
+}
+function vCreateStep1(){
+  const top=TOPCATS.find(t=>t.id===draft.topcat);
+  const subs=SUBCATS[draft.topcat]||[];
+  if(!draft.subcat&&subs[0])draft.subcat=subs[0].id;
+  return `<div class="screen"><div class="create">
+    <button class="iconbtn" onclick="draft.step=0;render()" style="margin-bottom:14px">${svg("back")}</button>
+    <p class="eyebrow" style="color:var(--purple)">${esc(top.label)}</p>
     <h2 style="font-size:23px;margin:4px 0 2px">Quel est votre projet ?</h2>
     <div class="icon-grid">
-      ${CREATE_ICONS.map(c=>`<button class="icon-opt ${draft.icon===c.id?"on":""}" onclick="draft.icon='${c.id}';render()">${svg(c.icon)}${c.label}</button>`).join("")}
+      ${subs.map(s=>`<button class="icon-opt ${draft.subcat===s.id?"on":""}" onclick="draft.subcat='${s.id}';render()">${svg(s.icon)}${s.label}</button>`).join("")}
     </div>
     <div class="field"><label>Nom de l'activité <span class="cnt" id="cnttitle">${draft.title.length}/60</span></label><input id="ntitle" maxlength="60" value="${esc(draft.title)}" placeholder="Ex. Sunset run sur la plage" oninput="draft.title=this.value;$('cnttitle').textContent=this.value.length+'/60'"></div>
     <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1299,19 +1311,20 @@ function createStep2(){
   draft.step=2;render();
 }
 function vCreateStep2(){
-  const ic=CREATE_ICONS.find(c=>c.id===draft.icon)||CREATE_ICONS[0];
+  const cc=colorOf({topcat:draft.topcat,subcat:draft.subcat});
+  const sub=subcatOf(draft.topcat,draft.subcat);
   return `<div class="screen"><div class="create">
     <button class="iconbtn" onclick="draft.step=1;render()" style="margin-bottom:14px">${svg("back")}</button>
     <p class="eyebrow" style="color:var(--purple)">Aperçu / Publier l'activité</p>
     <h2 style="font-size:21px;margin:4px 0 14px">Voici à quoi elle ressemblera pour les autres voyageurs</h2>
     <div class="preview-wrap">
       <div class="acard">
-        <div class="media"><div style="width:100%;height:100%;background:var(--purple-bg)"></div><div class="grad"></div>
-          <span class="tag" style="background:var(--purple)">Nouveau</span>
+        <div class="media"><div style="width:100%;height:100%;background:${cc.bg}"></div><div class="grad"></div>
+          <span class="tag" style="background:${cc.solid}">${esc(sub.label||"Nouveau")}</span>
           <span class="avstack">${avatarEl(S.user.name,24,'')}</span>
         </div>
         <div class="body">
-          <h4>${svg(ic.icon)} ${esc(draft.title)||"Titre de l'activité"}</h4>
+          <h4>${svg(sub.icon||"star")} ${esc(draft.title)||"Titre de l'activité"}</h4>
           <div class="meta"><span>${svg("cal")}${fmtDate(draft.date)}</span><span>${svg("clock")}${draft.time||"--:--"}</span><span>${svg("pin")}${esc(draft.lieu)||"Lieu"}</span></div>
           ${draft.desc?`<p class="desc">${esc(draft.desc)}</p>`:""}
           <div class="orga">${svg("user")} Créé par vous</div>
@@ -1326,7 +1339,7 @@ function vCreateStep2(){
 async function publishA(){
   const d=draft;
   const {data,error}=await sb.from("activities").insert({
-    establishment_id:EST.id,topcat:"sport",subcat:d.icon,title:d.title.trim(),
+    establishment_id:EST.id,topcat:d.topcat,subcat:d.subcat,title:d.title.trim(),
     description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
     type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name
   }).select().single();
@@ -1334,8 +1347,18 @@ async function publishA(){
   await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
   await loadEstablishmentData();
   toast(`« ${esc(d.title.trim())} » est publiée. Les voyageurs intéressés seront notifiés.`);
-  S.catFilter={topcat:"sport",tab:"a"};
+  S.catFilter={topcat:d.topcat,tab:"a"};
   openDetail(data.id);
+}
+
+/* ---------- Itinéraire (Google Maps, fonctionne réellement) ---------- */
+function mapsUrl(lieu){
+  const q=`${lieu}, ${EST.place||EST.name}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+function openItinerary(id){
+  const a=findA(id);if(!a)return;
+  window.open(mapsUrl(a.lieu),"_blank","noopener");
 }
 
 /* ---------- Mes activités ---------- */
