@@ -28,7 +28,8 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{font-family:'Inter',sans-serif;color:var(--ink);background:var(--sidebar);min-height:100vh}
+html,body{height:100%}
+body{font-family:'Inter',sans-serif;color:var(--ink);background:var(--sidebar);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input,select,textarea{font:inherit;color:var(--ink)}
 :focus-visible{outline:2px solid var(--coral);outline-offset:2px;border-radius:4px}
@@ -38,7 +39,7 @@ svg{stroke:currentColor;overflow:visible;width:20px;height:20px;flex:none}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
 /* ---------- demo bar ---------- */
-.demo-bar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:10px 16px;background:var(--sidebar);color:#fff;font-size:12px;letter-spacing:.02em}
+.demo-bar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:10px 16px;background:var(--sidebar);color:#fff;font-size:12px;letter-spacing:.02em;flex:none}
 .demo-bar .tag{font-family:'Baloo 2',sans-serif;font-weight:700;font-size:16px}
 .demo-bar .tag span{color:var(--coral)}
 .demo-bar .sep{opacity:.3}
@@ -49,9 +50,9 @@ svg{stroke:currentColor;overflow:visible;width:20px;height:20px;flex:none}
 .demo-bar .ghost:hover{border-color:var(--coral)}
 
 /* ---------- stage / phone ---------- */
-.stage{display:flex;justify-content:center;align-items:flex-start;padding:28px 12px 60px;min-height:calc(100vh - 42px)}
+.stage{display:flex;justify-content:center;align-items:flex-start;padding:28px 12px 60px;flex:1;min-height:0}
 .phone{width:100%;max-width:412px;background:var(--cream);border-radius:38px;overflow:hidden;box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;height:min(880px,calc(100vh - 120px));min-height:640px;position:relative}
-@media (max-width:480px){.stage{padding:0}.phone{max-width:none;border-radius:0;height:calc(100vh - 42px);height:calc(100dvh - 42px);min-height:0;box-shadow:none;border:none}}
+@media (max-width:480px){.stage{padding:0;align-items:stretch}.phone{max-width:none;border-radius:0;height:auto;flex:1;min-height:0;box-shadow:none;border:none}}
 .screen{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:block;position:relative}
 #screen>*{animation:screenIn .2s ease}
 @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -259,7 +260,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .filter-btn svg{width:14px;height:14px}
 
 /* ---------- detail ---------- */
-.detail{padding:0 0 110px}
+.detail{padding:0 0 160px}
 .dethero{position:relative;height:260px}
 .dethero img{width:100%;height:100%;object-fit:cover}
 .dethero .grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,0) 32%,rgba(0,0,0,0) 60%,rgba(0,0,0,.55) 100%)}
@@ -302,6 +303,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .addr b{display:block;font-size:13px}
 .addr span{font-size:12px;color:var(--muted)}
 .sticky-cta{position:sticky;bottom:0;background:linear-gradient(0deg,var(--cream) 60%,rgba(245,246,250,0));padding:16px 18px calc(8px + env(safe-area-inset-bottom));margin-top:-8px}
+.fixedbar{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(0deg,var(--cream) 68%,rgba(245,246,250,0));padding:20px 18px calc(12px + env(safe-area-inset-bottom));z-index:6;display:flex;flex-direction:column;gap:10px}
 
 /* ---------- join confirmation ---------- */
 .confirm{flex:1;display:flex;flex-direction:column}
@@ -328,7 +330,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .confirm .actions .btn{margin-bottom:10px}
 
 /* ---------- create ---------- */
-.create{padding:20px 20px calc(40px + env(safe-area-inset-bottom))}
+.create{padding:20px 20px calc(140px + env(safe-area-inset-bottom))}
 .icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 4px}
 .icon-opt{border:1.5px solid var(--line);border-radius:14px;background:#fff;padding:12px 4px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10.5px;font-weight:700}
 .icon-opt svg{width:22px;height:22px;stroke:var(--ink2)}
@@ -807,10 +809,11 @@ function renderInner(){
   const el=$("screen");
   if(S.ended){el.innerHTML=vEnded();$("tabbar").innerHTML="";return;}
   if(!S.user){el.innerHTML=S.screen==="explainer"?vExplainer():(S.screen==="onboard"?vOnboard():vLanding());$("tabbar").innerHTML="";return;}
-  const views={home:vHome,category:vCategory,detail:vDetail,confirm:vConfirm,create:vCreate,myactivities:vMyActivities,messages:vMessages,chat:vChat,profile:vProfile,tips:vTips};
+  const views={home:vHome,category:vCategory,detail:vDetail,confirm:vConfirm,create:vCreate,myactivities:vMyActivities,messages:vMessages,chat:vChat,profile:vProfile,tips:vTips,partages:vPartages};
   const noTabs=["detail","confirm","create","chat"];
+  const fixedBars={detail:vDetailCta,create:vCreateCta};
   el.innerHTML=(views[S.screen]||vHome)();
-  $("tabbar").innerHTML=noTabs.includes(S.screen)?"":vTabs();
+  $("tabbar").innerHTML=fixedBars[S.screen]?fixedBars[S.screen]():(noTabs.includes(S.screen)?"":vTabs());
   if(S.screen==="chat"){const box=$("msgs");if(box)box.scrollTop=box.scrollHeight;}
   el.scrollTop=0;
 }
@@ -867,6 +870,7 @@ function vLanding(){
         <span class="ic">${svg("sun")}</span>
         <span style="flex:1;text-align:left"><span class="small muted" style="display:block">Vous séjournez à</span><b style="font-size:15px;display:block">${esc(EST.name)}</b><span class="small muted">${esc(EST.place)}</span></span>
       </div>
+      ${S.hideBrowserTip?"":`<div class="info-banner o" style="align-items:flex-start"><span style="flex:1">${svg("info")} Pour ne pas perdre votre accès, ouvrez ce lien dans <b>Safari ou Chrome</b> plutôt que directement dans WhatsApp (menu ••• puis « Ouvrir dans le navigateur »).</span><button onclick="S.hideBrowserTip=true;render()" style="flex:none;font-size:18px;line-height:1;color:#9B3B27">${svg("close")}</button></div>`}
       <button class="btn btn-coral" onclick="go('onboard')">${svg("scan")} Rejoindre la communauté ${svg("chevR")}</button>
       <div class="feat-row">
         <div class="feat"><span class="ic" style="background:var(--green-bg)">${svg("users")}</span><span>Rencontrez</span><small>d'autres voyageurs</small></div>
@@ -1006,7 +1010,7 @@ function vHome(){
       </div>
     </div>
     <div class="cat-grid">
-      ${HOME_CARDS.map(c=>{const cc=CATCOLORS[c.color];return `<button class="cat-card" onclick="${c.id==='tips'?"go('tips','home')":c.id==='partages'?"go('tips','home')":`openCategory('${c.id}')`}">
+      ${HOME_CARDS.map(c=>{const cc=CATCOLORS[c.color];return `<button class="cat-card" onclick="${c.id==='tips'?"go('tips','home')":c.id==='partages'?"go('partages','home')":`openCategory('${c.id}')`}">
         <span class="icon-circle sm" style="background:${cc.bg}">${svg(c.icon)}</span>
         <span class="txt"><b>${c.label}</b><p>${c.desc}</p></span>
       </button>`;}).join("")}
@@ -1160,16 +1164,27 @@ function vDetail(){
         <div class="addr" style="margin-bottom:10px"><b>${esc(a.lieu)}</b><span>${esc(EST.place)}</span></div>
         <button class="btn btn-outline" onclick="openItinerary('${a.id}')">${svg("route")} Ouvrir l'itinéraire</button>
       </div>
-      ${!canceled?(inIt?`<div style="display:flex;flex-direction:column;gap:10px">
-            <button class="btn btn-navy" onclick="openChat('${a.id}')">${svg("chat")} Ouvrir le chat du groupe</button>
-            ${mine?`<button class="btn btn-outline" onclick="cancelA('${a.id}')">Annuler l'activité</button>`:`<button class="btn btn-outline" onclick="leaveA('${a.id}')">Quitter l'activité</button>`}
-          </div>`
-        :(full?`<div class="info-banner o">${svg("info")}<span>Cette activité est complète. Créez la vôtre : d'autres voyageurs partagent sûrement la même envie.</span></div><button class="btn btn-outline" onclick="openCreate('${a.topcat}')">Proposer une activité similaire</button>`
-              :`<button class="btn btn-coral" style="background:${cc.solid}" onclick="joinA('${a.id}')">${svg("users")} Rejoindre cette activité</button>`)
-      ):""}
+      ${!canceled&&!inIt&&full?`<div class="info-banner o">${svg("info")}<span>Cette activité est complète. Créez la vôtre : d'autres voyageurs partagent sûrement la même envie.</span></div>`:""}
       ${!canceled?`<p style="text-align:center;margin-top:16px"><button class="link-danger" onclick="report('activité','${a.id}')">Signaler cette activité</button></p>`:""}
     </div>
   </div></div>`;
+}
+function vDetailCta(){
+  const a=findA(S.currentId);if(!a)return "";
+  const canceled=a.status==="annulée";
+  if(canceled)return "";
+  const cc=colorOf(a);
+  const inIt=isIn(a),mine=a.orga===S.user.name,full=a.parts.length>=a.cap;
+  if(inIt){
+    return `<div class="fixedbar">
+      <button class="btn btn-navy" onclick="openChat('${a.id}')">${svg("chat")} Ouvrir le chat du groupe</button>
+      ${mine?`<button class="btn btn-outline" onclick="cancelA('${a.id}')">Annuler l'activité</button>`:`<button class="btn btn-outline" onclick="leaveA('${a.id}')">Quitter l'activité</button>`}
+    </div>`;
+  }
+  if(full){
+    return `<div class="fixedbar"><button class="btn btn-outline" onclick="openCreate('${a.topcat}')">Proposer une activité similaire</button></div>`;
+  }
+  return `<div class="fixedbar"><button class="btn btn-coral" style="background:${cc.solid}" onclick="joinA('${a.id}')">${svg("users")} Rejoindre cette activité</button></div>`;
 }
 async function joinA(id){
   const a=findA(id);
@@ -1303,7 +1318,6 @@ function vCreateStep1(){
     <div class="field"><label>Lieu de rendez-vous</label><input value="${esc(draft.lieu)}" placeholder="Ex. Réception du camping" oninput="draft.lieu=this.value"></div>
     <div class="field"><label>Participants max</label><input type="number" min="2" max="30" value="${draft.cap}" onchange="draft.cap=+this.value"></div>
     <div class="field"><label>Message <span class="muted">(optionnel)</span></label><textarea placeholder="Niveau, matériel, ambiance…" oninput="draft.desc=this.value">${esc(draft.desc)}</textarea></div>
-    <button class="btn btn-coral" style="margin-top:18px" onclick="createStep2()">Aperçu de mon activité</button>
   </div></div>`;
 }
 function createStep2(){
@@ -1332,16 +1346,21 @@ function vCreateStep2(){
         </div>
       </div>
     </div>
-    <button class="btn btn-coral" style="margin-top:18px" onclick="publishA()">Publier mon activité</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="draft.step=1;render()">${svg("route")} Modifier</button>
   </div></div>`;
+}
+function vCreateCta(){
+  if(draft.step===0)return "";
+  if(draft.step===1)return `<div class="fixedbar"><button class="btn btn-coral" onclick="createStep2()">Aperçu de mon activité</button></div>`;
+  return `<div class="fixedbar"><button class="btn btn-coral" onclick="publishA()">Publier mon activité</button><button class="btn btn-outline" onclick="draft.step=1;render()">${svg("route")} Modifier</button></div>`;
 }
 async function publishA(){
   const d=draft;
+  const top=TOPCATS.find(t=>t.id===d.topcat);
   const {data,error}=await sb.from("activities").insert({
     establishment_id:EST.id,topcat:d.topcat,subcat:d.subcat,title:d.title.trim(),
     description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
-    type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name
+    type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name,
+    photo:top?.cover||null
   }).select().single();
   if(error){toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
   await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
@@ -1439,6 +1458,15 @@ function vTips(){
     <div class="count-row"><h3>Conseils &amp; Tips</h3><button class="filter-btn" onclick="addTip()">${svg("plus")} Partager</button></div>
     <p class="small muted" style="margin-bottom:16px">Les bons plans de la communauté : plages, restaurants, parcours, excursions.</p>
     ${S.tips.map(cardTip).join("")}
+  </div>`;
+}
+
+/* ---------- Moments partagés ---------- */
+function vPartages(){
+  return vTopbar(`go('home','home')`,"Moments partagés")+`<div class="home" style="padding:16px 20px 96px">
+    <div class="count-row"><h3>Moments partagés</h3></div>
+    <p class="small muted" style="margin-bottom:16px">Revivez les expériences marquantes partagées par les voyageurs de votre communauté.</p>
+    ${PAST_EXPERIENCES.length?renderPastList(PAST_EXPERIENCES):`<div class="panel" style="text-align:center;padding:26px"><p class="small muted">Pas encore de souvenir partagé.</p></div>`}
   </div>`;
 }
 function addTip(){
