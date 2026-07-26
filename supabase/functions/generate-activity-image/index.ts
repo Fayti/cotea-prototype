@@ -1,11 +1,19 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const STYLE = "Photographie realiste de style lifestyle/voyage haut de gamme, lumiere doree de fin d'apres-midi (golden hour), decor de bord de mer mediterraneen avec collines rocheuses, pins parasols et eau turquoise en arriere-plan. Les personnes sont vues de dos ou de trois-quarts, jamais de gros plan sur le visage. Tenues decontractees ou sportives, ambiance chaleureuse, naturelle et conviviale entre amis. Couleurs saturees et chaudes, legere profondeur de champ, cadrage large format paysage. Aucun texte, chiffre, logo ou watermark dans l'image.";
+const STYLE = "Realistic high-end lifestyle travel photography, golden hour late afternoon light, Mediterranean seaside setting with rocky hills, umbrella pines and turquoise water in the background. People shown from behind or three-quarter angle, never close-up on faces. Casual or sporty outfits, warm natural friendly atmosphere among friends, saturated warm colors, shallow depth of field, wide landscape framing. No text, logo or watermark.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function hashSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % 1000000;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -20,57 +28,43 @@ Deno.serve(async (req) => {
       });
     }
 
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const prompt = `${STYLE} Scene: ${title}, category ${topcat}${subcat ? "/" + subcat : ""}${lieu ? ", location: " + lieu : ""}. Show people concretely doing this specific activity, recognizable at a glance.`;
+    const encoded = encodeURIComponent(prompt);
+    const seed = hashSeed(activityId);
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1536&height=1024&nologo=true&seed=${seed}`;
 
-    const prompt = `${STYLE}\n\nScene a illustrer : "${title}" (categorie : ${topcat}${subcat ? " / " + subcat : ""}${lieu ? ", lieu : " + lieu : ""}). Montre concretement des personnes en train de pratiquer cette activite precise, de maniere reconnaissable.`;
-
-    const openaiRes = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-image-1",
-        prompt,
-        size: "1536x1024",
-        quality: "medium",
-        n: 1,
-      }),
-    });
-
-    const openaiData = await openaiRes.json();
-    if (!openaiRes.ok) {
-      return new Response(JSON.stringify({ error: openaiData }), {
+    let imgRes: Response;
+    try {
+      imgRes = await fetch(pollinationsUrl);
+    } catch (fetchErr) {
+      return new Response(JSON.stringify({ error: "image_fetch_failed: " + String(fetchErr) }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const b64 = openaiData.data?.[0]?.b64_json;
-    if (!b64) {
-      return new Response(JSON.stringify({ error: "no image returned", raw: openaiData }), {
+    if (!imgRes.ok) {
+      return new Response(JSON.stringify({ error: `pollinations returned ${imgRes.status}` }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const bytes = new Uint8Array(await imgRes.arrayBuffer());
+    if (bytes.length < 1000) {
+      return new Response(JSON.stringify({ error: "image too small, likely a placeholder/error image" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const path = `${activityId}-${Date.now()}.png`;
+    const path = `${activityId}-${Date.now()}.jpg`;
     const { error: upErr } = await supabase.storage
       .from("activity-photos")
-      .upload(path, bytes, { contentType: "image/png", upsert: true });
+      .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
     if (upErr) {
       return new Response(JSON.stringify({ error: upErr.message }), {
         status: 500,
