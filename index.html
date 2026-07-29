@@ -40,9 +40,32 @@ svg{stroke:currentColor;overflow:visible;width:20px;height:20px;flex:none}
 
 /* ---------- demo bar ---------- */
 .demo-bar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:10px 16px;background:var(--sidebar);color:#fff;font-size:12px;letter-spacing:.02em;flex:none}
+.demo-bar.hidden{display:none}
 .demo-bar .tag{font-family:'Baloo 2',sans-serif;font-weight:700;font-size:16px}
 .demo-bar .tag span{color:var(--coral)}
 .demo-bar .sep{opacity:.3}
+
+/* ---------- écran de connexion (3 espaces) ---------- */
+.gate{flex:1;display:flex;align-items:center;justify-content:center;padding:30px 20px;overflow-y:auto}
+.gate-inner{width:100%;max-width:460px;text-align:center}
+.gate .logo-big{font-family:'Baloo 2',sans-serif;font-weight:700;font-size:40px;color:#fff}
+.gate .logo-big span{color:var(--coral)}
+.gate .sub{color:rgba(255,255,255,.6);font-size:13.5px;margin:6px 0 30px}
+.gate-card{display:flex;align-items:center;gap:14px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px;margin-bottom:12px;text-align:left;transition:border-color .15s,background .15s}
+.gate-card:hover{background:rgba(255,255,255,.1);border-color:var(--coral)}
+.gate-card .ic{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex:none}
+.gate-card .ic svg{width:24px;height:24px}
+.gate-card b{display:block;color:#fff;font-size:15px;font-family:'Baloo 2',sans-serif}
+.gate-card p{color:rgba(255,255,255,.55);font-size:12px;line-height:1.4;margin-top:2px}
+.gate-card .chev{color:rgba(255,255,255,.4);flex:none}
+.gate .backlink{color:rgba(255,255,255,.55);font-size:13px;margin-top:18px;display:inline-flex;align-items:center;gap:6px}
+.gate .field label{color:rgba(255,255,255,.75)}
+.gate .field input,.gate .field select{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.15);color:#fff}
+.gate .field input::placeholder{color:rgba(255,255,255,.35)}
+.est-pick{display:flex;align-items:center;gap:12px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px;margin-bottom:10px;text-align:left}
+.est-pick:hover{border-color:var(--coral)}
+.est-pick b{color:#fff;font-size:14px;display:block}
+.est-pick span{color:rgba(255,255,255,.5);font-size:12px}
 .seg{display:inline-flex;border:1px solid rgba(255,255,255,.25);border-radius:99px;overflow:hidden}
 .seg button{padding:5px 14px;color:#fff;font-size:12px;font-weight:600}
 .seg button.on{background:var(--coral);color:#fff}
@@ -189,9 +212,10 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .home-hero .script{color:var(--coral);font-style:italic}
 .home-hero p{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
 .cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 20px 6px}
-.cat-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;align-items:flex-start;gap:10px;text-align:left;box-shadow:var(--shadow)}
+.cat-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;align-items:center;gap:10px;text-align:left;box-shadow:var(--shadow)}
 .cat-card .txt{flex:1;min-width:0}
-.cat-card b{font-size:13.5px;display:block;margin-bottom:3px;line-height:1.25}
+.cat-card b{font-size:13.5px;display:block;line-height:1.25}
+.cat-card .txt:has(p) b{margin-bottom:3px}
 .cat-card p{font-size:11px;color:var(--muted);line-height:1.4}
 .cat-card svg.chev{width:15px;height:15px;stroke:var(--muted);flex:none;margin-top:4px}
 
@@ -523,19 +547,17 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 </head>
 <body>
 
-<div class="demo-bar" role="toolbar" aria-label="Contrôles de démonstration">
+<div class="demo-bar" id="demoBar" role="toolbar" aria-label="Contrôles de démonstration">
   <span class="tag">côté<span>a</span></span>
   <span class="sep">·</span>
-  <span>Prototype</span>
-  <span class="sep">·</span>
-  <div class="seg" role="group" aria-label="Rôle">
-    <button id="segVoy" class="on" onclick="setRole('voy')">Voyageur</button>
-    <button id="segDir" onclick="setRole('dir')">Directeur</button>
-  </div>
+  <span id="demoBarRole">Espace</span>
+  <button class="ghost" onclick="backToGate()">Changer d'espace</button>
   <button class="ghost" onclick="resetDemo()">Réinitialiser</button>
 </div>
 
-<div class="stage">
+<div class="gate" id="gate" hidden style="display:none"></div>
+
+<div class="stage" id="stage">
   <div class="phone" id="phone">
     <div class="screen" id="screen"></div>
     <div id="tabbar"></div>
@@ -674,7 +696,7 @@ function A(o){return Object.assign({status:"ouverte",price:"Gratuit",aPrevoir:[]
 function m(who,text){return{who,text};}
 function seed(){
   return {
-    user:null, role:"voy", tab:"home", screen:"landing",
+    user:null, role:"voy", space:null, scanned:false, tab:"home", screen:"landing",
     onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, visDefault:"visible",
     catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0,
     dashPeriod:"week", dashPage:"tableau", dashActTab:"all", dashActSearch:"", prefillCode:null,
@@ -747,23 +769,111 @@ async function boot(){
       session=data.session;
     }
     UID=session.user.id;
+
+    const p=new URLSearchParams(location.search);
+    const urlCode=p.get("code");
+    // Arriving via a QR scan goes straight to the traveller space —
+    // the role switcher must never be visible to a guest scanning at reception.
+    S.scanned=!!urlCode;
+
     const {data:prof}=await sb.from("profiles").select("*, establishments(*)").eq("id",UID).maybeSingle();
     if(prof&&prof.establishments){
       EST.id=prof.establishment_id;EST.name=prof.establishments.name;EST.place=prof.establishments.place;EST.joinCode=prof.establishments.join_code;
       S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility};
-      S.screen="home";S.tab="home";
+      S.role="voy";S.space="voy";S.screen="home";S.tab="home";
       await loadEstablishmentData();
-    }else{
-      const p=new URLSearchParams(location.search);
-      const urlCode=p.get("code");
-      const code=(urlCode||DEFAULT_CODE).toUpperCase();
-      const {data:est}=await sb.from("establishments").select("*").eq("join_code",code).maybeSingle();
-      if(est){EST.id=est.id;EST.name=est.name;EST.place=est.place;EST.joinCode=est.join_code;S.prefillCode=urlCode?code:null;}
-      else return bootError("Établissement introuvable pour ce code. Vérifiez le lien ou le QR utilisé.");
-      S.screen="landing";
+      hideGate();render();return;
     }
-    render();
+
+    if(urlCode){
+      const code=urlCode.toUpperCase();
+      const {data:est}=await sb.from("establishments").select("*").eq("join_code",code).maybeSingle();
+      if(!est)return bootError("Établissement introuvable pour ce code. Vérifiez le lien ou le QR utilisé.");
+      EST.id=est.id;EST.name=est.name;EST.place=est.place;EST.joinCode=est.join_code;
+      S.prefillCode=code;S.role="voy";S.space="voy";S.screen="landing";
+      hideGate();render();return;
+    }
+
+    // No QR, no profile → show the three entry spaces
+    S.space=null;
+    renderGate();
   }catch(err){console.error(err);bootError("Une erreur réseau est survenue. Vérifiez votre connexion.");}
+}
+
+/* ---------- Écran de connexion : 3 espaces ---------- */
+let ESTABLISHMENTS=[];
+async function loadEstablishments(){
+  const {data}=await sb.from("establishments").select("*").order("created_at");
+  ESTABLISHMENTS=data||[];
+}
+function renderGate(){
+  $("demoBar").classList.add("hidden");
+  $("stage").style.display="none";
+  const g=$("gate");
+  g.hidden=false;g.style.display="flex";
+  g.innerHTML=vGateHome();
+}
+function hideGate(){
+  const g=$("gate");
+  g.hidden=true;g.style.display="none";
+  $("stage").style.display="flex";
+  $("demoBar").classList.toggle("hidden",S.scanned);
+  const labels={voy:"Espace Voyageur",dir:"Espace Directeur",cotea:"Espace Côtéa"};
+  const el=$("demoBarRole");
+  if(el)el.textContent=labels[S.space]||"Espace";
+}
+function vGateHome(){
+  const spaces=[
+    {id:"voy",label:"Voyageur",desc:"Rejoindre la communauté de mon séjour",icon:"users",bg:"rgba(240,96,77,.18)",fg:"var(--coral)"},
+    {id:"dir",label:"Directeur",desc:"Gérer mon établissement et ma communauté",icon:"grid",bg:"rgba(108,79,224,.2)",fg:"#9d86f0"},
+    {id:"cotea",label:"Côtéa",desc:"Administration multi-établissements",icon:"gear",bg:"rgba(45,111,224,.2)",fg:"#6ea3f5"}
+  ];
+  return `<div class="gate-inner">
+    <div class="logo-big">côté<span>a</span></div>
+    <p class="sub">Choisissez votre espace de connexion</p>
+    ${spaces.map(s=>`<button class="gate-card" onclick="pickSpace('${s.id}')">
+      <span class="ic" style="background:${s.bg};color:${s.fg}">${svg(s.icon)}</span>
+      <span style="flex:1"><b>${s.label}</b><p>${s.desc}</p></span>
+      <span class="chev">${svg("chevR")}</span>
+    </button>`).join("")}
+  </div>`;
+}
+async function pickSpace(id){
+  S.space=id;
+  if(!ESTABLISHMENTS.length)await loadEstablishments();
+  if(id==="cotea"){hideGate();S.role="cotea";render();return;}
+  $("gate").innerHTML=vGateEstablishments(id);
+}
+function vGateEstablishments(space){
+  const title=space==="voy"?"Où séjournez-vous ?":"Quel établissement gérez-vous ?";
+  return `<div class="gate-inner">
+    <div class="logo-big" style="font-size:30px">côté<span>a</span></div>
+    <p class="sub">${title}</p>
+    ${ESTABLISHMENTS.map(e=>`<button class="est-pick" onclick="chooseEstablishment('${e.id}','${space}')">
+      <span class="ic icon-circle sm" style="background:rgba(255,255,255,.1);color:#fff">${svg("sun")}</span>
+      <span style="flex:1"><b>${esc(e.name)}</b><span>${esc(e.place||"")}</span></span>
+      <span class="chev">${svg("chevR")}</span>
+    </button>`).join("")}
+    <button class="backlink" onclick="renderGate()">${svg("back")} Retour</button>
+  </div>`;
+}
+async function chooseEstablishment(id,space){
+  const est=ESTABLISHMENTS.find(e=>e.id===id);
+  if(!est)return;
+  EST.id=est.id;EST.name=est.name;EST.place=est.place;EST.joinCode=est.join_code;
+  hideGate();
+  if(space==="dir"){
+    S.role="dir";
+    await loadEstablishmentData();
+    render();
+  }else{
+    S.role="voy";S.screen="landing";S.prefillCode=null;
+    render();
+  }
+}
+function backToGate(){
+  S.space=null;S.role="voy";
+  renderGate();
 }
 
 /* ---------- Toast / Modale ---------- */
@@ -805,9 +915,8 @@ function render(){renderInner();}
 function go(screen,tab){S.screen=screen;if(tab)S.tab=tab;render();}
 function renderInner(){
   $("phone").style.display=S.role==="voy"?"flex":"none";
-  $("dash").style.display=S.role==="dir"?"flex":"none";
-  $("segVoy").classList.toggle("on",S.role==="voy");
-  $("segDir").classList.toggle("on",S.role==="dir");
+  $("dash").style.display=(S.role==="dir"||S.role==="cotea")?"flex":"none";
+  if(S.role==="cotea"){renderCotea();return;}
   if(S.role==="dir"){renderDash();return;}
   const el=$("screen");
   if(S.ended){el.innerHTML=vEnded();$("tabbar").innerHTML="";return;}
@@ -1015,7 +1124,7 @@ function vHome(){
     <div class="cat-grid">
       ${HOME_CARDS.map(c=>{const cc=CATCOLORS[c.color];return `<button class="cat-card" onclick="${c.id==='tips'?"go('tips','home')":c.id==='partages'?"go('partages','home')":`openCategory('${c.id}')`}">
         <span class="icon-circle sm" style="background:${cc.bg}">${svg(c.icon)}</span>
-        <span class="txt"><b>${c.label}</b><p>${c.desc}</p></span>
+        <span class="txt"><b>${c.label}</b></span>
       </button>`;}).join("")}
     </div>
   </div>`;
@@ -1652,6 +1761,67 @@ function renderDash(){
 }
 function vDashStub(){
   return `<div class="stub-page"><span class="ic">${svg("info")}</span><p>Cette section arrive bientôt dans le prototype.</p></div>`;
+}
+
+/* ---------- Espace Côtéa : administration multi-établissements ---------- */
+function estJoinUrl(code){
+  const base=location.origin+location.pathname;
+  return `${base}?code=${encodeURIComponent(code)}`;
+}
+async function renderCotea(){
+  if(!ESTABLISHMENTS.length)await loadEstablishments();
+  // RLS hides other establishments' activities from a non-member, so use an
+  // aggregate-only function that exposes counts without any content.
+  const {data:stats}=await sb.rpc("establishment_stats");
+  const byEst={};
+  (stats||[]).forEach(s=>{byEst[s.establishment_id]={acts:s.activities,members:s.members};});
+  $("dash").innerHTML=`
+    <aside class="sidebar">
+      <div class="slogo">côté<span style="color:var(--coral)">a</span></div>
+      <div class="scamp"><div><b>Administration</b><div class="stars" style="color:rgba(255,255,255,.4)">Multi-établissements</div></div></div>
+      <nav class="snav"><button class="on">${svg("grid")}Établissements</button></nav>
+      <div class="shelp"><b>Espace Côtéa</b>Gérez les établissements partenaires et leurs QR codes d'accès.</div>
+      <div class="suser">${avatarEl("Côtéa",36,'')}<div><b>Équipe Côtéa</b><span>Administration</span></div></div>
+    </aside>
+    <main class="dash-main">
+      <div class="dash-top">
+        <div><h1>Établissements</h1><p>${ESTABLISHMENTS.length} établissement${ESTABLISHMENTS.length>1?"s":""} · un QR code d'accès unique par établissement.</p></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+        ${ESTABLISHMENTS.map(e=>`<div class="dpanel2">
+          <h3 style="margin-bottom:4px">${esc(e.name)}</h3>
+          <p class="small muted" style="margin-bottom:14px">${esc(e.place||"")}</p>
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+            <div class="qr-visual2" style="width:132px;height:132px">${qrSvg(estJoinUrl(e.join_code),5)}</div>
+            <div style="flex:1;min-width:150px">
+              <div class="qr-code2" style="font-size:16px">${esc(e.join_code)}</div>
+              <p class="small muted" style="margin-bottom:10px">${byEst[e.id]?.acts||0} activité${(byEst[e.id]?.acts||0)>1?"s":""} · ${byEst[e.id]?.members||0} membre${(byEst[e.id]?.members||0)>1?"s":""}</p>
+              <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" onclick="copyText('${estJoinUrl(e.join_code)}')">${svg("share")} Copier le lien</button>
+              <button class="btn btn-navy btn-sm" style="width:100%" onclick="printQR('${esc(e.name)}','${e.join_code}')">${svg("download")} Imprimer le QR</button>
+            </div>
+          </div>
+        </div>`).join("")}
+      </div>
+    </main>`;
+}
+function copyText(t){
+  if(navigator.clipboard?.writeText)navigator.clipboard.writeText(t).then(()=>toast("Lien copié.")).catch(()=>toast(t));
+  else toast(t);
+}
+function printQR(name,code){
+  const url=estJoinUrl(code);
+  const w=window.open("","_blank");
+  if(!w){toast("Autorisez les fenêtres pop-up pour imprimer le QR.");return;}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR ${esc(name)}</title>
+  <style>body{font-family:system-ui,sans-serif;text-align:center;padding:60px 20px}h1{font-size:26px;margin-bottom:4px}p{color:#666;margin-bottom:8px}.code{font-size:22px;letter-spacing:.08em;font-weight:700;margin:18px 0}svg{width:320px;height:320px}</style>
+  </head><body>
+    <h1>${esc(name)}</h1><p>Scannez pour rejoindre la communauté Côtéa</p>
+    ${qrSvg(url,6)}
+    <div class="code">${esc(code)}</div>
+    <p style="font-size:12px">${esc(url)}</p>
+    <script>window.onload=()=>window.print()<\/script>
+  </body></html>`);
+  w.document.close();
 }
 function dashHeader(title,sub){
   const demo=DASH_DEMO[S.dashPeriod];
