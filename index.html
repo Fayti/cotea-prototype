@@ -180,6 +180,7 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 .dots i.on{background:var(--purple);width:18px;border-radius:4px}
 .avatar-upload{width:84px;height:84px;border-radius:50%;background:#fff;border:2px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin:6px auto 4px;font-size:10.5px;font-weight:600;color:var(--muted)}
 .avatar-upload svg{width:20px;height:20px;stroke:var(--muted)}
+.idcard-avatar .cam-badge svg{width:11px;height:11px}
 .choice-card{border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;text-align:left}
 .choice-card.on{border-color:var(--purple);background:var(--purple-bg)}
 .choice-card b{display:block;font-size:14px;margin-bottom:3px}
@@ -687,8 +688,38 @@ function colorOf(a){
 }
 const AVCOLORS=["#2D6FE0","#F0604D","#6C4FE0","#128A82","#E8A93B","#D34D82","#2FA36B"];
 function avatarColor(name){let h=0;for(let i=0;i<name.length;i++)h=name.charCodeAt(i)+((h<<5)-h);return AVCOLORS[Math.abs(h)%AVCOLORS.length];}
-function avatarEl(name,size,extraCls){
+function avatarEl(name,size,extraCls,photoUrl){
+  if(photoUrl)return `<img class="av ${extraCls||''}" src="${photoUrl}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none">`;
   return `<span class="av ${extraCls||''}" style="width:${size}px;height:${size}px;border-radius:50%;background:${avatarColor(name)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none">${esc(name[0].toUpperCase())}</span>`;
+}
+function myAvatar(size,extraCls){
+  return avatarEl(S.user?.name||"?",size,extraCls,S.user?.photo);
+}
+async function uploadAvatarFile(file){
+  if(!file)return null;
+  const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+  const path=`${UID}.${ext}`;
+  const {error}=await sb.storage.from("avatars").upload(path,file,{upsert:true,contentType:file.type||"image/jpeg"});
+  if(error){toast("Impossible d'envoyer la photo. Réessayez.");console.error(error);return null;}
+  const {data}=sb.storage.from("avatars").getPublicUrl(path);
+  return data.publicUrl+"?t="+Date.now();
+}
+async function handleAvatarPick(input){
+  const file=input.files[0];if(!file)return;
+  toast("Envoi de la photo…");
+  const url=await uploadAvatarFile(file);
+  if(url){S.pendingPhoto=url;render();}
+}
+async function handleProfilePhotoChange(input){
+  const file=input.files[0];if(!file)return;
+  toast("Envoi de la photo…");
+  const url=await uploadAvatarFile(file);
+  if(!url)return;
+  const {error}=await sb.from("profiles").update({photo_url:url}).eq("id",UID);
+  if(error){toast("Erreur lors de la mise à jour.");console.error(error);return;}
+  S.user.photo=url;
+  toast("Photo de profil mise à jour !");
+  render();
 }
 
 /* ---------- Données seed ---------- */
@@ -697,7 +728,7 @@ function m(who,text){return{who,text};}
 function seed(){
   return {
     user:null, role:"voy", space:null, scanned:false, tab:"home", screen:"landing",
-    onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, visDefault:"visible",
+    onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, visDefault:"visible", pendingPhoto:null,
     catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0,
     dashPeriod:"week", dashPage:"tableau", dashActTab:"all", dashActSearch:"", prefillCode:null,
     partners:[
@@ -779,7 +810,7 @@ async function boot(){
     const {data:prof}=await sb.from("profiles").select("*, establishments(*)").eq("id",UID).maybeSingle();
     if(prof&&prof.establishments){
       EST.id=prof.establishment_id;EST.name=prof.establishments.name;EST.place=prof.establishments.place;EST.joinCode=prof.establishments.join_code;
-      S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility};
+      S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null};
       S.role="voy";S.space="voy";S.screen="home";S.tab="home";
       await loadEstablishmentData();
       hideGate();render();return;
@@ -946,7 +977,7 @@ function vTopbar(back,title){
     <span class="brand logo" style="font-size:19px">côté<span style="color:var(--coral)">a</span></span>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="iconbtn" onclick="toast('Aucune nouvelle notification pour le moment.')">${svg("bell")}${myChats?'<span class="dot"></span>':''}</button>
-      <button class="avatar" style="width:38px;height:38px;font-size:13px" onclick="go('profile','profile')">${esc(S.user.name[0].toUpperCase())}</button>
+      <button style="border-radius:50%" onclick="go('profile','profile')">${myAvatar(38,'')}</button>
     </div>
   </header>`;
 }
@@ -1023,7 +1054,10 @@ function vOnboard(){
   if(S.onbStep===1){
     return wrap(`
       <div style="text-align:center">
-        <div class="avatar-upload" onclick="toast('Sélection de photo (démo).')">${svg("camera")}<span>Ajouter</span></div>
+        <label class="avatar-upload" style="${S.pendingPhoto?`background-image:url('${S.pendingPhoto}');background-size:cover;background-position:center;border-style:solid;cursor:pointer`:"cursor:pointer"}">
+          ${S.pendingPhoto?"":svg("camera")}${S.pendingPhoto?"":"<span>Ajouter</span>"}
+          <input type="file" accept="image/*" style="display:none" onchange="handleAvatarPick(this)">
+        </label>
         <h2 style="margin-top:10px">Bienvenue au<br>${esc(EST.name)} 🌴</h2>
         <p class="sub">Rejoignez la communauté de votre séjour et partagez de beaux moments ensemble.</p>
       </div>
@@ -1094,9 +1128,9 @@ function onbNext1(){
 function togEnvie(id){const i=S.selEnvies.indexOf(id);i>=0?S.selEnvies.splice(i,1):S.selEnvies.push(id);render();}
 function togMoment(id){const i=S.selMoments.indexOf(id);i>=0?S.selMoments.splice(i,1):S.selMoments.push(id);render();}
 async function finishOnboard(){
-  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:S.visDefault});
+  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:S.visDefault,photo_url:S.pendingPhoto||null});
   if(error){toast("Impossible de créer votre profil pour le moment. Réessayez.");console.error(error);return;}
-  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:S.visDefault};
+  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:S.visDefault,photo:S.pendingPhoto||null};
   S.notifs.push=S.notifSuggest;
   await loadEstablishmentData();
   go("home","home");
@@ -1374,7 +1408,7 @@ function vConfirm(){
         <div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b>Vous êtes le ${idx}${idx===1?"er":"e"} participant.</b><span>${a.cap-a.parts.length} places disponibles au total</span></div></div>
         <div style="display:flex;flex-wrap:wrap;gap:12px 6px">
           ${a.parts.filter(p=>p!==S.user.name).slice(0,4).map(p=>`<div class="avrow-item">${avatarEl(p,44,'')}<span>${esc(p.split(' ')[0])}</span></div>`).join("")}
-          <div class="avrow-item me">${avatarEl(S.user.name,44,'')}<span>Vous</span></div>
+          <div class="avrow-item me">${myAvatar(44,'')}<span>Vous</span></div>
         </div>
       </div>
       <div class="actions">
@@ -1447,7 +1481,7 @@ function vCreateStep2(){
       <div class="acard">
         <div class="media"><div style="width:100%;height:100%;background:${cc.bg}"></div><div class="grad"></div>
           <span class="tag" style="background:${cc.solid}">${esc(sub.label||"Nouveau")}</span>
-          <span class="avstack">${avatarEl(S.user.name,24,'')}</span>
+          <span class="avstack">${myAvatar(24,'')}</span>
         </div>
         <div class="body">
           <h4>${svg(sub.icon||"star")} ${esc(draft.title)||"Titre de l'activité"}</h4>
@@ -1526,7 +1560,7 @@ function vMyActivities(){
   const organized=S.activities.filter(a=>a.orga===S.user.name&&a.status!=="annulée");
   const joined=S.activities.filter(a=>a.parts.includes(S.user.name)&&a.orga!==S.user.name&&a.status!=="annulée").sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
   return vTopbar()+`<div class="home" style="padding-left:20px;padding-right:20px">
-    <div class="myact-head"><span class="avatar av" style="width:48px;height:48px;font-size:17px;background:${avatarColor(S.user.name)}">${esc(S.user.name[0].toUpperCase())}</span>
+    <div class="myact-head">${myAvatar(48,'')}
       <div><h2 style="font-size:19px">Mes activités</h2><p class="small muted">Retrouvez vos activités organisées et celles auxquelles vous participez.</p></div>
     </div>
     <div class="myact-sec"><h3>Activités que j'organise <span class="n">${organized.length}</span></h3></div>
@@ -1638,7 +1672,11 @@ function vProfile(){
   const allInterests=[{id:"sport",label:"Sport"},{id:"gastronomie",label:"Gastronomie"},{id:"velo",label:"Vélo"},{id:"randonnee",label:"Randonnée"},{id:"plage",label:"Mer / Plage"},{id:"vins",label:"Dégustation & vins"},{id:"jeux",label:"Jeux"},{id:"musique",label:"Musique"},{id:"bienetre",label:"Bien-être"},{id:"enfants",label:"Activités enfants"}];
   return vTopbar()+`<div class="prof">
     <div class="idcard">
-      <span class="av" style="width:52px;height:52px;font-size:18px;border-radius:50%;background:${avatarColor(u.name)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">${esc(u.name[0].toUpperCase())}</span>
+      <label class="idcard-avatar" style="position:relative;cursor:pointer;flex:none">
+        ${myAvatar(52,'')}
+        <span class="cam-badge" style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--coral);display:flex;align-items:center;justify-content:center;border:2px solid #fff;color:#fff">${svg("camera")}</span>
+        <input type="file" accept="image/*" style="display:none" onchange="handleProfilePhotoChange(this)">
+      </label>
       <div><b style="font-family:'Baloo 2',sans-serif;font-size:18px">${esc(u.name)}</b><div class="small muted">Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</div></div>
     </div>
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Mes centres d'intérêt</h5>
