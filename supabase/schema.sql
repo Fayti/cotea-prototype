@@ -88,6 +88,21 @@ create table if not exists reports (
   created_at timestamptz default now()
 );
 
+-- ---------- Encarts publicitaires (publiés par le directeur) ----------
+create table if not exists ads (
+  id uuid primary key default gen_random_uuid(),
+  establishment_id uuid not null references establishments(id) on delete cascade,
+  title text not null,
+  body text,
+  image_url text,
+  cta_label text,
+  cta_url text,
+  placement text not null default 'home' check (placement in ('home','category')),
+  active boolean not null default true,
+  created_at timestamptz default now()
+);
+create index if not exists ads_establishment_idx on ads(establishment_id, active);
+
 -- ============================================================
 -- Row Level Security — chaque voyageur ne voit que son établissement
 -- ============================================================
@@ -157,10 +172,25 @@ create policy "reports update in establishment" on reports for update using (
   establishment_id = (select establishment_id from profiles where id = auth.uid())
 );
 
+-- Encarts : lus par tout membre de l'établissement, écrits par le seul directeur.
+alter table ads enable row level security;
+create policy "ads select in establishment" on ads for select using (
+  establishment_id = (select establishment_id from profiles where id = auth.uid())
+);
+create policy "ads insert by director" on ads for insert with check (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_director and p.establishment_id = ads.establishment_id)
+);
+create policy "ads update by director" on ads for update using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_director and p.establishment_id = ads.establishment_id)
+);
+create policy "ads delete by director" on ads for delete using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_director and p.establishment_id = ads.establishment_id)
+);
+
 -- ============================================================
--- Active la synchronisation temps réel (chat, nouvelles activités)
+-- Active la synchronisation temps réel (chat, nouvelles activités, encarts)
 -- ============================================================
-alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports;
+alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports, ads;
 
 -- ============================================================
 -- Établissement de démo (garde le même code que le prototype)

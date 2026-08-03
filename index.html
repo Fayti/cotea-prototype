@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Côtéa — Prototype</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#141B2E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Côtéa">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="icon" href="assets/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -59,6 +66,11 @@ svg{stroke:currentColor;overflow:visible;width:20px;height:20px;flex:none}
 .gate-card p{color:rgba(255,255,255,.55);font-size:12px;line-height:1.4;margin-top:2px}
 .gate-card .chev{color:rgba(255,255,255,.4);flex:none}
 .gate .backlink{color:rgba(255,255,255,.55);font-size:13px;margin-top:18px;display:inline-flex;align-items:center;gap:6px}
+.install-steps{text-align:left}
+.istep{display:flex;gap:13px;align-items:flex-start;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:15px;margin-bottom:10px}
+.istep .n{width:26px;height:26px;border-radius:50%;background:var(--coral);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none}
+.istep b{color:#fff;font-size:14px;font-weight:600;line-height:1.35}
+.istep p{color:rgba(255,255,255,.55);font-size:12px;line-height:1.45;margin-top:4px}
 .gate .field label{color:rgba(255,255,255,.75)}
 .gate .field input,.gate .field select{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.15);color:#fff}
 .gate .field input::placeholder{color:rgba(255,255,255,.35)}
@@ -120,6 +132,32 @@ h1,h2,h3,h4{font-family:'Baloo 2',sans-serif;font-weight:700;line-height:1.15;co
 /* ---------- top bars ---------- */
 .topbar{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;background:var(--cream);position:sticky;top:0;z-index:5}
 .topbar .logo{font-size:20px}
+.topbar-est{display:flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.topbar-est svg{width:11px;height:11px;stroke:var(--coral);flex:none}
+/* encarts publicitaires */
+.adcard{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin:0 20px 14px;box-shadow:var(--shadow)}
+.catlist .adcard{margin-left:0;margin-right:0}
+.adcard img{width:100%;height:120px;object-fit:cover;display:block}
+.adcard .adbody{padding:13px 15px 15px}
+.adcard .adlabel{display:block;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--amber);margin-bottom:4px}
+.adcard b{display:block;font-size:14.5px;font-family:'Baloo 2',sans-serif;line-height:1.25}
+.adcard p{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
+/* notifications */
+.notif-count{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--coral);color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--cream)}
+.notif-row{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:9px}
+.notif-row.forme{border-color:var(--coral);background:var(--coral-bg)}
+.notif-row .ic{width:34px;height:34px;border-radius:11px;background:var(--purple-bg);color:var(--purple);display:flex;align-items:center;justify-content:center;flex:none}
+.notif-row .ic svg{width:17px;height:17px}
+.notif-row b{display:block;font-size:13.5px;line-height:1.3}
+.notif-row p{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.notif-row .when{display:block;font-size:10.5px;color:var(--muted);margin-top:5px}
+/* bandeau « vous êtes rattaché à » sur l'accueil */
+.est-badge{display:flex;align-items:center;gap:10px;margin:0 20px 14px;padding:11px 13px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.est-badge .ic{width:34px;height:34px;border-radius:11px;background:var(--teal-bg);color:var(--teal);display:flex;align-items:center;justify-content:center;flex:none}
+.est-badge .ic svg{width:17px;height:17px}
+.est-badge b{display:block;font-size:13.5px;line-height:1.2}
+.est-badge span{font-size:11px;color:var(--muted)}
+.est-badge .lbl{display:block;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--teal);margin-bottom:1px}
 .iconbtn{width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;position:relative;flex:none}
 .iconbtn svg{width:19px;height:19px;stroke:var(--ink)}
 .iconbtn .dot{position:absolute;top:6px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--coral);border:2px solid var(--cream)}
@@ -794,7 +832,7 @@ function m(who,text){return{who,text};}
 function seed(){
   return {
     user:null, role:"voy", space:null, scanned:false, tab:"home", screen:"landing",
-    onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, visDefault:"visible", pendingPhoto:null,
+    onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, pendingPhoto:null,
     catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0,
     dashPeriod:"week", dashPage:"tableau", dashActTab:"all", dashActSearch:"", prefillCode:null,
     partners:[
@@ -808,7 +846,7 @@ function seed(){
     activities:[],
     tips:[],
     chats:{},
-    notifs:{push:true,rappels:true}
+    notifs:{push:true,rappels:true}, notifications:[], ads:[]
   };
 }
 const PAST_EXPERIENCES=[
@@ -856,7 +894,35 @@ async function loadEstablishmentData(){
 function bootError(msg){
   $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center;text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:18px;margin-bottom:8px">Connexion impossible</p><p class="small muted">${esc(msg)}</p><button class="btn btn-outline" style="margin-top:16px;max-width:220px" onclick="location.reload()">Réessayer</button></div>`;
 }
+/* ---------- Écran d'installation (cible du QR « téléchargement ») ---------- */
+function appBaseUrl(){return location.origin+location.pathname;}
+function installUrl(){return appBaseUrl()+"?dl=1";}
+function renderInstall(){
+  $("demoBar").classList.add("hidden");
+  $("stage").style.display="none";
+  const g=$("gate");
+  g.hidden=false;g.style.display="flex";
+  const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const steps=ios
+    ? [["Ouvrez ce lien dans <b>Safari</b>","Si vous êtes dans WhatsApp ou Instagram : menu ••• puis « Ouvrir dans le navigateur »."],
+       ["Touchez le bouton <b>Partager</b>","L'icône carrée avec une flèche vers le haut, en bas de l'écran."],
+       ["Choisissez <b>Sur l'écran d'accueil</b>","Puis « Ajouter ». Côtéa apparaît comme une application."]]
+    : [["Ouvrez ce lien dans <b>Chrome</b>","Si vous êtes dans WhatsApp : menu ••• puis « Ouvrir dans le navigateur »."],
+       ["Touchez le menu <b>⋮</b> en haut à droite",""],
+       ["Choisissez <b>Ajouter à l'écran d'accueil</b>","Puis « Installer ». Côtéa apparaît comme une application."]];
+  g.innerHTML=`<div class="gate-inner">
+    <img src="assets/icon-192.png" alt="" style="width:76px;height:76px;border-radius:20px;margin:0 auto 14px;display:block">
+    <div class="logo-big" style="font-size:34px">côté<span>a</span></div>
+    <p class="sub">Installez Côtéa sur votre téléphone</p>
+    <div class="install-steps">
+      ${steps.map(([t,s],i)=>`<div class="istep"><span class="n">${i+1}</span><div><b>${t}</b>${s?`<p>${s}</p>`:""}</div></div>`).join("")}
+    </div>
+    <button class="btn btn-coral" style="margin-top:18px" onclick="location.href='${appBaseUrl()}'">Continuer sans installer</button>
+    <p class="small" style="text-align:center;margin-top:12px;color:rgba(255,255,255,.45)">Aucun store, aucun téléchargement : Côtéa fonctionne directement dans votre navigateur.</p>
+  </div>`;
+}
 async function boot(){
+  if(new URLSearchParams(location.search).get("dl")!==null){renderInstall();return;}
   $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center"><p class="small muted">Connexion à la communauté…</p></div>`;
   try{
     let {data:{session}}=await sb.auth.getSession();
@@ -876,9 +942,18 @@ async function boot(){
     const {data:prof}=await sb.from("profiles").select("*, establishments(*)").eq("id",UID).maybeSingle();
     if(prof&&prof.establishments){
       EST.id=prof.establishment_id;EST.name=prof.establishments.name;EST.place=prof.establishments.place;EST.joinCode=prof.establishments.join_code;
+      if(prof.is_director){
+        S.role="dir";S.space="dir";
+        await loadEstablishmentData();
+        await loadAds();
+        hideGate();render();return;
+      }
       S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null};
       S.role="voy";S.space="voy";S.screen="home";S.tab="home";
+      S.notifications=loadNotifs();
       await loadEstablishmentData();
+      await loadAds();
+      subscribeEstablishment();
       hideGate();render();return;
     }
 
@@ -961,12 +1036,21 @@ async function chooseEstablishment(id,space){
   hideGate();
   if(space==="dir"){
     S.role="dir";
+    // Sans ligne dans `profiles`, la RLS masque toutes les données de l'établissement
+    // au directeur : son tableau de bord affichait 0 activité.
+    await ensureDirectorProfile();
     await loadEstablishmentData();
+    await loadAds();
     render();
   }else{
     S.role="voy";S.screen="landing";S.prefillCode=null;
     render();
   }
+}
+async function ensureDirectorProfile(){
+  const {data:prof}=await sb.from("profiles").select("id,name").eq("id",UID).maybeSingle();
+  if(prof)await sb.from("profiles").update({establishment_id:EST.id,is_director:true}).eq("id",UID);
+  else await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:"Directeur",is_director:true,visibility:"visible"});
 }
 function backToGate(){
   S.space=null;S.role="voy";
@@ -1020,8 +1104,8 @@ function renderInner(){
   const el=$("screen");
   if(S.ended){el.innerHTML=vEnded();$("tabbar").innerHTML="";return;}
   if(!S.user){el.innerHTML=S.screen==="explainer"?vExplainer():(S.screen==="onboard"?vOnboard():vLanding());$("tabbar").innerHTML="";return;}
-  const views={home:vHome,category:vCategory,detail:vDetail,confirm:vConfirm,create:vCreate,myactivities:vMyActivities,messages:vMessages,chat:vChat,profile:vProfile,tips:vTips,partages:vPartages};
-  const noTabs=["detail","confirm","create","chat"];
+  const views={home:vHome,category:vCategory,detail:vDetail,confirm:vConfirm,create:vCreate,myactivities:vMyActivities,messages:vMessages,chat:vChat,profile:vProfile,tips:vTips,partages:vPartages,notifications:vNotifs};
+  const noTabs=["detail","confirm","create","chat","notifications"];
   const fixedBars={detail:vDetailCta,create:vCreateCta};
   el.innerHTML=(views[S.screen]||vHome)();
   $("tabbar").innerHTML=fixedBars[S.screen]?fixedBars[S.screen]():(noTabs.includes(S.screen)?"":vTabs());
@@ -1042,9 +1126,12 @@ function vTopbar(back,title){
   if(back)return `<header class="topbar"><button class="iconbtn" onclick="${back}">${svg("back")}</button><span class="brand" style="font-size:16px">${title||""}</span><span style="width:38px"></span></header>`;
   const myChats=S.activities.filter(a=>isIn(a)&&a.status!=="annulée").length;
   return `<header class="topbar">
-    <span class="brand logo" style="font-size:19px">côté<span style="color:var(--coral)">a</span></span>
+    <div style="min-width:0">
+      <span class="brand logo" style="font-size:19px;display:block;line-height:1.05">côté<span style="color:var(--coral)">a</span></span>
+      <span class="topbar-est">${svg("pin")}${esc(EST.name)}</span>
+    </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="iconbtn" onclick="toast('Aucune nouvelle notification pour le moment.')">${svg("bell")}${myChats?'<span class="dot"></span>':''}</button>
+      <button class="iconbtn" onclick="openNotifs()" aria-label="Notifications">${svg("bell")}${unreadNotifs()?`<span class="notif-count">${unreadNotifs()>9?"9+":unreadNotifs()}</span>`:""}</button>
       <button style="border-radius:50%" onclick="go('profile','profile')">${myAvatar(38,'')}</button>
     </div>
   </header>`;
@@ -1112,8 +1199,8 @@ function vExplainer(){
   </div>`;
 }
 
-/* ---------- Onboarding (5 étapes) ---------- */
-const ONB_TOTAL=5;
+/* ---------- Onboarding (4 étapes) ---------- */
+const ONB_TOTAL=4;
 function vOnboard(){
   const prog=`<div class="top-progress">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${S.onbStep>=i+1?"on":""}"></i>`).join("")}</div>`;
   const back=`<button class="iconbtn" onclick="${S.onbStep>1?`S.onbStep--;render()`:`go('landing')`}">${svg("back")}</button>`;
@@ -1135,22 +1222,6 @@ function vOnboard(){
     `);
   }
   if(S.onbStep===2){
-    return wrap(`
-      <h2>Votre visibilité<br>par défaut</h2>
-      <p class="sub">Choisissez comment les autres voyageurs pourront vous voir par défaut.</p>
-      <button class="choice-card ${S.visDefault==="visible"?"on":""}" style="width:100%" onclick="S.visDefault='visible';render()">
-        <div style="flex:1"><b>Visible par défaut</b><p>Les autres voyageurs pourront voir votre profil (pseudo, photo si ajoutée) et vos activités par défaut.</p></div>
-        <span class="radio">${S.visDefault==="visible"?svg("check"):""}</span>
-      </button>
-      <button class="choice-card ${S.visDefault==="discret"?"on":""}" style="width:100%" onclick="S.visDefault='discret';render()">
-        <div style="flex:1"><b>Discret par défaut</b><p>Les autres voyageurs ne verront pas votre profil. Ils verront uniquement le nombre de participants aux activités auxquelles vous participez.</p></div>
-        <span class="radio">${S.visDefault==="discret"?svg("check"):""}</span>
-      </button>
-      <p class="small muted" style="margin-top:6px">Vous pourrez changer cette visibilité à tout moment dans les paramètres ou pour chaque activité.</p>
-      <div class="foot"><button class="btn btn-purple" onclick="S.onbStep=3;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===1?"on":""}"></i>`).join("")}</div></div>
-    `);
-  }
-  if(S.onbStep===3){
     const opts=[{id:"sport",label:"Sport",icon:"run"},{id:"gastronomie",label:"Gastronomie",icon:"fork"},{id:"velo",label:"Vélo",icon:"bike"},{id:"randonnee",label:"Randonnée",icon:"route"},{id:"plage",label:"Mer / Plage",icon:"sun"},{id:"vins",label:"Dégustation & vins",icon:"star"},{id:"jeux",label:"Jeux",icon:"dice"},{id:"musique",label:"Musique",icon:"music"},{id:"bienetre",label:"Bien-être",icon:"heart"},{id:"enfants",label:"Activités enfants",icon:"users"}];
     return wrap(`
       <h2>Vos centres<br>d'intérêt</h2>
@@ -1159,10 +1230,10 @@ function vOnboard(){
         ${opts.map(o=>`<button class="interest ${S.selEnvies.includes(o.id)?"on":""}" onclick="togEnvie('${o.id}')">${S.selEnvies.includes(o.id)?`<span class="badge-ok">${svg("check")}</span>`:""}${svg(o.icon)}${o.label}</button>`).join("")}
       </div>
       <p class="small muted" style="margin-top:12px">Vous pourrez modifier ces centres d'intérêt à tout moment dans votre profil.</p>
-      <div class="foot"><button class="btn btn-purple" ${S.selEnvies.length?"":"disabled"} onclick="S.onbStep=4;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===2?"on":""}"></i>`).join("")}</div></div>
+      <div class="foot"><button class="btn btn-purple" ${S.selEnvies.length?"":"disabled"} onclick="S.onbStep=3;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===1?"on":""}"></i>`).join("")}</div></div>
     `);
   }
-  if(S.onbStep===4){
+  if(S.onbStep===3){
     const moments=[{id:"matin",label:"Matin (6h – 12h)"},{id:"apresmidi",label:"Après-midi (12h – 18h)"},{id:"soiree",label:"Soirée (18h – 23h)"}];
     const roles=[{id:"organiser",label:"Organiser des activités",p:"Proposez et créez des activités"},{id:"participer",label:"Participer aux activités",p:"Rejoignez les activités proposées"},{id:"deux",label:"Les deux",p:"Organiser et participer"}];
     return wrap(`
@@ -1172,7 +1243,7 @@ function vOnboard(){
       <p class="sub" style="margin-top:16px">Vous préférez…</p>
       ${roles.map(r=>`<button class="choice-card ${S.selRole===r.id?"on":""}" style="width:100%" onclick="S.selRole='${r.id}';render()"><div style="flex:1"><b>${r.label}</b><p>${r.p}</p></div><span class="radio">${S.selRole===r.id?svg("check"):""}</span></button>`).join("")}
       <p class="small muted" style="margin-top:6px">Ces informations sont facultatives et modifiables à tout moment.</p>
-      <div class="foot"><button class="btn btn-purple" onclick="S.onbStep=5;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===3?"on":""}"></i>`).join("")}</div></div>
+      <div class="foot"><button class="btn btn-purple" onclick="S.onbStep=4;render()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===2?"on":""}"></i>`).join("")}</div></div>
     `);
   }
   return wrap(`
@@ -1185,7 +1256,7 @@ function vOnboard(){
       <p class="small" style="font-weight:700;display:flex;align-items:center;gap:8px;color:var(--green-solid)">${svg("shield")} Vos données restent les vôtres</p>
       ${["Elles servent uniquement à améliorer votre expérience pendant votre séjour.","Jamais revendues ni utilisées à des fins publicitaires.","Partagées uniquement sous forme de statistiques anonymisées avec l'établissement.","Modifiables ou supprimables à tout moment depuis votre profil."].map(t=>`<div class="privacy-check">${svg("check")}<span>${t}</span></div>`).join("")}
     </div>
-    <div class="foot"><button class="btn btn-coral" onclick="finishOnboard()">Rejoindre la communauté 🎉</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===4?"on":""}"></i>`).join("")}</div></div>
+    <div class="foot"><button class="btn btn-coral" onclick="finishOnboard()">Rejoindre la communauté 🎉</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===3?"on":""}"></i>`).join("")}</div></div>
   `);
 }
 function onbNext1(){
@@ -1196,11 +1267,13 @@ function onbNext1(){
 function togEnvie(id){const i=S.selEnvies.indexOf(id);i>=0?S.selEnvies.splice(i,1):S.selEnvies.push(id);render();}
 function togMoment(id){const i=S.selMoments.indexOf(id);i>=0?S.selMoments.splice(i,1):S.selMoments.push(id);render();}
 async function finishOnboard(){
-  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:S.visDefault,photo_url:S.pendingPhoto||null});
+  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:"visible",photo_url:S.pendingPhoto||null});
   if(error){toast("Impossible de créer votre profil pour le moment. Réessayez.");console.error(error);return;}
-  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:S.visDefault,photo:S.pendingPhoto||null};
+  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:"visible",photo:S.pendingPhoto||null};
   S.notifs.push=S.notifSuggest;
+  S.notifications=loadNotifs();
   await loadEstablishmentData();
+  subscribeEstablishment();
   go("home","home");
   setTimeout(()=>toast(`Bienvenue ${esc(S.user.name)} — votre accès est actif jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}.`),300);
 }
@@ -1220,7 +1293,15 @@ function vHome(){
       <img src="assets/hero-home.jpg?v=2" alt="">
       <div class="txt">
         <h2>Bienvenue ${esc(S.user.name)} <span class="script">à côté de vous</span></h2>
-        <p>Mêmes envies, même moment, même endroit. Découvrez ce que prépare votre communauté au ${esc(EST.name)}.</p>
+        <p>Mêmes envies, même moment, même endroit. Découvrez ce que prépare votre communauté.</p>
+      </div>
+    </div>
+    <div class="est-badge">
+      <span class="ic">${svg("pin")}</span>
+      <div style="min-width:0">
+        <span class="lbl">Votre établissement</span>
+        <b>${esc(EST.name)}</b>
+        <span>${esc(EST.place||"")}${EST.place?" · ":""}Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</span>
       </div>
     </div>
     <div class="cat-grid">
@@ -1229,6 +1310,7 @@ function vHome(){
         <span class="txt"><b>${c.label}</b></span>
       </button>`;}).join("")}
     </div>
+    ${adsFor("home")}
   </div>`;
 }
 function openCategory(id){S.catFilter={topcat:id,tab:"a"};go("category","home");}
@@ -1262,7 +1344,7 @@ function vCategory(){
     </div>
     <div class="catlist">
       ${banner}
-      ${tab==="c"?renderPastList(list):(list.length?list.map(a=>tab==="b"?cardLive(a):cardA(a)).join(""):emptyState(top))}
+      ${tab==="c"?renderPastList(list):(list.length?list.map((a,i)=>(tab==="b"?cardLive(a):cardA(a))+(i===1?adsFor("category"):"")).join("")+(list.length<2?adsFor("category"):""):emptyState(top)+adsFor("category"))}
       ${tab!=="c"?`<div class="safety">${svg("shield")}<span><b>Côtéa met en relation les voyageurs.</b> Les paiements se font directement entre vous et les prestataires ou entre participants. Ne partagez jamais d'informations sensibles.</span></div>`:""}
     </div>`;
 }
@@ -1541,13 +1623,14 @@ function createStep2(){
 function vCreateStep2(){
   const cc=colorOf({topcat:draft.topcat,subcat:draft.subcat});
   const sub=subcatOf(draft.topcat,draft.subcat);
+  const photo=photoFor(draft.topcat,draft.subcat);
   return `<div class="screen"><div class="create">
     <button class="iconbtn" onclick="draft.step=1;render()" style="margin-bottom:14px">${svg("back")}</button>
     <p class="eyebrow" style="color:var(--purple)">Aperçu / Publier l'activité</p>
     <h2 style="font-size:21px;margin:4px 0 14px">Voici à quoi elle ressemblera pour les autres voyageurs</h2>
     <div class="preview-wrap">
       <div class="acard">
-        <div class="media"><div style="width:100%;height:100%;background:${cc.bg}"></div><div class="grad"></div>
+        <div class="media">${photo?`<img src="${photo}" alt="">`:`<div style="width:100%;height:100%;background:${cc.bg}"></div>`}<div class="grad"></div>
           <span class="tag" style="background:${cc.solid}">${esc(sub.label||"Nouveau")}</span>
           <span class="avstack">${myAvatar(24,'')}</span>
         </div>
@@ -1567,12 +1650,29 @@ function vCreateCta(){
   if(draft.step===1)return `<div class="fixedbar"><button class="btn btn-coral" onclick="createStep2()">Aperçu de mon activité</button></div>`;
   return `<div class="fixedbar"><button class="btn btn-coral" onclick="publishA()">Publier mon activité</button><button class="btn btn-outline" onclick="draft.step=1;render()">${svg("route")} Modifier</button></div>`;
 }
+// Photothèque : une image dédiée pour CHAQUE sous-catégorie, appliquée
+// automatiquement à la création. Aucune attente, aucun décalage entre le titre
+// de l'activité et sa photo.
 const SUBCAT_PHOTOS={
-  foot:"assets/hero-foot.jpg",petanque:"assets/hero-petanque.jpg",tennis:"assets/hero-tennis.jpg",
-  rando:"assets/hero-rando.jpg",paddle:"assets/hero-paddle.jpg",veloD:"assets/hero-velo.jpg",
-  chien:"assets/hero-chien.jpg",marche:"assets/hero-marche.jpg",visite:"assets/hero-village.jpg",
-  village:"assets/hero-village.jpg",barbecue:"assets/hero-barbecue.jpg"
+  // Sport
+  running:"assets/hero-running.jpg", foot:"assets/hero-foot.jpg", rando:"assets/hero-rando.jpg",
+  velo:"assets/hero-velo.jpg", petanque:"assets/hero-petanque.jpg", tennis:"assets/hero-tennis.jpg",
+  paddle:"assets/hero-paddle.jpg", autre:"assets/hero-sport.jpg",
+  // Découverte & Sortie
+  bateau:"assets/hero-bateau.jpg", visite:"assets/hero-village.jpg", plage:"assets/hero-plage.jpg",
+  chien:"assets/hero-chien.jpg", veloD:"assets/hero-velo.jpg", marche:"assets/hero-marche.jpg",
+  village:"assets/hero-village.jpg",
+  // Loisirs
+  cartes:"assets/hero-cartes.jpg", societe:"assets/hero-societe.jpg", creatives:"assets/hero-creatives.jpg",
+  lecture:"assets/hero-lecture.jpg", musique:"assets/hero-musique.jpg", cinema:"assets/hero-cinema.jpg",
+  autresL:"assets/hero-loisirs.jpg",
+  // Moments conviviaux
+  barbecue:"assets/hero-barbecue.jpg", soiree:"assets/hero-soiree.jpg",
+  restaurant:"assets/hero-restaurant.jpg", autreM:"assets/hero-moments.jpg"
 };
+function photoFor(topcat,subcat){
+  return SUBCAT_PHOTOS[subcat]||(TOPCATS.find(t=>t.id===topcat)||{}).cover||null;
+}
 function showLoadingOverlay(msg){
   $("modalHost").innerHTML=`<div class="modal-overlay"><div class="modal-card" style="text-align:center">
     <div class="spinner"></div>
@@ -1585,32 +1685,20 @@ function updateLoadingMsg(msg){
 }
 async function publishA(){
   const d=draft;
-  const top=TOPCATS.find(t=>t.id===d.topcat);
   showLoadingOverlay("Publication de votre activité…");
   const {data,error}=await sb.from("activities").insert({
     establishment_id:EST.id,topcat:d.topcat,subcat:d.subcat,title:d.title.trim(),
     description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
     type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name,
-    photo:SUBCAT_PHOTOS[d.subcat]||top?.cover||null
+    photo:photoFor(d.topcat,d.subcat)
   }).select().single();
   if(error){closeModal();toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
   await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
-  updateLoadingMsg("Génération d'une photo par IA…");
-  await generateActivityPhoto(data.id,d.title.trim(),d.topcat,d.subcat,d.lieu.trim(),d.desc.trim());
   await loadEstablishmentData();
   closeModal();
   toast(`« ${esc(d.title.trim())} » est publiée. Les voyageurs intéressés seront notifiés.`);
   S.catFilter={topcat:d.topcat,tab:"a"};
   openDetail(data.id);
-}
-async function generateActivityPhoto(activityId,title,topcat,subcat,lieu,desc){
-  try{
-    const result=await Promise.race([
-      sb.functions.invoke("generate-activity-image",{body:{activityId,title,topcat,subcat,lieu,desc}}),
-      new Promise(resolve=>setTimeout(()=>resolve({timeout:true}),20000))
-    ]);
-    if(result?.error)console.error(result.error);
-  }catch(e){console.error(e);}
 }
 
 /* ---------- Itinéraire (Google Maps, fonctionne réellement) ---------- */
@@ -1735,6 +1823,238 @@ async function submitTip(){
 }
 
 /* ---------- Profil ---------- */
+/* ============================================================
+   Encarts publicitaires — publiés par le directeur, vus par les voyageurs
+   ============================================================ */
+async function loadAds(){
+  const {data,error}=await sb.from("ads").select("*").eq("establishment_id",EST.id).order("created_at",{ascending:false});
+  if(error){console.error(error);return;}
+  S.ads=data||[];
+}
+const activeAds=where=>(S.ads||[]).filter(a=>a.active&&a.placement===where);
+function adCard(ad){
+  return `<div class="adcard">
+    ${ad.image_url?`<img src="${esc(ad.image_url)}" alt="">`:""}
+    <div class="adbody">
+      <span class="adlabel">Proposé par ${esc(EST.name)}</span>
+      <b>${esc(ad.title)}</b>
+      ${ad.body?`<p>${esc(ad.body)}</p>`:""}
+      ${ad.cta_url?`<a class="btn btn-coral btn-sm" style="margin-top:10px;display:inline-flex" href="${esc(ad.cta_url)}" target="_blank" rel="noopener noreferrer">${esc(ad.cta_label||"En savoir plus")}</a>`:""}
+    </div>
+  </div>`;
+}
+function adsFor(where){return activeAds(where).map(adCard).join("");}
+
+/* --- Côté directeur --- */
+function vDashPublicite(){
+  const list=S.ads||[];
+  const on=list.filter(a=>a.active).length;
+  return dashHeader("Publicité","Publiez des encarts visibles par les voyageurs de votre communauté.",true)+`
+    <div class="info-banner p" style="margin-bottom:18px">${svg("info")}<span><b>Où apparaissent vos encarts ?</b> « Accueil » les affiche sur la page d'accueil de l'app, juste sous les catégories. « Listes d'activités » les insère dans les listes, entre les activités.</span></div>
+    <div class="kgrid">
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("grid")}</span><div><b class="num">${list.length}</b><span class="lbl">Encarts créés</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("eye")}</span><div><b class="num">${on}</b><span class="lbl">Actuellement diffusés</span></div></div></div>
+    </div>
+    <div class="dpanel2">
+      <div style="display:flex;align-items:center;margin-bottom:14px"><h3 style="margin:0">Vos encarts</h3><button class="btn btn-coral btn-sm" style="margin-left:auto" onclick="openAddAd()">${svg("plus")} Nouvel encart</button></div>
+      ${list.length?list.map(a=>`<div class="mod-row ${a.active?"":"resolved"}">
+        <div style="flex:1;min-width:0">
+          <b style="display:block;font-size:13.5px;margin-bottom:3px">${esc(a.title)}</b>
+          ${a.body?`<span class="small muted" style="line-height:1.5">${esc(a.body)}</span>`:""}
+          <div class="small muted" style="margin-top:6px">${a.placement==="home"?"Accueil":"Listes d'activités"}${a.cta_url?` · lien : ${esc(a.cta_url)}`:""}</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex:none">
+          <button class="switch ${a.active?"on":""}" onclick="toggleAd('${a.id}',${!a.active})" aria-label="Diffuser"><i></i></button>
+          <button class="link-danger" onclick="removeAd('${a.id}')">Supprimer</button>
+        </div>
+      </div>`).join(""):`<p class="small muted">Aucun encart pour le moment. Créez-en un pour mettre en avant un service, un partenaire ou un événement.</p>`}
+    </div>
+    <div class="dpanel2" style="margin-top:16px">
+      <h3>Aperçu côté voyageur</h3>
+      ${on?`<div style="max-width:380px">${activeAds("home").concat(activeAds("category")).map(adCard).join("")}</div>`:`<p class="small muted">Activez au moins un encart pour voir l'aperçu.</p>`}
+    </div>`;
+}
+function openAddAd(){
+  openModal(`
+    <h3>Nouvel encart publicitaire</h3>
+    <p class="small muted" style="margin:6px 0 14px">Visible par tous les voyageurs de votre établissement.</p>
+    <div class="field"><label>Titre</label><input id="adtitle" placeholder="Ex. -20% au restaurant du camping"></div>
+    <div class="field"><label>Texte <span class="muted">(optionnel)</span></label><textarea id="adbody" placeholder="Détail de l'offre…"></textarea></div>
+    <div class="field"><label>Image <span class="muted">(optionnel)</span></label><input type="file" accept="image/*" id="adfile" onchange="handleAdImagePick(this)"><div id="adImgPrev" class="small muted" style="margin-top:6px"></div></div>
+    <div class="field"><label>Texte du bouton <span class="muted">(optionnel)</span></label><input id="adcta" placeholder="Ex. Réserver une table"></div>
+    <div class="field"><label>Lien du bouton <span class="muted">(optionnel)</span></label><input id="adurl" placeholder="https://…"></div>
+    <div class="field"><label>Emplacement</label><select id="adplace"><option value="home">Accueil</option><option value="category">Listes d'activités</option></select></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-coral" onclick="submitAd()">Publier</button>
+    </div>`);
+}
+let pendingAdImage=null;
+async function handleAdImagePick(input){
+  const file=input.files[0];if(!file)return;
+  const prev=$("adImgPrev");if(prev)prev.textContent="Envoi de l'image…";
+  const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+  const path=`ads/${EST.id}-${Date.now()}.${ext}`;
+  const {error}=await sb.storage.from("activity-photos").upload(path,file,{contentType:file.type||"image/jpeg",upsert:true});
+  if(error){if(prev)prev.textContent="Échec de l'envoi de l'image.";console.error(error);return;}
+  pendingAdImage=sb.storage.from("activity-photos").getPublicUrl(path).data.publicUrl;
+  if(prev)prev.textContent="Image ajoutée ✓";
+}
+async function submitAd(){
+  const title=$("adtitle").value.trim();
+  if(!title){toast("Un titre est nécessaire.");return;}
+  const {error}=await sb.from("ads").insert({
+    establishment_id:EST.id,title,
+    body:$("adbody").value.trim()||null,
+    image_url:pendingAdImage,
+    cta_label:$("adcta").value.trim()||null,
+    cta_url:$("adurl").value.trim()||null,
+    placement:$("adplace").value
+  });
+  if(error){toast("Impossible de publier l'encart.");console.error(error);return;}
+  pendingAdImage=null;
+  await loadAds();closeModal();toast("Encart publié — il est visible par vos voyageurs.");render();
+}
+async function toggleAd(id,active){
+  const {error}=await sb.from("ads").update({active}).eq("id",id);
+  if(error){toast("Modification impossible.");console.error(error);return;}
+  await loadAds();toast(active?"Encart diffusé.":"Encart mis en pause.");render();
+}
+async function removeAd(id){
+  const {error}=await sb.from("ads").delete().eq("id",id);
+  if(error){toast("Suppression impossible.");console.error(error);return;}
+  await loadAds();toast("Encart supprimé.");render();
+}
+
+/* ============================================================
+   Notifications — alimentées en temps réel par Supabase
+   ============================================================ */
+const NOTIF_KEY="cotea_notifs_";
+// Rapproche les centres d'intérêt du profil des catégories/sous-catégories d'activité.
+const ENVIE_MATCH={
+  sport:["sport"],velo:["velo","veloD"],randonnee:["rando"],plage:["plage","paddle"],
+  gastronomie:["restaurant","barbecue","marche"],jeux:["cartes","societe"],musique:["musique","soiree"],
+  vins:["soiree","restaurant"],bienetre:["creatives","lecture"],enfants:["cartes","societe","plage"]
+};
+function loadNotifs(){
+  try{return JSON.parse(localStorage.getItem(NOTIF_KEY+UID)||"[]");}catch(e){return [];}
+}
+function saveNotifs(){
+  try{localStorage.setItem(NOTIF_KEY+UID,JSON.stringify(S.notifications.slice(0,60)));}catch(e){}
+}
+const unreadNotifs=()=>S.notifications.filter(n=>!n.read).length;
+function pushNotif(n){
+  if(S.notifications.some(x=>x.id===n.id))return;
+  S.notifications.unshift(Object.assign({at:Date.now(),read:false},n));
+  saveNotifs();
+  showBrowserNotif(n);
+  toast(n.title);
+  render();
+}
+function showBrowserNotif(n){
+  // Doublon inutile si l'utilisateur a déjà l'app sous les yeux : le toast suffit.
+  if(!("Notification" in window)||Notification.permission!=="granted")return;
+  if(document.visibilityState==="visible")return;
+  try{new Notification(n.title,{body:n.body||"",icon:"assets/icon-192.png",tag:n.id});}catch(e){}
+}
+function notifPermLabel(){
+  if(!("Notification" in window))return "non gérées par ce navigateur";
+  return {granted:"activées",denied:"bloquées",default:"non activées"}[Notification.permission];
+}
+async function askNotifPermission(){
+  if(!("Notification" in window)){toast("Votre navigateur ne gère pas les notifications système.");return;}
+  if(Notification.permission==="denied"){toast("Notifications bloquées — réactivez-les dans les réglages du navigateur.");return;}
+  const r=await Notification.requestPermission();
+  toast(r==="granted"?"Notifications activées sur cet appareil.":"Notifications non activées.");
+  render();
+}
+function testNotif(){
+  pushNotif({id:"test-"+Date.now(),kind:"test",title:"Test de notification",body:"Si vous voyez ceci, les notifications fonctionnent."});
+}
+function matchesMyInterests(row){
+  const envies=S.user?.envies||[];
+  return envies.some(e=>(ENVIE_MATCH[e]||[]).some(k=>k===row.topcat||k===row.subcat));
+}
+let estChannel=null;
+function subscribeEstablishment(){
+  if(estChannel)sb.removeChannel(estChannel);
+  estChannel=sb.channel("est-"+EST.id)
+    .on("postgres_changes",{event:"INSERT",schema:"public",table:"activities",filter:`establishment_id=eq.${EST.id}`},p=>onNewActivity(p.new))
+    .on("postgres_changes",{event:"INSERT",schema:"public",table:"activity_participants"},p=>onNewParticipant(p.new))
+    .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},p=>onNewMessage(p.new))
+    .subscribe();
+}
+async function onNewActivity(row){
+  await loadEstablishmentData();
+  if(row.orga_id===UID){render();return;}
+  if(!S.notifs.push){render();return;}
+  const forMe=matchesMyInterests(row);
+  pushNotif({
+    id:"act-"+row.id,kind:"activity",ref:row.id,forMe,
+    title:(forMe?"Pour vous : ":"Nouvelle activité : ")+row.title,
+    body:`${fmtDate(row.date)} · ${row.time} — proposée par ${row.orga_name}`
+  });
+}
+async function onNewParticipant(row){
+  const a=findA(row.activity_id);
+  if(!a||row.user_id===UID||a.orga!==S.user?.name)return;
+  await loadEstablishmentData();
+  pushNotif({
+    id:"join-"+row.activity_id+"-"+row.user_id,kind:"join",ref:row.activity_id,
+    title:`${row.user_name} a rejoint votre activité`,body:a.title
+  });
+}
+function onNewMessage(row){
+  if(row.user_id===UID)return;
+  const a=findA(row.activity_id);
+  if(!a||!isIn(a))return;
+  if(S.screen==="chat"&&S.currentId===row.activity_id)return;
+  pushNotif({
+    id:"msg-"+row.id,kind:"message",ref:row.activity_id,
+    title:`${row.user_name} a écrit au groupe`,body:`${a.title} — ${row.text}`
+  });
+}
+function openNotifs(){
+  S.notifications.forEach(n=>n.read=true);
+  saveNotifs();
+  go("notifications");
+}
+function openNotif(n){
+  const a=findA(n.ref);
+  if(!a){toast("Cette activité n'est plus disponible.");return;}
+  if(n.kind==="message")openChat(n.ref);else openDetail(n.ref);
+}
+function clearNotifs(){S.notifications=[];saveNotifs();render();}
+const NOTIF_ICON={activity:"cal",join:"users",message:"chat",test:"bell"};
+function vNotifs(){
+  const perm=notifPermLabel();
+  return vTopbar(`go('home','home')`,"Notifications")+`<div class="catlist">
+    <div class="panel" style="margin-bottom:14px">
+      <div class="setline" style="border:none;align-items:flex-start">
+        <span style="flex:1"><b style="display:block;font-size:13.5px">Notifications sur cet appareil</b><span class="small muted">Actuellement ${perm}. Une fois activées, vous êtes prévenu même quand l'app est fermée.</span></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-coral btn-sm" style="flex:1;min-width:130px" onclick="askNotifPermission()">${svg("bell")} Activer</button>
+        <button class="btn btn-outline btn-sm" style="flex:1;min-width:130px" onclick="testNotif()">Tester</button>
+      </div>
+    </div>
+    ${S.notifications.length?`
+      <div style="display:flex;align-items:center;margin-bottom:8px">
+        <span class="small muted">${S.notifications.length} notification${S.notifications.length>1?"s":""}</span>
+        <button class="link-danger" style="margin-left:auto;font-size:12px" onclick="clearNotifs()">Tout effacer</button>
+      </div>
+      ${S.notifications.map(n=>`<button class="notif-row ${n.forMe?"forme":""}" onclick="${n.ref?`openNotif(${JSON.stringify(n).replace(/"/g,"&quot;")})`:""}">
+        <span class="ic">${svg(NOTIF_ICON[n.kind]||"bell")}</span>
+        <span style="flex:1;min-width:0"><b>${esc(n.title)}</b>${n.body?`<p>${esc(n.body)}</p>`:""}<span class="when">${relTime(new Date(n.at).toISOString())}</span></span>
+      </button>`).join("")}`
+    :`<div class="panel" style="text-align:center;padding:30px">
+        <span class="icon-circle lg" style="background:var(--purple-bg);margin:0 auto 12px">${svg("bell")}</span>
+        <p style="font-family:'Baloo 2',sans-serif;font-size:16px;margin-bottom:6px">Aucune notification</p>
+        <p class="small muted">Vous serez prévenu dès qu'une activité est proposée, que quelqu'un rejoint la vôtre ou écrit à votre groupe.</p>
+      </div>`}
+  </div>`;
+}
+
 function vProfile(){
   const u=S.user;
   const allInterests=[{id:"sport",label:"Sport"},{id:"gastronomie",label:"Gastronomie"},{id:"velo",label:"Vélo"},{id:"randonnee",label:"Randonnée"},{id:"plage",label:"Mer / Plage"},{id:"vins",label:"Dégustation & vins"},{id:"jeux",label:"Jeux"},{id:"musique",label:"Musique"},{id:"bienetre",label:"Bien-être"},{id:"enfants",label:"Activités enfants"}];
@@ -1753,7 +2073,7 @@ function vProfile(){
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--purple)">Notifications</h5>
       <div class="setline"><span>Nouvelles activités selon mes envies</span><button class="switch ${S.notifs.push?"on":""}" onclick="S.notifs.push=!S.notifs.push;render()"><i></i></button></div>
       <div class="setline"><span>Rappels avant mes activités</span><button class="switch ${S.notifs.rappels?"on":""}" onclick="S.notifs.rappels=!S.notifs.rappels;render()"><i></i></button></div>
-      <div class="setline" style="border:none"><span>Visibilité par défaut</span><button class="switch ${u.visibility==="visible"?"on":""}" onclick="u.visibility=u.visibility==='visible'?'discret':'visible';render()"><i></i></button></div>
+      <button class="setline" style="border:none;width:100%;text-align:left" onclick="openNotifs()"><span style="flex:1">Notifications sur cet appareil <span class="small muted">— ${notifPermLabel()}</span></span><span class="muted">›</span></button>
     </div>
     <div class="panel"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--purple)">Communauté &amp; confidentialité</h5>
       <div class="setline"><span>Charte de communauté</span><span class="muted">›</span></div>
@@ -1842,6 +2162,7 @@ const DASH_NAV=[
   {id:"voyageurs",label:"Voyageurs",icon:"users"},
   {id:"partenaires",label:"Partenaires",icon:"handshake"},
   {id:"messages",label:"Messages",icon:"chat"},
+  {id:"publicite",label:"Publicité",icon:"eye"},
   {id:"statistiques",label:"Statistiques",icon:"bar"},
   {id:"parametres",label:"Paramètres",icon:"gear"}
 ];
@@ -1869,7 +2190,7 @@ function dashMobileNav(){
   </nav>`;
 }
 function renderDash(){
-  const pageFns={tableau:vDashTableau,activites:vDashActivites,voyageurs:vDashVoyageurs,partenaires:vDashPartenaires,messages:vDashMessages,statistiques:vDashStatistiques,parametres:vDashParametres};
+  const pageFns={tableau:vDashTableau,activites:vDashActivites,voyageurs:vDashVoyageurs,partenaires:vDashPartenaires,messages:vDashMessages,publicite:vDashPublicite,statistiques:vDashStatistiques,parametres:vDashParametres};
   const content=(pageFns[S.dashPage]||vDashStub)();
   $("dash").innerHTML=`
     <aside class="sidebar">
@@ -1901,13 +2222,34 @@ function estJoinUrl(code){
   const base=location.origin+location.pathname;
   return `${base}?code=${encodeURIComponent(code)}`;
 }
+let COTEA_STATS=[];
+function exportEstablishmentsCSV(){
+  const head=["Établissement","Localité","Code d'accès","Activités","Membres","Lien de la communauté"];
+  const rows=ESTABLISHMENTS.map(e=>{
+    const s=COTEA_STATS.find(x=>x.establishment_id===e.id)||{};
+    return [e.name,e.place||"",e.join_code,s.activities||0,s.members||0,estJoinUrl(e.join_code)];
+  });
+  const csv=[head,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
+  const blob=new Blob([String.fromCharCode(0xFEFF)+csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url;link.download=`cotea-etablissements-${iso(daysFrom(0))}.csv`;
+  document.body.appendChild(link);link.click();document.body.removeChild(link);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast(`Export CSV téléchargé (${rows.length} établissements).`);
+}
 async function renderCotea(){
   if(!ESTABLISHMENTS.length)await loadEstablishments();
   // RLS hides other establishments' activities from a non-member, so use an
   // aggregate-only function that exposes counts without any content.
   const {data:stats}=await sb.rpc("establishment_stats");
+  COTEA_STATS=stats||[];
   const byEst={};
   (stats||[]).forEach(s=>{byEst[s.establishment_id]={acts:s.activities,members:s.members};});
+  const totActs=(stats||[]).reduce((n,s)=>n+Number(s.activities||0),0);
+  const totMembers=(stats||[]).reduce((n,s)=>n+Number(s.members||0),0);
+  const actifs=ESTABLISHMENTS.filter(e=>(byEst[e.id]?.acts||0)>0).length;
+  const topEst=[...ESTABLISHMENTS].sort((a,b)=>(byEst[b.id]?.acts||0)-(byEst[a.id]?.acts||0))[0];
   $("dash").innerHTML=`
     <aside class="sidebar">
       <div class="slogo">côté<span style="color:var(--coral)">a</span></div>
@@ -1923,7 +2265,43 @@ async function renderCotea(){
     </header>
     <main class="dash-main">
       <div class="dash-top">
-        <div><h1>Établissements</h1><p>${ESTABLISHMENTS.length} établissement${ESTABLISHMENTS.length>1?"s":""} · un QR code d'accès unique par établissement.</p></div>
+        <div><h1>Pilotage Côtéa</h1><p>Vue consolidée du parc d'établissements, de leurs accès et de leur activité.</p></div>
+        <div class="dsel"><button class="btn btn-outline btn-sm" onclick="exportEstablishmentsCSV()">${svg("download")} Exporter en CSV</button></div>
+      </div>
+      <div class="sectitle">${svg("bar")} VUE D'ENSEMBLE</div>
+      <div class="kgrid">
+        <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("grid")}</span><div><b class="num">${ESTABLISHMENTS.length}</b><span class="lbl">Établissements</span></div></div><span class="sub">${actifs} avec au moins une activité</span></div>
+        <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${totMembers}</b><span class="lbl">Membres au total</span></div></div><span class="sub">Comptes créés via les QR codes</span></div>
+        <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("cal")}</span><div><b class="num">${totActs}</b><span class="lbl">Activités au total</span></div></div><span class="sub">Toutes catégories confondues</span></div>
+        <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">${totMembers?(totActs/totMembers).toFixed(2):"0"}</b><span class="lbl">Activités par membre</span></div></div><span class="sub">${topEst?"Meilleur site : "+esc(topEst.name):""}</span></div>
+      </div>
+      <div class="dpanel2" style="margin-bottom:16px">
+        <h3>${svg("bar")} Comparatif des établissements</h3>
+        <div style="overflow-x:auto"><table class="dtable">
+          <thead><tr><th>Établissement</th><th>Localité</th><th>Code</th><th>Activités</th><th>Membres</th></tr></thead>
+          <tbody>
+          ${ESTABLISHMENTS.map(e=>`<tr>
+            <td class="cmain"><b>${esc(e.name)}</b></td>
+            <td data-label="Localité" class="muted">${esc(e.place||"—")}</td>
+            <td data-label="Code"><span class="status-pill" style="background:var(--purple-bg);color:var(--purple)">${esc(e.join_code)}</span></td>
+            <td data-label="Activités">${byEst[e.id]?.acts||0}</td>
+            <td data-label="Membres">${byEst[e.id]?.members||0}</td>
+          </tr>`).join("")}
+          </tbody>
+        </table></div>
+        <p class="small muted" style="margin-top:10px">${svg("shield")} Côtéa n'accède qu'à des compteurs agrégés : ni les conversations, ni le contenu des activités des voyageurs ne sont lisibles depuis cet espace.</p>
+      </div>
+      <div class="sectitle">${svg("scan")} ACCÈS &amp; QR CODES</div>
+      <div class="dpanel2" style="margin-bottom:16px">
+        <h3>${svg("download")} QR Téléchargement <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);margin-left:6px">Commun à tous</span></h3>
+        <p class="small muted" style="margin-bottom:14px">Ce QR ne rattache à aucun établissement : il mène à la page d'installation de l'app. À utiliser sur les supports de communication généraux (flyers, site, salons).</p>
+        <div class="qr-card2">
+          <div class="qr-visual2">${qrSvg(installUrl(),5)}</div>
+          <div style="flex:1;min-width:190px">
+            <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" onclick="copyText('${installUrl()}')">${svg("share")} Copier le lien</button>
+            <button class="btn btn-navy btn-sm" style="width:100%" onclick="printInstallQR()">${svg("download")} Imprimer le QR</button>
+          </div>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
         ${ESTABLISHMENTS.map(e=>`<div class="dpanel2">
@@ -1946,27 +2324,32 @@ function copyText(t){
   if(navigator.clipboard?.writeText)navigator.clipboard.writeText(t).then(()=>toast("Lien copié.")).catch(()=>toast(t));
   else toast(t);
 }
-function printQR(name,code){
-  const url=estJoinUrl(code);
+function printSheet(title,subtitle,url,footer){
   const w=window.open("","_blank");
   if(!w){toast("Autorisez les fenêtres pop-up pour imprimer le QR.");return;}
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR ${esc(name)}</title>
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR ${esc(title)}</title>
   <style>body{font-family:system-ui,sans-serif;text-align:center;padding:60px 20px}h1{font-size:26px;margin-bottom:4px}p{color:#666;margin-bottom:8px}.code{font-size:22px;letter-spacing:.08em;font-weight:700;margin:18px 0}svg{width:320px;height:320px}</style>
   </head><body>
-    <h1>${esc(name)}</h1><p>Scannez pour rejoindre la communauté Côtéa</p>
+    <h1>${esc(title)}</h1><p>${esc(subtitle)}</p>
     ${qrSvg(url,6)}
-    <div class="code">${esc(code)}</div>
+    ${footer?`<div class="code">${esc(footer)}</div>`:""}
     <p style="font-size:12px">${esc(url)}</p>
     <script>window.onload=()=>window.print()<\/script>
   </body></html>`);
   w.document.close();
 }
-function dashHeader(title,sub){
-  const demo=DASH_DEMO[S.dashPeriod];
+function printQR(name,code){
+  printSheet(name,"Scannez pour rejoindre la communauté Côtéa",estJoinUrl(code),code);
+}
+function printInstallQR(){
+  printSheet("Côtéa","Scannez pour installer l'application sur votre téléphone",installUrl(),"");
+}
+// noPeriod : pages dont le contenu ne dépend pas de la période (Publicité, Paramètres).
+function dashHeader(title,sub,noPeriod){
   const chip=(p,label)=>`<button class="chip ${S.dashPeriod===p?"on":""}" onclick="setDashPeriod('${p}')">${label}</button>`;
   return `<div class="dash-top">
     <div><h1>${title}</h1><p>${sub}</p></div>
-    <div class="dsel">${chip("week","Cette semaine")}${chip("month","Ce mois")}${chip("season","Saison")}</div>
+    ${noPeriod?"":`<div class="dsel">${chip("week","Cette semaine")}${chip("month","Ce mois")}${chip("season","Saison")}</div>`}
   </div>`;
 }
 
@@ -2182,17 +2565,30 @@ function vDashVoyageurs(){
 
 /* ---------- Dashboard : Paramètres (QR & accès communauté) ---------- */
 function vDashParametres(){
-  return dashHeader("Paramètres","Gérez l'accès à la communauté et les informations de votre établissement.")+`
-    <div class="dpanel2" style="margin-bottom:16px">
-      <h3>${svg("scan")} Accès communauté</h3>
-      <div class="qr-card2">
-        <div class="qr-visual2">${qrSvg(EST.joinUrl(),5)}</div>
-        <div style="flex:1;min-width:220px">
-          <p class="small muted">Affichez ce QR à la réception. Les voyageurs le scannent pour rejoindre la communauté, avec le code pré-rempli automatiquement.</p>
-          <div class="qr-code2">${esc(EST.joinCode)}</div>
-          <div style="display:flex;gap:10px;max-width:340px;flex-wrap:wrap">
-            <button class="btn btn-outline" onclick="copyJoinLink()">${svg("share")} Copier le lien</button>
-            <button class="btn btn-navy" onclick="regenCode()">Régénérer le code</button>
+  return dashHeader("Paramètres","Gérez l'accès à la communauté et les informations de votre établissement.",true)+`
+    <div class="dgrid2">
+      <div class="dpanel2">
+        <h3>${svg("scan")} QR Communauté</h3>
+        <p class="small muted" style="margin-bottom:14px">À afficher à la réception. Le voyageur le scanne et rejoint <b>directement la communauté de votre établissement</b>, code pré-rempli.</p>
+        <div class="qr-card2">
+          <div class="qr-visual2">${qrSvg(EST.joinUrl(),5)}</div>
+          <div style="flex:1;min-width:190px">
+            <div class="qr-code2">${esc(EST.joinCode)}</div>
+            <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" onclick="copyJoinLink()">${svg("share")} Copier le lien</button>
+            <button class="btn btn-navy btn-sm" style="width:100%;margin-bottom:8px" onclick="printQR('${esc(EST.name)}','${EST.joinCode}')">${svg("download")} Imprimer</button>
+            <button class="btn btn-outline btn-sm" style="width:100%" onclick="regenCode()">Régénérer le code</button>
+          </div>
+        </div>
+      </div>
+      <div class="dpanel2">
+        <h3>${svg("download")} QR Téléchargement</h3>
+        <p class="small muted" style="margin-bottom:14px">Le même pour tous les établissements. Il mène à la <b>page d'installation</b> : le voyageur ajoute Côtéa à son écran d'accueil comme une vraie application.</p>
+        <div class="qr-card2">
+          <div class="qr-visual2">${qrSvg(installUrl(),5)}</div>
+          <div style="flex:1;min-width:190px">
+            <div class="qr-code2" style="font-size:14px">Installer l'app</div>
+            <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" onclick="copyText('${installUrl()}')">${svg("share")} Copier le lien</button>
+            <button class="btn btn-navy btn-sm" style="width:100%" onclick="printInstallQR()">${svg("download")} Imprimer</button>
           </div>
         </div>
       </div>
