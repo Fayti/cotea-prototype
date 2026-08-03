@@ -846,7 +846,7 @@ function seed(){
     activities:[],
     tips:[],
     chats:{},
-    notifs:{push:true,rappels:true}, notifications:[], ads:[]
+    notifs:{push:true,rappels:true}, notifications:[], ads:[], authEmail:null, pendingEmail:null
   };
 }
 const PAST_EXPERIENCES=[
@@ -932,6 +932,7 @@ async function boot(){
       session=data.session;
     }
     UID=session.user.id;
+    S.authEmail=session.user.email||null;
 
     const p=new URLSearchParams(location.search);
     const urlCode=p.get("code");
@@ -1103,9 +1104,13 @@ function renderInner(){
   if(S.role==="dir"){renderDash();return;}
   const el=$("screen");
   if(S.ended){el.innerHTML=vEnded();$("tabbar").innerHTML="";return;}
-  if(!S.user){el.innerHTML=S.screen==="explainer"?vExplainer():(S.screen==="onboard"?vOnboard():vLanding());$("tabbar").innerHTML="";return;}
-  const views={home:vHome,category:vCategory,detail:vDetail,confirm:vConfirm,create:vCreate,myactivities:vMyActivities,messages:vMessages,chat:vChat,profile:vProfile,tips:vTips,partages:vPartages,notifications:vNotifs};
-  const noTabs=["detail","confirm","create","chat","notifications"];
+  if(!S.user){
+    const pre={explainer:vExplainer,onboard:vOnboard,login:vLogin};
+    el.innerHTML=(pre[S.screen]||vLanding)();
+    $("tabbar").innerHTML="";return;
+  }
+  const views={home:vHome,category:vCategory,detail:vDetail,confirm:vConfirm,create:vCreate,myactivities:vMyActivities,messages:vMessages,chat:vChat,profile:vProfile,tips:vTips,partages:vPartages,notifications:vNotifs,login:vLogin};
+  const noTabs=["detail","confirm","create","chat","notifications","login"];
   const fixedBars={detail:vDetailCta,create:vCreateCta};
   el.innerHTML=(views[S.screen]||vHome)();
   $("tabbar").innerHTML=fixedBars[S.screen]?fixedBars[S.screen]():(noTabs.includes(S.screen)?"":vTabs());
@@ -1168,8 +1173,8 @@ function vLanding(){
         <span class="ic">${svg("sun")}</span>
         <span style="flex:1;text-align:left"><span class="small muted" style="display:block">Vous séjournez à</span><b style="font-size:15px;display:block">${esc(EST.name)}</b><span class="small muted">${esc(EST.place)}</span></span>
       </div>
-      ${S.hideBrowserTip?"":`<div class="info-banner o" style="align-items:flex-start"><span style="flex:1">${svg("info")} Pour ne pas perdre votre accès, ouvrez ce lien dans <b>Safari ou Chrome</b> plutôt que directement dans WhatsApp (menu ••• puis « Ouvrir dans le navigateur »).</span><button onclick="S.hideBrowserTip=true;render()" style="flex:none;font-size:18px;line-height:1;color:#9B3B27">${svg("close")}</button></div>`}
       <button class="btn btn-coral" onclick="go('onboard')">${svg("scan")} Rejoindre la communauté ${svg("chevR")}</button>
+      <button class="btn btn-outline" style="margin-top:10px" onclick="openLogin()">J'ai déjà un compte — Se connecter</button>
       <div class="feat-row">
         <div class="feat"><span class="ic" style="background:var(--green-bg)">${svg("users")}</span><span>Rencontrez</span><small>d'autres voyageurs</small></div>
         <div class="feat"><span class="ic" style="background:var(--amber-bg)">${svg("cal")}</span><span>Partagez</span><small>des activités</small></div>
@@ -1275,7 +1280,9 @@ async function finishOnboard(){
   await loadEstablishmentData();
   subscribeEstablishment();
   go("home","home");
-  setTimeout(()=>toast(`Bienvenue ${esc(S.user.name)} — votre accès est actif jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}.`),300);
+  // Proposé juste après l'inscription, quand l'intérêt est le plus fort — mais
+  // jamais bloquant : « Plus tard » referme et l'accès anonyme continue.
+  setTimeout(()=>{if(isAnon())openSecureAccount();},600);
 }
 
 /* ---------- Accueil ---------- */
@@ -1826,6 +1833,117 @@ async function submitTip(){
 
 /* ---------- Profil ---------- */
 /* ============================================================
+   Compte & connexion
+   ------------------------------------------------------------
+   À l'arrivée, l'accès est anonyme : c'est instantané, mais le compte est lié
+   au navigateur. Changer de navigateur (ou passer par la webview WhatsApp)
+   créait donc un nouveau compte à chaque fois. On propose maintenant de
+   rattacher un email + mot de passe au compte anonyme existant : même
+   identifiant interne, donc mêmes activités, mêmes messages — et il devient
+   possible de se reconnecter depuis n'importe quel appareil.
+   ============================================================ */
+const isAnon=()=>!S.authEmail;
+function authErrorFr(err){
+  const m=(err?.message||"").toLowerCase();
+  if(m.includes("already registered")||m.includes("already been registered"))return "Cette adresse est déjà utilisée. Connectez-vous plutôt.";
+  if(m.includes("invalid login credentials"))return "Adresse email ou mot de passe incorrect.";
+  if(m.includes("email address")&&m.includes("invalid"))return "Cette adresse email n'est pas acceptée. Utilisez une adresse réelle.";
+  if(m.includes("password")&&m.includes("6"))return "Le mot de passe doit faire au moins 6 caractères.";
+  if(m.includes("email not confirmed"))return "Compte non confirmé : ouvrez le lien reçu par email.";
+  // Survient uniquement si la confirmation d'email est active côté Supabase :
+  // le quota d'envoi (quelques mails par heure) est alors vite atteint.
+  if(m.includes("rate limit")||m.includes("too many"))return "Service d'email saturé. Réessayez dans quelques minutes.";
+  return err?.message||"Une erreur est survenue.";
+}
+function openLogin(){go("login");}
+function vLogin(){
+  return vTopbar(S.user?`go('profile','profile')`:`go('landing')`,"Se connecter")+`<div class="catlist">
+    <div class="panel">
+      <p class="small muted" style="margin-bottom:14px">Connectez-vous pour retrouver votre profil, vos activités et vos conversations depuis n'importe quel téléphone.</p>
+      <div class="field"><label>Adresse email</label><input id="logEmail" type="email" autocomplete="email" inputmode="email" placeholder="vous@exemple.fr"></div>
+      <div class="field"><label>Mot de passe</label><input id="logPwd" type="password" autocomplete="current-password" placeholder="Votre mot de passe" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn btn-coral" style="width:100%" onclick="doLogin()">Se connecter</button>
+    </div>
+    <p class="small muted" style="text-align:center;margin-top:14px">Pas encore d'identifiants ?<br>Rejoignez la communauté, puis enregistrez-les depuis votre profil.</p>
+  </div>`;
+}
+async function doLogin(){
+  const email=$("logEmail").value.trim(), password=$("logPwd").value;
+  if(!email||!password){toast("Renseignez votre email et votre mot de passe.");return;}
+  showLoadingOverlay("Connexion…");
+  const {data,error}=await sb.auth.signInWithPassword({email,password});
+  if(error){closeModal();toast(authErrorFr(error));return;}
+  // Le compte anonyme précédent est remplacé : on repart d'un état propre et
+  // on relit le profil rattaché à ce compte.
+  UID=data.user.id;
+  S.authEmail=data.user.email||null;
+  const {data:prof}=await sb.from("profiles").select("*, establishments(*)").eq("id",UID).maybeSingle();
+  closeModal();
+  if(!prof||!prof.establishments){
+    toast("Connecté, mais ce compte n'est rattaché à aucun établissement.");
+    return;
+  }
+  EST.id=prof.establishment_id;EST.name=prof.establishments.name;EST.place=prof.establishments.place;EST.joinCode=prof.establishments.join_code;
+  if(prof.is_director){
+    S.role="dir";S.space="dir";
+    await loadEstablishmentData();await loadAds();hideGate();render();
+    toast(`Bienvenue — espace directeur de ${esc(EST.name)}.`);
+    return;
+  }
+  S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null};
+  S.role="voy";S.space="voy";S.notifications=loadNotifs();
+  await loadEstablishmentData();await loadAds();
+  subscribeEstablishment();
+  hideGate();go("home","home");
+  toast(`Content de vous revoir, ${esc(S.user.name)} !`);
+}
+function openSecureAccount(){
+  openModal(`
+    <h3>Enregistrer mes identifiants</h3>
+    <p class="small muted" style="margin:6px 0 14px">Votre profil et vos activités sont conservés. Vous pourrez ensuite vous reconnecter depuis n'importe quel téléphone.</p>
+    <div class="field"><label>Adresse email</label><input id="secEmail" type="email" autocomplete="email" inputmode="email" placeholder="vous@exemple.fr"></div>
+    <div class="field"><label>Mot de passe <span class="muted">(6 caractères minimum)</span></label><input id="secPwd" type="password" autocomplete="new-password" placeholder="Choisissez un mot de passe"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Plus tard</button>
+      <button class="btn btn-coral" onclick="doSecureAccount()">Enregistrer</button>
+    </div>`);
+}
+async function doSecureAccount(){
+  const email=$("secEmail").value.trim(), password=$("secPwd").value;
+  if(!email||password.length<6){toast("Indiquez un email et un mot de passe d'au moins 6 caractères.");return;}
+  showLoadingOverlay("Enregistrement…");
+  const {data,error}=await sb.auth.updateUser({email,password});
+  if(error){closeModal();toast(authErrorFr(error));return;}
+  closeModal();
+  if(data.user?.email===email&&!data.user?.new_email){
+    S.authEmail=email;
+    toast("Identifiants enregistrés — vous pouvez désormais vous reconnecter partout.");
+  }else{
+    // La confirmation d'email est active sur le projet : l'adresse n'est
+    // rattachée qu'après clic sur le lien reçu.
+    S.pendingEmail=email;
+    toast("Vérifiez votre boîte mail et cliquez sur le lien pour valider l'adresse.");
+  }
+  render();
+}
+async function doLogout(){
+  closeModal();
+  await sb.auth.signOut();
+  location.href=location.pathname;
+}
+function confirmLogout(){
+  openModal(`
+    <h3>Se déconnecter ?</h3>
+    <p class="small muted" style="margin:6px 0 14px">${isAnon()
+      ? "Attention : votre accès n'est lié à aucun identifiant. Si vous vous déconnectez maintenant, vous ne pourrez pas retrouver ce profil."
+      : "Vous pourrez vous reconnecter avec "+esc(S.authEmail)+"."}</p>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-coral" onclick="doLogout()">Se déconnecter</button>
+    </div>`);
+}
+
+/* ============================================================
    Encarts publicitaires — publiés par le directeur, vus par les voyageurs
    ============================================================ */
 async function loadAds(){
@@ -2068,6 +2186,17 @@ function vProfile(){
         <input type="file" accept="image/*" style="display:none" onchange="handleProfilePhotoChange(this)">
       </label>
       <div><b style="font-family:'Baloo 2',sans-serif;font-size:18px">${esc(u.name)}</b><div class="small muted">Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Mon compte</h5>
+      ${isAnon()?`
+        <div class="info-banner o" style="align-items:flex-start;margin-bottom:12px"><span style="flex:1">${svg("info")} <b>Votre accès n'est lié à aucun identifiant.</b> Il est enregistré dans ce navigateur uniquement : si vous changez de téléphone, videz votre historique ou ouvrez le lien depuis WhatsApp, vous repartirez de zéro.</span></div>
+        ${S.pendingEmail?`<p class="small muted" style="margin-bottom:10px">Un email de validation a été envoyé à <b>${esc(S.pendingEmail)}</b>. Cliquez sur le lien qu'il contient pour terminer.</p>`:""}
+        <button class="btn btn-coral" style="width:100%" onclick="openSecureAccount()">${svg("shield")} Enregistrer mes identifiants</button>
+      `:`
+        <div class="setline"><span style="flex:1">Connecté avec<br><b>${esc(S.authEmail)}</b></span><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("check")}</span></div>
+        <p class="small muted" style="margin:8px 0 10px">Vous pouvez vous reconnecter avec cette adresse depuis n'importe quel téléphone.</p>
+        <button class="btn btn-outline" style="width:100%" onclick="confirmLogout()">Se déconnecter</button>
+      `}
     </div>
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Mes centres d'intérêt</h5>
       <div class="tagpills">${allInterests.map(c=>`<button class="tagpill" style="${u.envies.includes(c.id)?"background:var(--purple);color:#fff":""}" onclick="togProfEnvie('${c.id}')">${c.label}</button>`).join("")}</div>
