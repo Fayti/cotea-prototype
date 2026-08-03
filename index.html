@@ -1650,25 +1650,27 @@ function vCreateCta(){
   if(draft.step===1)return `<div class="fixedbar"><button class="btn btn-coral" onclick="createStep2()">Aperçu de mon activité</button></div>`;
   return `<div class="fixedbar"><button class="btn btn-coral" onclick="publishA()">Publier mon activité</button><button class="btn btn-outline" onclick="draft.step=1;render()">${svg("route")} Modifier</button></div>`;
 }
-// Photothèque : une image dédiée pour CHAQUE sous-catégorie, appliquée
-// automatiquement à la création. Aucune attente, aucun décalage entre le titre
-// de l'activité et sa photo.
+// Photothèque : une illustration dédiée pour CHAQUE sous-catégorie (26/26),
+// appliquée automatiquement à la création. Aucune attente, aucun décalage entre
+// le titre de l'activité et son visuel.
+// Direction artistique commune : illustration stylisée façon affiche de voyage,
+// aplats de couleur, lumière méditerranéenne, pas de visages.
 const SUBCAT_PHOTOS={
   // Sport
-  running:"assets/hero-running.jpg", foot:"assets/hero-foot.jpg", rando:"assets/hero-rando.jpg",
-  velo:"assets/hero-velo.jpg", petanque:"assets/hero-petanque.jpg", tennis:"assets/hero-tennis.jpg",
-  paddle:"assets/hero-paddle.jpg", autre:"assets/hero-sport.jpg",
+  running:"assets/cat/running.jpg", foot:"assets/cat/foot.jpg", rando:"assets/cat/rando.jpg",
+  velo:"assets/cat/velo.jpg", petanque:"assets/cat/petanque.jpg", tennis:"assets/cat/tennis.jpg",
+  paddle:"assets/cat/paddle.jpg", autre:"assets/cat/autre.jpg",
   // Découverte & Sortie
-  bateau:"assets/hero-bateau.jpg", visite:"assets/hero-village.jpg", plage:"assets/hero-plage.jpg",
-  chien:"assets/hero-chien.jpg", veloD:"assets/hero-velo.jpg", marche:"assets/hero-marche.jpg",
-  village:"assets/hero-village.jpg",
+  bateau:"assets/cat/bateau.jpg", visite:"assets/cat/visite.jpg", plage:"assets/cat/plage.jpg",
+  chien:"assets/cat/chien.jpg", veloD:"assets/cat/veloD.jpg", marche:"assets/cat/marche.jpg",
+  village:"assets/cat/village.jpg",
   // Loisirs
-  cartes:"assets/hero-cartes.jpg", societe:"assets/hero-societe.jpg", creatives:"assets/hero-creatives.jpg",
-  lecture:"assets/hero-lecture.jpg", musique:"assets/hero-musique.jpg", cinema:"assets/hero-cinema.jpg",
-  autresL:"assets/hero-loisirs.jpg",
+  cartes:"assets/cat/cartes.jpg", societe:"assets/cat/societe.jpg", creatives:"assets/cat/creatives.jpg",
+  lecture:"assets/cat/lecture.jpg", musique:"assets/cat/musique.jpg", cinema:"assets/cat/cinema.jpg",
+  autresL:"assets/cat/autresL.jpg",
   // Moments conviviaux
-  barbecue:"assets/hero-barbecue.jpg", soiree:"assets/hero-soiree.jpg",
-  restaurant:"assets/hero-restaurant.jpg", autreM:"assets/hero-moments.jpg"
+  barbecue:"assets/cat/barbecue.jpg", soiree:"assets/cat/soiree.jpg",
+  restaurant:"assets/cat/restaurant.jpg", autreM:"assets/cat/autreM.jpg"
 };
 function photoFor(topcat,subcat){
   return SUBCAT_PHOTOS[subcat]||(TOPCATS.find(t=>t.id===topcat)||{}).cover||null;
