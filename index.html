@@ -765,7 +765,8 @@ const IC={
   gear:'<circle cx="12" cy="12" r="3" fill="none" stroke-width="1.6"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18 6l-1.5 1.5M7.5 16.5L6 18M18 18l-1.5-1.5M7.5 7.5L6 6" stroke-width="1.6" stroke-linecap="round"/>',
   bar:'<path d="M5 20V10M12 20V4M19 20v-7" stroke-width="2" stroke-linecap="round"/>',
   handshake:'<path d="M2 12l4-3 4 2 3-2 3 2 4-2 2 3-3 5-3 2-3-2-3 2-3-2z" fill="none" stroke-width="1.5" stroke-linejoin="round"/>',
-  download:'<path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+  download:'<path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  pencil:'<path d="M4 20l.9-4.2L16 4.7a1.5 1.5 0 0 1 2.1 0l1.2 1.2a1.5 1.5 0 0 1 0 2.1L8.2 19.1z" fill="none" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.5 6.2l3.3 3.3" stroke-width="1.6"/>'
 };
 const svg=(n,cls="")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]||IC.sun}</svg>`;
 
@@ -2020,6 +2021,46 @@ function confirmLogout(){
     </div>`);
 }
 
+/* ---------- Modifier son prénom ---------- */
+// L'appartenance à une activité (organisateur / participant) est déterminée en
+// comparant des chaînes de caractères (isIn(), a.orga===S.user.name…) plutôt
+// qu'un identifiant stable, et ce nom est recopié tel quel dans
+// activity_participants.user_name, activities.orga_name et messages.user_name.
+// Renommer sans répercuter ces copies ferait perdre à l'utilisateur la
+// reconnaissance de ses propres activités passées.
+function openEditName(){
+  openModal(`
+    <h3>Modifier mon prénom</h3>
+    <p class="small muted" style="margin:6px 0 14px">Il apparaît tel quel dans vos activités et vos messages déjà publiés.</p>
+    <div class="field"><label>Prénom</label><input id="editNameInput" maxlength="30" value="${esc(S.user.name)}" autocomplete="off" onkeydown="if(event.key==='Enter')saveEditName()"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-coral" onclick="saveEditName()">Enregistrer</button>
+    </div>`);
+  setTimeout(()=>$("editNameInput")?.select(),50);
+}
+async function saveEditName(){
+  const name=$("editNameInput").value.trim();
+  if(!name){toast("Le prénom ne peut pas être vide.");return;}
+  if(name===S.user.name){closeModal();return;}
+  showLoadingOverlay("Mise à jour…");
+  const {error:e1}=await sb.from("profiles").update({name}).eq("id",UID);
+  if(e1){closeModal();toast("Impossible de modifier le prénom pour le moment.");console.error(e1);return;}
+  // Répercute sur les copies dénormalisées de CE compte uniquement — jamais sur
+  // les activités ou messages d'autrui.
+  const [{error:e2},{error:e3},{error:e4}]=await Promise.all([
+    sb.from("activities").update({orga_name:name}).eq("orga_id",UID),
+    sb.from("activity_participants").update({user_name:name}).eq("user_id",UID),
+    sb.from("messages").update({user_name:name}).eq("user_id",UID)
+  ]);
+  if(e2||e3||e4)console.error("Répercussion partielle du renommage :",e2,e3,e4);
+  S.user.name=name;
+  await loadEstablishmentData();
+  closeModal();
+  toast("Prénom mis à jour.");
+  render();
+}
+
 /* ============================================================
    Encarts publicitaires — publiés par le directeur, vus par les voyageurs
    ============================================================ */
@@ -2262,7 +2303,13 @@ function vProfile(){
         <span class="cam-badge" style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--coral);display:flex;align-items:center;justify-content:center;border:2px solid #fff;color:#fff">${svg("camera")}</span>
         <input type="file" accept="image/*" style="display:none" onchange="handleProfilePhotoChange(this)">
       </label>
-      <div><b style="font-family:'Baloo 2',sans-serif;font-size:18px">${esc(u.name)}</b><div class="small muted">Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</div></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px">
+          <b style="font-family:'Baloo 2',sans-serif;font-size:18px">${esc(u.name)}</b>
+          <button class="iconbtn" style="width:26px;height:26px" onclick="openEditName()" aria-label="Modifier mon prénom">${svg("pencil")}</button>
+        </div>
+        <div class="small muted">Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</div>
+      </div>
     </div>
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Mon compte</h5>
       ${isAnon()?`

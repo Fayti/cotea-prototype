@@ -140,6 +140,10 @@ create policy "participants select in establishment" on activity_participants fo
 );
 create policy "participants insert self" on activity_participants for insert with check (user_id = auth.uid());
 create policy "participants delete self" on activity_participants for delete using (user_id = auth.uid());
+-- user_name est dénormalisé pour éviter des jointures : permet de le répercuter
+-- quand le voyageur renomme son profil.
+create policy "participants update own name" on activity_participants for update
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Messages : réservés aux participants de l'activité
 create policy "messages select if participant" on messages for select using (
@@ -152,6 +156,8 @@ create policy "messages insert if participant" on messages for insert with check
     or activity_id in (select id from activities where orga_id = auth.uid())
   )
 );
+create policy "messages update own name" on messages for update
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Tips : lecture/écriture dans son établissement
 create policy "tips select in establishment" on tips for select using (
