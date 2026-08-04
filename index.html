@@ -767,7 +767,7 @@ const TOPCATS=[
   {id:"loisirs",label:"Loisirs",icon:"dice",color:"purple",cover:"assets/hero-loisirs.jpg?v=2",desc:"Amusez-vous, partagez et créez de beaux souvenirs ensemble."}
 ];
 const SUBCATS={
-  sport:[{id:"running",label:"Running",icon:"run"},{id:"foot",label:"Football",icon:"ball"},{id:"rando",label:"Randonnée",icon:"route"},{id:"velo",label:"Vélo",icon:"bike"},{id:"petanque",label:"Pétanque",icon:"dice"},{id:"tennis",label:"Tennis",icon:"star"},{id:"paddle",label:"Paddle",icon:"boat"},{id:"autre",label:"Autre",icon:"dots"}],
+  sport:[{id:"running",label:"Running",icon:"run"},{id:"foot",label:"Football",icon:"ball"},{id:"rugby",label:"Rugby",icon:"ball"},{id:"basket",label:"Basket",icon:"ball"},{id:"volley",label:"Volley",icon:"ball"},{id:"tennis",label:"Tennis",icon:"star"},{id:"pingpong",label:"Ping-pong",icon:"dice"},{id:"petanque",label:"Pétanque",icon:"dice"},{id:"natation",label:"Natation",icon:"sun"},{id:"paddle",label:"Paddle",icon:"boat"},{id:"surf",label:"Surf",icon:"boat"},{id:"velo",label:"Vélo",icon:"bike"},{id:"rando",label:"Randonnée",icon:"route"},{id:"yoga",label:"Yoga & bien-être",icon:"heart"},{id:"autre",label:"Autre",icon:"dots"}],
   decouverte:[{id:"bateau",label:"Excursion bateau",icon:"boat",color:"blue"},{id:"visite",label:"Visite",icon:"village",color:"purple"},{id:"plage",label:"Plage",icon:"sun",color:"orange"},{id:"chien",label:"Promenade chien",icon:"paw",color:"green"},{id:"veloD",label:"Balade à vélo",icon:"bike",color:"blue"},{id:"marche",label:"Marché",icon:"basket",color:"orange"},{id:"village",label:"Village",icon:"village",color:"pink"}],
   loisirs:[{id:"cartes",label:"Jeux de cartes",icon:"cards",color:"purple"},{id:"societe",label:"Jeux de société",icon:"dice",color:"orange"},{id:"creatives",label:"Activités créatives",icon:"palette",color:"pink"},{id:"lecture",label:"Lecture & culture",icon:"book",color:"blue"},{id:"musique",label:"Musique",icon:"music",color:"amber"},{id:"cinema",label:"Cinéma",icon:"film",color:"navy"},{id:"autresL",label:"Autres loisirs",icon:"dots",color:"green"}],
   moments:[{id:"barbecue",label:"Barbecue",icon:"sun",color:"orange"},{id:"soiree",label:"Soirée / Apéro",icon:"music",color:"purple"},{id:"restaurant",label:"Restaurant",icon:"fork",color:"green"},{id:"autreM",label:"Autre moment",icon:"users",color:"blue"}]
@@ -1481,7 +1481,12 @@ function vDetailCta(){
   if(inIt){
     return `<div class="fixedbar">
       <button class="btn btn-navy" onclick="openChat('${a.id}')">${svg("chat")} Ouvrir le chat du groupe</button>
-      ${mine?`<button class="btn btn-outline" onclick="cancelA('${a.id}')">Annuler l'activité</button>`:`<button class="btn btn-outline" onclick="leaveA('${a.id}')">Quitter l'activité</button>`}
+      ${mine
+        ? `<div style="display:flex;gap:8px">
+             <button class="btn btn-outline" style="flex:1" onclick="openEdit('${a.id}')">${svg("route")} Modifier</button>
+             <button class="btn btn-outline" style="flex:1" onclick="cancelA('${a.id}')">Annuler</button>
+           </div>`
+        : `<button class="btn btn-outline" onclick="leaveA('${a.id}')">Quitter l'activité</button>`}
     </div>`;
   }
   if(full){
@@ -1580,8 +1585,34 @@ function vConfirm(){
 /* ---------- Créer une activité ---------- */
 let draft={};
 function openCreate(topcat){
-  draft={step:topcat?1:0,topcat:topcat||null,subcat:null,title:"",date:iso(daysFrom(0)),time:"",lieu:"",cap:6,desc:""};
+  draft={step:topcat?1:0,topcat:topcat||null,subcat:null,title:"",date:iso(daysFrom(0)),time:"",lieu:"",cap:6,desc:"",editId:null};
   go("create");
+}
+// Réutilise entièrement l'écran de création : même formulaire, même aperçu.
+function openEdit(id){
+  const a=findA(id);
+  if(!a)return;
+  if(a.orga!==S.user.name){toast("Seul l'organisateur peut modifier cette activité.");return;}
+  draft={step:1,topcat:a.topcat,subcat:a.subcat,title:a.title,date:a.date,time:a.time,
+         lieu:a.lieu,cap:a.cap,desc:a.description||"",editId:id,minCap:a.parts.length};
+  go("create");
+}
+const isEditing=()=>!!draft.editId;
+async function saveEdit(){
+  const d=draft;
+  const min=Math.max(2,d.minCap||2);
+  if(d.cap<min){toast(`Cette activité compte déjà ${d.minCap} participant${d.minCap>1?"s":""} : la capacité ne peut pas être réduite en dessous.`);return;}
+  showLoadingOverlay("Enregistrement des modifications…");
+  const {error}=await sb.from("activities").update({
+    topcat:d.topcat,subcat:d.subcat,title:d.title.trim(),
+    description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
+    cap:d.cap,photo:photoFor(d.topcat,d.subcat,d.title)
+  }).eq("id",d.editId);
+  if(error){closeModal();toast("Modification impossible. Réessayez.");console.error(error);return;}
+  await loadEstablishmentData();
+  closeModal();
+  toast("Activité mise à jour — les participants voient les changements.");
+  openDetail(d.editId);
 }
 function vCreate(){
   if(draft.step===0)return vCreateStep0();
@@ -1607,9 +1638,9 @@ function vCreateStep1(){
   const subs=SUBCATS[draft.topcat]||[];
   if(!draft.subcat&&subs[0])draft.subcat=subs[0].id;
   return `<div class="screen"><div class="create">
-    <button class="iconbtn" onclick="draft.step=0;render()" style="margin-bottom:14px">${svg("back")}</button>
+    <button class="iconbtn" onclick="${isEditing()?`openDetail('${draft.editId}')`:`draft.step=0;render()`}" style="margin-bottom:14px">${svg("back")}</button>
     <p class="eyebrow" style="color:var(--purple)">${esc(top.label)}</p>
-    <h2 style="font-size:23px;margin:4px 0 2px">Quel est votre projet ?</h2>
+    <h2 style="font-size:23px;margin:4px 0 2px">${isEditing()?"Modifier l'activité":"Quel est votre projet ?"}</h2>
     <div class="icon-grid">
       ${subs.map(s=>`<button class="icon-opt ${draft.subcat===s.id?"on":""}" onclick="draft.subcat='${s.id}';render()">${svg(s.icon)}${s.label}</button>`).join("")}
     </div>
@@ -1630,10 +1661,10 @@ function createStep2(){
 function vCreateStep2(){
   const cc=colorOf({topcat:draft.topcat,subcat:draft.subcat});
   const sub=subcatOf(draft.topcat,draft.subcat);
-  const photo=photoFor(draft.topcat,draft.subcat);
+  const photo=photoFor(draft.topcat,draft.subcat,draft.title);
   return `<div class="screen"><div class="create">
     <button class="iconbtn" onclick="draft.step=1;render()" style="margin-bottom:14px">${svg("back")}</button>
-    <p class="eyebrow" style="color:var(--purple)">Aperçu / Publier l'activité</p>
+    <p class="eyebrow" style="color:var(--purple)">${isEditing()?"Aperçu des modifications":"Aperçu / Publier l'activité"}</p>
     <h2 style="font-size:21px;margin:4px 0 14px">Voici à quoi elle ressemblera pour les autres voyageurs</h2>
     <div class="preview-wrap">
       <div class="acard">
@@ -1654,8 +1685,10 @@ function vCreateStep2(){
 }
 function vCreateCta(){
   if(draft.step===0)return "";
-  if(draft.step===1)return `<div class="fixedbar"><button class="btn btn-coral" onclick="createStep2()">Aperçu de mon activité</button></div>`;
-  return `<div class="fixedbar"><button class="btn btn-coral" onclick="publishA()">Publier mon activité</button><button class="btn btn-outline" onclick="draft.step=1;render()">${svg("route")} Modifier</button></div>`;
+  if(draft.step===1)return `<div class="fixedbar"><button class="btn btn-coral" onclick="createStep2()">${isEditing()?"Voir les modifications":"Aperçu de mon activité"}</button></div>`;
+  return `<div class="fixedbar">
+    <button class="btn btn-coral" onclick="${isEditing()?"saveEdit()":"publishA()"}">${isEditing()?"Enregistrer les modifications":"Publier mon activité"}</button>
+    <button class="btn btn-outline" onclick="draft.step=1;render()">${svg("route")} Continuer à modifier</button></div>`;
 }
 // Photothèque : une illustration dédiée pour CHAQUE sous-catégorie (26/26),
 // appliquée automatiquement à la création. Aucune attente, aucun décalage entre
@@ -1667,6 +1700,9 @@ const SUBCAT_PHOTOS={
   running:"assets/cat/running.jpg", foot:"assets/cat/foot.jpg", rando:"assets/cat/rando.jpg",
   velo:"assets/cat/velo.jpg", petanque:"assets/cat/petanque.jpg", tennis:"assets/cat/tennis.jpg",
   paddle:"assets/cat/paddle.jpg", autre:"assets/cat/autre.jpg",
+  rugby:"assets/cat/rugby.jpg", basket:"assets/cat/basket.jpg", volley:"assets/cat/volley.jpg",
+  natation:"assets/cat/natation.jpg", yoga:"assets/cat/yoga.jpg",
+  pingpong:"assets/cat/pingpong.jpg", surf:"assets/cat/surf.jpg",
   // Découverte & Sortie
   bateau:"assets/cat/bateau.jpg", visite:"assets/cat/visite.jpg", plage:"assets/cat/plage.jpg",
   chien:"assets/cat/chien.jpg", veloD:"assets/cat/veloD.jpg", marche:"assets/cat/marche.jpg",
@@ -1679,7 +1715,38 @@ const SUBCAT_PHOTOS={
   barbecue:"assets/cat/barbecue.jpg", soiree:"assets/cat/soiree.jpg",
   restaurant:"assets/cat/restaurant.jpg", autreM:"assets/cat/autreM.jpg"
 };
-function photoFor(topcat,subcat){
+// Rattrapage par le titre : quand la sous-catégorie choisie est générique
+// (« Autre »), on devine le sujet à partir du nom de l'activité — sinon un
+// « Tournoi de rugby » classé dans « Autre » héritait d'une image sans rapport.
+// L'ordre compte : les termes les plus spécifiques d'abord.
+const TITLE_PHOTO_HINTS=[
+  [/rugby/i,"rugby"],[/basket|panier/i,"basket"],[/volley/i,"volley"],
+  [/ping.?pong|tennis de table/i,"pingpong"],[/tennis/i,"tennis"],
+  [/p[ée]tanque|boule/i,"petanque"],[/foot|soccer/i,"foot"],
+  [/natation|piscine|nager|baignade/i,"natation"],
+  [/yoga|pilates|m[ée]ditation|stretching|bien.?[êe]tre|relaxation/i,"yoga"],
+  [/surf/i,"surf"],[/paddle|kayak|cano[ëe]/i,"paddle"],
+  [/running|jogging|footing|course [àa] pied/i,"running"],
+  [/randonn|trek|kilom[èe]tre/i,"rando"],[/v[ée]lo|cycl|vtt/i,"velo"],
+  [/bateau|voilier|catamaran|croisi[èe]re/i,"bateau"],
+  [/march[ée] (local|provençal|nocturne)|au march[ée]/i,"marche"],
+  [/plage|sable/i,"plage"],[/village|vieille ville/i,"village"],
+  [/belote|tarot|poker|jeu de cartes|cartes/i,"cartes"],
+  [/jeu de soci[ée]t[ée]|scrabble|monopoly|[ée]checs/i,"societe"],
+  [/peinture|dessin|atelier cr[ée]atif|bricolage|poterie/i,"creatives"],
+  [/lecture|livre|biblioth/i,"lecture"],
+  [/musique|guitare|concert|karaok|chant/i,"musique"],
+  [/cin[ée]ma|film|projection/i,"cinema"],
+  [/barbecue|bbq|grillade|planch/i,"barbecue"],
+  [/ap[ée]ro|soir[ée]e|cocktail|sunset/i,"soiree"],
+  [/restaurant|d[îi]ner|repas|brunch/i,"restaurant"]
+];
+const GENERIC_SUBCATS=new Set(["autre","autreM","autresL"]);
+function photoFor(topcat,subcat,title){
+  if((!subcat||GENERIC_SUBCATS.has(subcat))&&title){
+    const hit=TITLE_PHOTO_HINTS.find(([re])=>re.test(title));
+    if(hit&&SUBCAT_PHOTOS[hit[1]])return SUBCAT_PHOTOS[hit[1]];
+  }
   return SUBCAT_PHOTOS[subcat]||(TOPCATS.find(t=>t.id===topcat)||{}).cover||null;
 }
 function showLoadingOverlay(msg){
@@ -1699,7 +1766,7 @@ async function publishA(){
     establishment_id:EST.id,topcat:d.topcat,subcat:d.subcat,title:d.title.trim(),
     description:d.desc.trim()||null,date:d.date,time:d.time,lieu:d.lieu.trim(),
     type:"B",cap:Math.max(2,d.cap||6),status:"ouverte",orga_id:UID,orga_name:S.user.name,
-    photo:photoFor(d.topcat,d.subcat)
+    photo:photoFor(d.topcat,d.subcat,d.title)
   }).select().single();
   if(error){closeModal();toast("Impossible de publier pour le moment. Réessayez.");console.error(error);return;}
   await sb.from("activity_participants").insert({activity_id:data.id,user_id:UID,user_name:S.user.name});
