@@ -86,9 +86,19 @@ svg{stroke:currentColor;overflow:visible;width:20px;height:20px;flex:none}
 
 /* ---------- stage / phone ---------- */
 .stage{display:flex;justify-content:center;align-items:flex-start;padding:28px 12px 60px;flex:1;min-height:0}
-.phone{width:100%;max-width:412px;background:var(--cream);border-radius:38px;overflow:hidden;box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;height:min(880px,calc(100vh - 120px));min-height:640px;position:relative}
+/* Pas de min-height inconditionnel : le corps de page ne défile pas, donc sur un
+   écran d'ordinateur peu haut le bas du téléphone (dont la barre d'action) se
+   retrouvait rogné hors de la fenêtre, sans aucun moyen de l'atteindre. */
+.phone{width:100%;max-width:412px;background:var(--cream);border-radius:38px;overflow:hidden;box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;height:min(880px,calc(100vh - 120px));position:relative}
+@media (min-height:760px){.phone{min-height:640px}}
 @media (max-width:480px){.stage{padding:0;align-items:stretch}.phone{max-width:none;border-radius:0;height:auto;flex:1;min-height:0;box-shadow:none;border:none}}
 .screen{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:block;position:relative}
+/* Plusieurs vues renvoient elles-mêmes un <div class="screen">, qui se retrouve
+   imbriqué dans #screen. Ce conteneur intérieur n'a rien à faire défiler, mais
+   son overscroll-behavior:contain empêchait la molette de remonter jusqu'à
+   #screen : sur ordinateur, la création d'activité devenait impossible à
+   parcourir. On le rend transparent au défilement, sans toucher à sa mise en page. */
+.screen .screen{overflow:visible;overscroll-behavior:auto}
 #screen>*{animation:screenIn .2s ease}
 @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
