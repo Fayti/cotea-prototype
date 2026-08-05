@@ -932,6 +932,19 @@ function renderInstall(){
     <p class="small" style="text-align:center;margin-top:12px;color:rgba(255,255,255,.45)">Aucun store, aucun téléchargement : Côtéa fonctionne directement dans votre navigateur.</p>
   </div>`;
 }
+// Récupère le profil du compte courant, avec une nouvelle tentative en cas
+// d'erreur réseau/transitoire. Sans ça, un simple aléa réseau faisait passer
+// un utilisateur déjà inscrit pour un nouveau, qui repartait dans
+// l'inscription puis échouait sur un conflit d'identifiant (profil déjà
+// existant) sans explication — vécu en conditions réelles le 4 août.
+async function fetchOwnProfile(){
+  for(let attempt=0;attempt<2;attempt++){
+    const {data,error}=await sb.from("profiles").select("*, establishments(*)").eq("id",UID).maybeSingle();
+    if(!error)return data;
+    console.error("fetchOwnProfile",attempt,error);
+  }
+  return null;
+}
 async function boot(){
   if(new URLSearchParams(location.search).get("dl")!==null){renderInstall();return;}
   $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center"><p class="small muted">Connexion à la communauté…</p></div>`;
@@ -951,7 +964,7 @@ async function boot(){
     // the role switcher must never be visible to a guest scanning at reception.
     S.scanned=!!urlCode;
 
-    const {data:prof}=await sb.from("profiles").select("*, establishments(*)").eq("id",UID).maybeSingle();
+    const prof=await fetchOwnProfile();
     if(prof&&prof.establishments){
       EST.id=prof.establishment_id;EST.name=prof.establishments.name;EST.place=prof.establishments.place;EST.joinCode=prof.establishments.join_code;
       if(prof.is_director){
@@ -1282,9 +1295,43 @@ function onbNext1(){
 }
 function togEnvie(id){const i=S.selEnvies.indexOf(id);i>=0?S.selEnvies.splice(i,1):S.selEnvies.push(id);render();}
 function togMoment(id){const i=S.selMoments.indexOf(id);i>=0?S.selMoments.splice(i,1):S.selMoments.push(id);render();}
+let onboardSubmitting=false;
 async function finishOnboard(){
+  // Coupe-circuit anti double-appui : sans lui, un deuxième clic pendant que
+  // le premier est encore en vol tente une seconde insertion et tombe sur le
+  // conflit ci-dessous pour rien.
+  if(onboardSubmitting)return;
+  onboardSubmitting=true;
   const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:"visible",photo_url:S.pendingPhoto||null});
-  if(error){toast("Impossible de créer votre profil pour le moment. Réessayez.");console.error(error);return;}
+  if(error){
+    onboardSubmitting=false;
+    // Code 23505 = un profil existe déjà pour ce compte (vu en conditions
+    // réelles : la détection au démarrage avait raté un profil existant à
+    // cause d'un aléa réseau, l'app relançait l'inscription, qui échouait
+    // ici sans que l'utilisateur puisse s'en sortir). On répare au lieu de
+    // bloquer : on récupère ce profil existant et on continue normalement.
+    if(error.code==="23505"){
+      const prof=await fetchOwnProfile();
+      if(prof&&prof.establishments){
+        EST.id=prof.establishment_id;EST.name=prof.establishments.name;EST.place=prof.establishments.place;EST.joinCode=prof.establishments.join_code;
+        if(prof.is_director){
+          S.role="dir";S.space="dir";
+          await loadEstablishmentData();await loadAds();
+          render();
+          return;
+        }
+        S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null};
+        S.notifications=loadNotifs();
+        await loadEstablishmentData();await loadAds();
+        subscribeEstablishment();
+        go("home","home");
+        toast(`Content de vous revoir, ${esc(S.user.name)} !`);
+        return;
+      }
+    }
+    toast("Impossible de créer votre profil pour le moment. Réessayez.");console.error(error);return;
+  }
+  onboardSubmitting=false;
   S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:"visible",photo:S.pendingPhoto||null};
   S.notifs.push=S.notifSuggest;
   S.notifications=loadNotifs();
