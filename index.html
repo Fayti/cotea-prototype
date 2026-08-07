@@ -1302,7 +1302,9 @@ function vOnboard(){
 function onbNext1(){
   const name=$("fp").value.trim();
   if(!name){toast("Indiquez votre prénom pour continuer.");return;}
-  S.pendingName=name;S.pendingAge=$("fage").value||null;S.onbStep=2;render();
+  const age=$("fage").value||null;
+  if(age&&MINOR_BRACKETS.has(age)){toast("L'inscription à la communauté est réservée aux 18 ans et plus.");return;}
+  S.pendingName=name;S.pendingAge=age;S.onbStep=2;render();
 }
 function togEnvie(id){const i=S.selEnvies.indexOf(id);i>=0?S.selEnvies.splice(i,1):S.selEnvies.push(id);render();}
 function togMoment(id){const i=S.selMoments.indexOf(id);i>=0?S.selMoments.splice(i,1):S.selMoments.push(id);render();}
@@ -1358,6 +1360,7 @@ async function finishOnboard(){
 // Mêmes tranches que le graphique "Répartition par âge" du dashboard, pour
 // que la saisie et l'affichage restent alignés sans table de correspondance.
 const AGE_BRACKETS=["0-5 ans","6-12 ans","13-17 ans","18-25 ans","26-35 ans","36-50 ans","51-65 ans","+65 ans"];
+const MINOR_BRACKETS=new Set(["0-5 ans","6-12 ans","13-17 ans"]);
 const HOME_CARDS=[
   {id:"sport",label:"Sport",desc:"Courir, nager, jouer ensemble",icon:"run",color:"blue"},
   {id:"decouverte",label:"Découverte & Sortie",desc:"Explorez les environs",icon:"boat",color:"teal"},
@@ -1403,7 +1406,7 @@ function vCategory(){
   const all=S.activities.filter(a=>a.topcat===top.id);
   let list,banner;
   if(tab==="a"){
-    list=all.filter(a=>a.status==="ouverte").sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+    list=all.filter(a=>a.status==="ouverte"&&a.date>=iso(daysFrom(0))).sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
     banner=`<div class="info-banner g">${svg("cal")}<span>Rejoignez une activité ou proposez la vôtre et partagez de bons moments ensemble !</span></div>`;
   }else if(tab==="b"){
     list=all.filter(a=>a.status==="live");
@@ -2410,6 +2413,7 @@ function vProfile(){
 }
 function togProfEnvie(id){const e=S.user.envies,i=e.indexOf(id);i>=0?e.splice(i,1):e.push(id);render();}
 async function setProfAge(age){
+  if(age&&MINOR_BRACKETS.has(age)){toast("La communauté est réservée aux 18 ans et plus.");render();return;}
   S.user.age=age||null;render();
   const {error}=await sb.from("profiles").update({age_bracket:S.user.age}).eq("id",UID);
   if(error)console.error(error);
