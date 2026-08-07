@@ -22,6 +22,7 @@ create table if not exists profiles (
   envies jsonb default '[]',
   visibility text default 'visible',
   is_director boolean default false,
+  age_bracket text,
   created_at timestamptz default now()
 );
 
@@ -102,6 +103,16 @@ create table if not exists ads (
   created_at timestamptz default now()
 );
 create index if not exists ads_establishment_idx on ads(establishment_id, active);
+
+-- ---------- Avis de fin de séjour (satisfaction réelle) ----------
+create table if not exists stay_ratings (
+  id uuid primary key default gen_random_uuid(),
+  establishment_id uuid not null references establishments(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  stars int not null check (stars between 1 and 5),
+  created_at timestamptz default now(),
+  unique(establishment_id, user_id)
+);
 
 -- ============================================================
 -- Row Level Security — chaque voyageur ne voit que son établissement
@@ -193,10 +204,20 @@ create policy "ads delete by director" on ads for delete using (
   exists (select 1 from profiles p where p.id = auth.uid() and p.is_director and p.establishment_id = ads.establishment_id)
 );
 
+alter table stay_ratings enable row level security;
+create policy "ratings select in establishment" on stay_ratings for select using (
+  establishment_id = (select establishment_id from profiles where id = auth.uid())
+);
+create policy "ratings insert self" on stay_ratings for insert with check (
+  user_id = auth.uid()
+  and establishment_id = (select establishment_id from profiles where id = auth.uid())
+);
+create policy "ratings update self" on stay_ratings for update using (user_id = auth.uid());
+
 -- ============================================================
 -- Active la synchronisation temps réel (chat, nouvelles activités, encarts)
 -- ============================================================
-alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports, ads;
+alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports, ads, stay_ratings;
 
 -- ============================================================
 -- Établissement de démo (garde le même code que le prototype)

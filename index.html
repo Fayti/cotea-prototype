@@ -844,7 +844,7 @@ function seed(){
   return {
     user:null, role:"voy", space:null, scanned:false, tab:"home", screen:"landing",
     onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, pendingPhoto:null,
-    catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0,
+    catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0, ratings:[], pendingAge:null, members:[],
     dashPeriod:"week", dashPage:"tableau", dashActTab:"all", dashActSearch:"", prefillCode:null,
     partners:[
       {id:"pt1",name:"Cap Horizon Location",category:"Excursion bateau",bookings:18,revenue:2340,contact:"04 94 00 00 01"},
@@ -890,17 +890,22 @@ function mapActivity(row){
     date:row.date,time:row.time,lieu:row.lieu,type:row.type,cap:row.cap,price:row.price,
     status:row.status,stats:row.stats,aPrevoir:row.a_prevoir||[],photo:row.photo,
     orga:row.orga_name,orgaId:row.orga_id,
-    parts:(row.activity_participants||[]).map(p=>p.user_name)
+    parts:(row.activity_participants||[]).map(p=>p.user_name),
+    partIds:(row.activity_participants||[]).map(p=>p.user_id)
   };
 }
 async function loadEstablishmentData(){
-  const {data:acts,error:e1}=await sb.from("activities").select("*, activity_participants(user_name)").eq("establishment_id",EST.id).order("date").order("time");
+  const {data:acts,error:e1}=await sb.from("activities").select("*, activity_participants(user_id, user_name)").eq("establishment_id",EST.id).order("date").order("time");
   if(e1)console.error(e1);
   S.activities=(acts||[]).map(mapActivity);
   const {data:tps}=await sb.from("tips").select("*").eq("establishment_id",EST.id).order("created_at",{ascending:false});
   S.tips=(tps||[]).map(t=>({id:t.id,title:t.title,body:t.body,by:`${t.user_name} · ${relTime(t.created_at)}`}));
   const {data:reps}=await sb.from("reports").select("*").eq("establishment_id",EST.id).order("created_at",{ascending:false});
   S.reports=(reps||[]).map(r=>({id:r.id,what:r.what,ref:r.ref,at:new Date(r.created_at).getTime(),resolved:r.resolved}));
+  const {data:rts}=await sb.from("stay_ratings").select("stars").eq("establishment_id",EST.id);
+  S.ratings=(rts||[]).map(r=>r.stars);
+  const {data:mbs}=await sb.from("profiles").select("id, age_bracket, created_at").eq("establishment_id",EST.id).eq("is_director",false);
+  S.members=mbs||[];
 }
 function bootError(msg){
   $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center;text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:18px;margin-bottom:8px">Connexion impossible</p><p class="small muted">${esc(msg)}</p><button class="btn btn-outline" style="margin-top:16px;max-width:220px" onclick="location.reload()">Réessayer</button></div>`;
@@ -973,7 +978,7 @@ async function boot(){
         await loadAds();
         hideGate();render();return;
       }
-      S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null};
+      S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null};
       S.role="voy";S.space="voy";S.screen="home";S.tab="home";
       S.notifications=loadNotifs();
       await loadEstablishmentData();
@@ -1247,6 +1252,12 @@ function vOnboard(){
       </div>
       <div class="field"><label>Prénom <span style="color:var(--coral)">*</span></label><input id="fp" placeholder="Votre prénom" value="${esc(S.pendingName||"")}" autocomplete="off"></div>
       <div class="field"><label>Langue</label><select id="flang"><option>Français</option><option>English</option><option>Deutsch</option><option>Español</option></select></div>
+      <div class="field"><label>Tranche d'âge <span class="muted">(optionnel)</span></label>
+        <select id="fage">
+          <option value="">Je préfère ne pas dire</option>
+          ${AGE_BRACKETS.map(b=>`<option value="${b}" ${S.pendingAge===b?"selected":""}>${b}</option>`).join("")}
+        </select>
+      </div>
       <div class="foot"><button class="btn btn-purple" onclick="onbNext1()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===0?"on":""}"></i>`).join("")}</div></div>
     `);
   }
@@ -1291,7 +1302,7 @@ function vOnboard(){
 function onbNext1(){
   const name=$("fp").value.trim();
   if(!name){toast("Indiquez votre prénom pour continuer.");return;}
-  S.pendingName=name;S.onbStep=2;render();
+  S.pendingName=name;S.pendingAge=$("fage").value||null;S.onbStep=2;render();
 }
 function togEnvie(id){const i=S.selEnvies.indexOf(id);i>=0?S.selEnvies.splice(i,1):S.selEnvies.push(id);render();}
 function togMoment(id){const i=S.selMoments.indexOf(id);i>=0?S.selMoments.splice(i,1):S.selMoments.push(id);render();}
@@ -1302,7 +1313,7 @@ async function finishOnboard(){
   // conflit ci-dessous pour rien.
   if(onboardSubmitting)return;
   onboardSubmitting=true;
-  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:"visible",photo_url:S.pendingPhoto||null});
+  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:"visible",photo_url:S.pendingPhoto||null,age_bracket:S.pendingAge||null});
   if(error){
     onboardSubmitting=false;
     // Code 23505 = un profil existe déjà pour ce compte (vu en conditions
@@ -1320,7 +1331,7 @@ async function finishOnboard(){
           render();
           return;
         }
-        S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null};
+        S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null};
         S.notifications=loadNotifs();
         await loadEstablishmentData();await loadAds();
         subscribeEstablishment();
@@ -1332,7 +1343,7 @@ async function finishOnboard(){
     toast("Impossible de créer votre profil pour le moment. Réessayez.");console.error(error);return;
   }
   onboardSubmitting=false;
-  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:"visible",photo:S.pendingPhoto||null};
+  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:"visible",photo:S.pendingPhoto||null,age:S.pendingAge||null};
   S.notifs.push=S.notifSuggest;
   S.notifications=loadNotifs();
   await loadEstablishmentData();
@@ -1344,6 +1355,9 @@ async function finishOnboard(){
 }
 
 /* ---------- Accueil ---------- */
+// Mêmes tranches que le graphique "Répartition par âge" du dashboard, pour
+// que la saisie et l'affichage restent alignés sans table de correspondance.
+const AGE_BRACKETS=["0-5 ans","6-12 ans","13-17 ans","18-25 ans","26-35 ans","36-50 ans","51-65 ans","+65 ans"];
 const HOME_CARDS=[
   {id:"sport",label:"Sport",desc:"Courir, nager, jouer ensemble",icon:"run",color:"blue"},
   {id:"decouverte",label:"Découverte & Sortie",desc:"Explorez les environs",icon:"boat",color:"teal"},
@@ -2015,7 +2029,7 @@ async function doLogin(){
     toast(`Bienvenue — espace directeur de ${esc(EST.name)}.`);
     return;
   }
-  S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null};
+  S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null};
   S.role="voy";S.space="voy";S.notifications=loadNotifs();
   await loadEstablishmentData();await loadAds();
   subscribeEstablishment();
@@ -2372,6 +2386,13 @@ function vProfile(){
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Mes centres d'intérêt</h5>
       <div class="tagpills">${allInterests.map(c=>`<button class="tagpill" style="${u.envies.includes(c.id)?"background:var(--purple);color:#fff":""}" onclick="togProfEnvie('${c.id}')">${c.label}</button>`).join("")}</div>
     </div>
+    <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Tranche d'âge <span class="muted" style="text-transform:none;font-weight:500">(optionnel)</span></h5>
+      <p class="small muted" style="margin-bottom:10px">Sert uniquement à des statistiques anonymisées pour l'établissement.</p>
+      <select onchange="setProfAge(this.value)">
+        <option value="">Je préfère ne pas dire</option>
+        ${AGE_BRACKETS.map(b=>`<option value="${b}" ${u.age===b?"selected":""}>${b}</option>`).join("")}
+      </select>
+    </div>
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--purple)">Notifications</h5>
       <div class="setline"><span>Nouvelles activités selon mes envies</span><button class="switch ${S.notifs.push?"on":""}" onclick="S.notifs.push=!S.notifs.push;render()"><i></i></button></div>
       <div class="setline"><span>Rappels avant mes activités</span><button class="switch ${S.notifs.rappels?"on":""}" onclick="S.notifs.rappels=!S.notifs.rappels;render()"><i></i></button></div>
@@ -2388,9 +2409,24 @@ function vProfile(){
   </div>`;
 }
 function togProfEnvie(id){const e=S.user.envies,i=e.indexOf(id);i>=0?e.splice(i,1):e.push(id);render();}
+async function setProfAge(age){
+  S.user.age=age||null;render();
+  const {error}=await sb.from("profiles").update({age_bracket:S.user.age}).eq("id",UID);
+  if(error)console.error(error);
+}
 
 /* ---------- Fin de séjour ---------- */
 function endStay(){S.ended=true;render();}
+// Un avis par personne et par établissement — la note affichée au directeur
+// (vDashStatistiques) vient uniquement d'ici, plus des expériences fictives.
+async function rateStay(stars){
+  S.stars=stars;render();
+  const {error}=await sb.from("stay_ratings").upsert(
+    {establishment_id:EST.id,user_id:UID,stars},
+    {onConflict:"establishment_id,user_id"}
+  );
+  if(error)console.error(error);
+}
 function vEnded(){
   return `<div class="landing" style="justify-content:center;text-align:center">
     <div class="body" style="margin-top:0">
@@ -2399,7 +2435,7 @@ function vEnded(){
       <h2 style="font-size:21px">Merci ${esc(S.user?.name||"")}, et bonne route.</h2>
       <p class="small muted" style="margin-top:10px;line-height:1.6">Votre séjour est terminé : l'accès à la communauté est fermé et vos conversations ne sont plus accessibles. Les statistiques anonymisées aident l'établissement à s'améliorer.</p>
       <p style="margin-top:22px;font-weight:700;font-size:14px">Comment était votre expérience Côtéa ?</p>
-      <div style="display:flex;justify-content:center;gap:8px;margin:14px 0">${[1,2,3,4,5].map(i=>`<button onclick="S.stars=${i};render()" style="font-size:30px;color:${S.stars>=i?"var(--amber-solid)":"#D8DCE6"}">★</button>`).join("")}</div>
+      <div style="display:flex;justify-content:center;gap:8px;margin:14px 0">${[1,2,3,4,5].map(i=>`<button onclick="rateStay(${i})" style="font-size:30px;color:${S.stars>=i?"var(--amber-solid)":"#D8DCE6"}">★</button>`).join("")}</div>
       ${S.stars?`<p style="font-weight:700;color:var(--coral)">Merci pour votre retour !</p>`:""}
     </div>
   </div>`;
@@ -2658,30 +2694,31 @@ function dashHeader(title,sub,noPeriod){
 /* ---------- Dashboard : Tableau de bord ---------- */
 function vDashTableau(){
   const acts=dashActs();
-  const demo=DASH_DEMO[S.dashPeriod];
+  const members=S.members||[];
+  const membres=members.length;
+  const activeIds=new Set(acts.flatMap(a=>a.partIds||[]).filter(Boolean));
+  const actifs=activeIds.size;
+  const engagementPct=membres?Math.round(actifs/membres*100):0;
+  const today=iso(daysFrom(0));
+  const newToday=members.filter(m=>(m.created_at||"").slice(0,10)===today).length;
+  const ratings=S.ratings||[];
+  const avgRating=ratings.length?(ratings.reduce((s,r)=>s+r,0)/ratings.length).toFixed(1).replace(".",","):null;
   const created=acts.length;
   const campingCount=acts.filter(a=>a.orga==="Équipe animation").length;
   const voyageurCount=created-campingCount;
   const top=[...acts].sort((a,b)=>b.parts.length-a.parts.length).slice(0,5);
   const totalParts=acts.reduce((s,a)=>s+a.parts.length,0)||1;
-  const trend=[8,11,9,14,12,16,created||10];
   return dashHeader("Tableau de bord","Voici le tableau de bord de votre communauté Côtéa.")+`
-    <div class="occ-banner">
-      <div><b>Saisissez l'occupation actuelle <span class="muted" style="font-weight:500">(optionnel)</span></b><p>Indiquez le nombre de voyageurs présents pour calculer vos taux d'adoption et d'activité.</p></div>
-      <div class="in"><input type="number" value="${demo.occ}" id="occInput"><button class="btn btn-navy btn-sm" onclick="toast('Occupation enregistrée (démo).')">Enregistrer</button></div>
-    </div>
     <div class="sectitle">${svg("users")} LA COMMUNAUTÉ</div>
     <div class="kgrid">
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b class="num">${demo.membres}</b><span class="lbl">Membres de la communauté</span></div></div><span class="sub">Ont rejoint Côtéa en scannant le QR pendant leur séjour</span>${sparkline([4,6,5,8,7,9,10],"var(--purple)")}</div>
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${demo.actifs}</b><span class="lbl">Voyageurs actifs</span></div></div><span class="sub">${Math.round(demo.actifs/demo.membres*100)}% des membres de la communauté</span>${sparkline([5,7,6,9,8,10,11],"var(--green-solid)")}</div>
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("cal")}</span><div><b class="num">${created}</b><span class="lbl">Activités créées</span></div></div><span class="sub">Sur la période sélectionnée</span>${sparkline(trend,"var(--blue)")}</div>
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">4,8 / 5</b><span class="lbl">Satisfaction moyenne</span></div></div><span class="sub">Basée sur les avis laissés cette période</span>${sparkline([4.5,4.6,4.7,4.6,4.8,4.9,4.8],"var(--amber-solid)")}</div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b class="num">${membres}</b><span class="lbl">Membres de la communauté</span></div></div><span class="sub">Ont rejoint Côtéa en scannant le QR pendant leur séjour</span></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${actifs}</b><span class="lbl">Voyageurs actifs</span></div></div><span class="sub">${engagementPct}% des membres de la communauté, sur la période</span></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("cal")}</span><div><b class="num">${created}</b><span class="lbl">Activités créées</span></div></div><span class="sub">Sur la période sélectionnée</span></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">${avgRating?avgRating+" / 5":"—"}</b><span class="lbl">Satisfaction moyenne</span></div></div><span class="sub">${ratings.length?`Basée sur ${ratings.length} avis de fin de séjour`:"Aucun avis pour l'instant"}</span></div>
     </div>
     <div class="dgrid3">
       <div class="dpanel2"><h3>${svg("scan")} Acquisition</h3>
-        <div class="stat-line"><b class="num" style="color:var(--purple)">${demo.qr}</b><div><div class="lbl">QR codes scannés</div><div class="sub">Depuis le début de la période</div></div></div>
-        <div class="stat-line"><b class="num" style="color:var(--green-solid)">${demo.newToday}</b><div><div class="lbl">Nouveaux membres aujourd'hui</div></div></div>
-        <div class="stat-line"><b class="num" style="color:var(--blue)">${demo.retour}%</b><div><div class="lbl">Voyageurs revenus au moins une deuxième fois</div></div></div>
+        <div class="stat-line"><b class="num" style="color:var(--green-solid)">${newToday}</b><div><div class="lbl">Nouveaux membres aujourd'hui</div></div></div>
         <div class="info-banner p" style="margin-top:14px">${svg("scan")}<span>Le QR code est votre porte d'entrée. Plus il est visible, plus votre communauté grandit ! <button class="link" style="color:var(--purple);font-weight:700" onclick="setDashPage('parametres')">Voir mon QR →</button></span></div>
       </div>
       <div class="dpanel2"><h3>${svg("cal")} Activités</h3>
@@ -2703,25 +2740,7 @@ function vDashTableau(){
         ${top.length?top.map((a,i)=>`<div class="leader"><span class="rank">${i+1}</span><span style="flex:1;font-weight:600">${esc(a.title)}</span><span class="pct">${Math.round(a.parts.length/totalParts*100)}%</span></div><div class="track" style="margin:-6px 0 10px 30px"><i style="width:${Math.round(a.parts.length/totalParts*100)}%"></i></div>`).join(""):`<p class="small muted">Aucune activité sur cette période.</p>`}
       </div>
     </div>
-    <div class="dgrid2">
-      <div class="dpanel2"><h3>${svg("handshake")} Impact partenaires</h3>
-        <div class="partner-grid">
-          <div class="partner-card"><img src="assets/hero-decouverte.jpg?v=2" alt=""><b>Excursion bateau</b><span class="amt">2 340 €</span><span class="sub">18 réservations</span></div>
-          <div class="partner-card"><img src="assets/hero-sport.jpg?v=2" alt=""><b>Location de vélos</b><span class="amt">780 €</span><span class="sub">12 réservations</span></div>
-          <div class="partner-card"><img src="assets/hero-moments.jpg?v=2" alt=""><b>Sortie kayak</b><span class="amt">540 €</span><span class="sub">8 réservations</span></div>
-        </div>
-        <div class="impact-total"><span>Total généré pour vos partenaires</span><b>3 660 €</b></div>
-      </div>
-      <div class="dpanel2"><h3>${svg("check")} Bénéfices Côtéa</h3>
-        <div class="benefit-grid">
-          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b>${demo.actifs} voyageurs actifs</b><span>soit ${Math.round(demo.actifs/demo.membres*100)}% de l'occupation</span></div></div>
-          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("scan")}</span><div><b>${Math.round(demo.qr/demo.occ*100)}% des voyageurs</b><span>ont rejoint via le QR code</span></div></div>
-          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("cal")}</span><div><b>${created} activités créées</b><span>sans intervention de votre équipe</span></div></div>
-          <div class="benefit-item"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b>4,8 / 5 de satisfaction</b><span>sur la période sélectionnée</span></div></div>
-        </div>
-      </div>
-    </div>
-    <p class="small muted" style="margin-top:6px">Les données présentées sont issues uniquement des interactions sur Côtéa.</p>`;
+    <p class="small muted" style="margin-top:6px">Données réelles, calculées à partir des membres et activités de votre établissement.</p>`;
 }
 
 /* ---------- Dashboard : Activités ---------- */
@@ -2814,55 +2833,44 @@ function vDashActivites(){
 
 /* ---------- Dashboard : Voyageurs ---------- */
 function vDashVoyageurs(){
-  const demo=DASH_DEMO[S.dashPeriod];
   const acts=dashActs();
+  const members=S.members||[];
+  const membres=members.length;
+  const activeIds=new Set(acts.flatMap(a=>a.partIds||[]).filter(Boolean));
+  const actifs=activeIds.size;
+  const totalParts=acts.reduce((s,a)=>s+a.parts.length,0);
+  const engagementRate=membres?Math.round(actifs/membres*100):null;
+  const partsPerActive=actifs?(totalParts/actifs).toFixed(1):null;
   const interestCounts={};
   acts.forEach(a=>{const l=catLabel(a.topcat);interestCounts[l]=(interestCounts[l]||0)+a.parts.length;});
   const interests=Object.entries(interestCounts).sort((a,b)=>b[1]-a[1]);
   const maxInt=Math.max(...interests.map(i=>i[1]),1);
-  const ageBuckets=[["0-5 ans",4],["6-12 ans",14],["13-17 ans",9],["18-25 ans",8],["26-35 ans",20],["36-50 ans",27],["51-65 ans",14],["+65 ans",4]];
-  const maxAge=Math.max(...ageBuckets.map(a=>a[1]));
-  const evolution=[12,18,16,22,25,23,28,31,29,34,38,36,41,45];
-  const lc=linechart(evolution);
+  const ageCounts=AGE_BRACKETS.map(l=>members.filter(m=>m.age_bracket===l).length);
+  const noAge=members.filter(m=>!m.age_bracket).length;
+  const maxAge=Math.max(...ageCounts,noAge,1);
   const engagement=[...acts].sort((a,b)=>(b.parts.length/b.cap)-(a.parts.length/a.cap)).slice(0,5);
   return dashHeader("Voyageurs","Aperçu de votre communauté et de son engagement.")+`
     <div class="kgrid">
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b class="num">${demo.membres}</b><span class="lbl">Membres de la communauté</span></div></div></div>
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${demo.actifs}</b><span class="lbl">Voyageurs actifs</span></div></div></div>
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">76%</b><span class="lbl">Taux d'engagement</span></div></div></div>
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--pink-bg);color:var(--pink)">${svg("heart")}</span><div><b class="num">87 / 100</b><span class="lbl">Indice de communauté</span></div></div></div>
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("cal")}</span><div><b class="num">4,6</b><span class="lbl">Activités / voyageur actif</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--purple-bg);color:var(--purple)">${svg("users")}</span><div><b class="num">${membres}</b><span class="lbl">Membres de la communauté</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("users")}</span><div><b class="num">${actifs}</b><span class="lbl">Voyageurs actifs sur la période</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">${engagementRate!==null?engagementRate+"%":"—"}</b><span class="lbl">Taux d'engagement — % de membres ayant rejoint ≥1 activité sur la période</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("cal")}</span><div><b class="num">${partsPerActive!==null?partsPerActive.replace(".",","):"—"}</b><span class="lbl">Activités / voyageur actif</span></div></div></div>
     </div>
-    <div class="dgrid3">
-      <div class="dpanel2"><h3>Composition de la communauté</h3>
-        <div class="donut-wrap">
-          ${donut([{value:42,color:"var(--green-solid)"},{value:31,color:"var(--purple)"},{value:18,color:"var(--blue)"},{value:9,color:"var(--amber-solid)"}],100,16)}
-          <div><b style="font-family:'Baloo 2',sans-serif;font-size:20px;display:block">${demo.membres}</b><span class="small muted">membres</span></div>
-        </div>
-        <div class="legend-item" style="margin-top:10px"><i style="background:var(--green-solid)"></i>Familles — 42%</div>
-        <div class="legend-item"><i style="background:var(--purple)"></i>Couples — 31%</div>
-        <div class="legend-item"><i style="background:var(--blue)"></i>Entre amis — 18%</div>
-        <div class="legend-item"><i style="background:var(--amber-solid)"></i>Voyageurs solo — 9%</div>
-      </div>
+    <div class="dgrid2">
       <div class="dpanel2"><h3>Centres d'intérêt</h3>
         ${interests.length?interests.map(([l,n])=>`<div class="hbar-row"><span class="lbl">${l}</span><span class="track"><i style="width:${Math.round(n/maxInt*100)}%;background:var(--purple)"></i></span><span class="val">${n}</span></div>`).join(""):`<p class="small muted">Aucune donnée sur cette période.</p>`}
       </div>
       <div class="dpanel2"><h3>Répartition par âge</h3>
-        ${ageBuckets.map(([l,n])=>`<div class="hbar-row"><span class="lbl" style="width:70px;font-size:11px">${l}</span><span class="track"><i style="width:${Math.round(n/maxAge*100)}%;background:var(--blue)"></i></span><span class="val">${n}%</span></div>`).join("")}
+        ${membres?AGE_BRACKETS.map((l,i)=>`<div class="hbar-row"><span class="lbl" style="width:70px;font-size:11px">${l}</span><span class="track"><i style="width:${Math.round(ageCounts[i]/maxAge*100)}%;background:var(--blue)"></i></span><span class="val">${ageCounts[i]}</span></div>`).join("")+(noAge?`<div class="hbar-row"><span class="lbl" style="width:70px;font-size:11px">Non renseigné</span><span class="track"><i style="width:${Math.round(noAge/maxAge*100)}%;background:#ccc"></i></span><span class="val">${noAge}</span></div>`:""):`<p class="small muted">Aucun membre pour l'instant.</p>`}
       </div>
     </div>
     <div class="dgrid2">
-      <div class="dpanel2">
-        <h3>Évolution des inscriptions</h3>
-        <div class="linechart-wrap">${lc.svg}</div>
-        <p class="small muted" style="margin-top:6px">Sur les 14 derniers jours — dernier point : ${evolution[evolution.length-1]} inscrits.</p>
-      </div>
       <div class="dpanel2">
         <h3>Engagement par activité</h3>
         ${engagement.length?engagement.map(a=>{const pct=Math.round(a.parts.length/a.cap*100);return `<div class="hbar-row"><span class="lbl" style="width:150px">${esc(a.title)}</span><span class="track"><i style="width:${pct}%;background:var(--green-solid)"></i></span><span class="val">${pct}%</span></div>`;}).join(""):`<p class="small muted">Aucune activité sur cette période.</p>`}
       </div>
     </div>
-    <p class="small muted" style="margin-top:6px">Les données sont anonymisées et mises à jour en temps réel.</p>`;
+    <p class="small muted" style="margin-top:6px">Données réelles, calculées à partir des membres et activités de votre établissement.</p>`;
 }
 
 /* ---------- Dashboard : Paramètres (QR & accès communauté) ---------- */
@@ -3005,13 +3013,15 @@ function vDashStatistiques(){
   const byDate={};acts.forEach(a=>{byDate[a.date]=(byDate[a.date]||0)+1;});
   const dates=Object.keys(byDate).sort();
   const maxDay=Math.max(...dates.map(d=>byDate[d]),1);
-  const avgRating=(PAST_EXPERIENCES.reduce((s,p)=>s+p.rating,0)/PAST_EXPERIENCES.length).toFixed(1);
+  const ratings=S.ratings||[];
+  const avgRating=ratings.length?(ratings.reduce((s,r)=>s+r,0)/ratings.length).toFixed(1):null;
+  const ratingCounts=[5,4,3,2,1].map(n=>ratings.filter(r=>r===n).length);
   const pending=S.reports.filter(r=>!r.resolved).length;
   const resolved=S.reports.length-pending;
   const resolutionRate=S.reports.length?Math.round(resolved/S.reports.length*100):100;
   return dashHeader("Statistiques","Analysez la performance de votre communauté et gérez la modération.")+`
     <div class="kgrid">
-      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">${avgRating} / 5</b><span class="lbl">Satisfaction moyenne</span></div></div></div>
+      <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--amber-bg);color:var(--amber)">${svg("star")}</span><div><b class="num">${avgRating?avgRating+" / 5":"—"}</b><span class="lbl">Satisfaction moyenne${ratings.length?` (${ratings.length} avis)`:" (pas encore d'avis)"}</span></div></div></div>
       <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--coral-bg);color:var(--coral-d)">${svg("info")}</span><div><b class="num">${S.reports.length}</b><span class="lbl">Signalements totaux</span></div></div></div>
       <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--blue-bg);color:var(--blue)">${svg("clock")}</span><div><b class="num">${pending}</b><span class="lbl">En attente de modération</span></div></div></div>
       <div class="kpi2"><div class="top"><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("check")}</span><div><b class="num">${resolutionRate}%</b><span class="lbl">Taux de résolution</span></div></div></div>
@@ -3020,8 +3030,8 @@ function vDashStatistiques(){
       <div class="dpanel2">
         <div style="display:flex;align-items:center;margin-bottom:14px"><h3 style="margin:0">Activité par jour</h3><button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="exportCSV()">${svg("download")} Exporter en CSV</button></div>
         ${dates.length?`<div class="trend">${dates.map(d=>`<div class="tbar" title="${fmtDate(d)} · ${byDate[d]} activité${byDate[d]>1?"s":""}"><div class="tbar-col"><i style="height:${Math.max(6,Math.round(byDate[d]/maxDay*70))}px;background:var(--purple)"></i></div><span>${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</span></div>`).join("")}</div>`:`<p class="small muted">Aucune activité enregistrée.</p>`}
-        <h3 style="margin-top:22px">Notes des expériences passées</h3>
-        ${PAST_EXPERIENCES.map(p=>`<div class="hbar-row"><span class="lbl" style="width:170px">${esc(p.title)}</span><span class="track"><i style="width:${p.rating/5*100}%;background:var(--amber-solid)"></i></span><span class="val">${p.rating}/5</span></div>`).join("")}
+        <h3 style="margin-top:22px">Avis de fin de séjour</h3>
+        ${ratings.length?[5,4,3,2,1].map((n,i)=>`<div class="hbar-row"><span class="lbl" style="width:170px">${n} étoile${n>1?"s":""}</span><span class="track"><i style="width:${ratingCounts[i]/ratings.length*100}%;background:var(--amber-solid)"></i></span><span class="val">${ratingCounts[i]}</span></div>`).join(""):`<p class="small muted">Personne n'a encore laissé d'avis de fin de séjour.</p>`}
       </div>
       <div class="dpanel2">
         <h3>Modération</h3>
