@@ -844,7 +844,7 @@ function seed(){
   return {
     user:null, role:"voy", space:null, scanned:false, tab:"home", screen:"landing",
     onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, pendingPhoto:null,
-    catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0, ratings:[], pendingAge:null, members:[],
+    catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0, ratings:[], pendingAge:null, pendingLot:null, pendingStayStart:null, pendingStayEnd:null, members:[], myActRatings:{},
     dashPeriod:"week", dashPage:"tableau", dashActTab:"all", dashActSearch:"", prefillCode:null,
     partners:[
       {id:"pt1",name:"Cap Horizon Location",category:"Excursion bateau",bookings:18,revenue:2340,contact:"04 94 00 00 01"},
@@ -906,6 +906,8 @@ async function loadEstablishmentData(){
   S.ratings=(rts||[]).map(r=>r.stars);
   const {data:mbs}=await sb.from("profiles").select("id, age_bracket, created_at").eq("establishment_id",EST.id).eq("is_director",false);
   S.members=mbs||[];
+  const {data:actRts}=await sb.from("activity_ratings").select("activity_id, stars").eq("user_id",UID);
+  S.myActRatings={};(actRts||[]).forEach(r=>{S.myActRatings[r.activity_id]=r.stars;});
 }
 function bootError(msg){
   $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center;text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:18px;margin-bottom:8px">Connexion impossible</p><p class="small muted">${esc(msg)}</p><button class="btn btn-outline" style="margin-top:16px;max-width:220px" onclick="location.reload()">Réessayer</button></div>`;
@@ -978,7 +980,7 @@ async function boot(){
         await loadAds();
         hideGate();render();return;
       }
-      S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null};
+      S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null,lot:prof.lot_number||null,stayStart:prof.stay_start||null,stayEnd:prof.stay_end||null};
       S.role="voy";S.space="voy";S.screen="home";S.tab="home";
       S.notifications=loadNotifs();
       await loadEstablishmentData();
@@ -1258,6 +1260,16 @@ function vOnboard(){
           ${AGE_BRACKETS.map(b=>`<option value="${b}" ${S.pendingAge===b?"selected":""}>${b}</option>`).join("")}
         </select>
       </div>
+      <div class="field"><label>N° d'emplacement / chambre <span class="muted">(optionnel)</span></label>
+        <input id="flot" placeholder="Ex. Emplacement 42" value="${esc(S.pendingLot||"")}" autocomplete="off">
+        <p class="small muted" style="margin-top:4px">Non visible par les autres membres — réservé à votre établissement.</p>
+      </div>
+      <div class="field"><label>Dates de séjour <span class="muted">(optionnel)</span></label>
+        <div style="display:flex;gap:8px">
+          <input id="fstart" type="date" value="${S.pendingStayStart||""}" style="flex:1">
+          <input id="fend" type="date" value="${S.pendingStayEnd||""}" style="flex:1">
+        </div>
+      </div>
       <div class="foot"><button class="btn btn-purple" onclick="onbNext1()">Continuer</button><div class="dots">${Array.from({length:ONB_TOTAL},(_,i)=>`<i class="${i===0?"on":""}"></i>`).join("")}</div></div>
     `);
   }
@@ -1304,7 +1316,9 @@ function onbNext1(){
   if(!name){toast("Indiquez votre prénom pour continuer.");return;}
   const age=$("fage").value||null;
   if(age&&MINOR_BRACKETS.has(age)){toast("L'inscription à la communauté est réservée aux 18 ans et plus.");return;}
-  S.pendingName=name;S.pendingAge=age;S.onbStep=2;render();
+  S.pendingName=name;S.pendingAge=age;S.pendingLot=$("flot").value.trim()||null;
+  S.pendingStayStart=$("fstart").value||null;S.pendingStayEnd=$("fend").value||null;
+  S.onbStep=2;render();
 }
 function togEnvie(id){const i=S.selEnvies.indexOf(id);i>=0?S.selEnvies.splice(i,1):S.selEnvies.push(id);render();}
 function togMoment(id){const i=S.selMoments.indexOf(id);i>=0?S.selMoments.splice(i,1):S.selMoments.push(id);render();}
@@ -1315,7 +1329,7 @@ async function finishOnboard(){
   // conflit ci-dessous pour rien.
   if(onboardSubmitting)return;
   onboardSubmitting=true;
-  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:"visible",photo_url:S.pendingPhoto||null,age_bracket:S.pendingAge||null});
+  const {error}=await sb.from("profiles").insert({id:UID,establishment_id:EST.id,name:S.pendingName,envies:S.selEnvies,visibility:"visible",photo_url:S.pendingPhoto||null,age_bracket:S.pendingAge||null,lot_number:S.pendingLot||null,stay_start:S.pendingStayStart||null,stay_end:S.pendingStayEnd||null});
   if(error){
     onboardSubmitting=false;
     // Code 23505 = un profil existe déjà pour ce compte (vu en conditions
@@ -1333,7 +1347,7 @@ async function finishOnboard(){
           render();
           return;
         }
-        S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null};
+        S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null,lot:prof.lot_number||null,stayStart:prof.stay_start||null,stayEnd:prof.stay_end||null};
         S.notifications=loadNotifs();
         await loadEstablishmentData();await loadAds();
         subscribeEstablishment();
@@ -1345,7 +1359,7 @@ async function finishOnboard(){
     toast("Impossible de créer votre profil pour le moment. Réessayez.");console.error(error);return;
   }
   onboardSubmitting=false;
-  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:"visible",photo:S.pendingPhoto||null,age:S.pendingAge||null};
+  S.user={name:S.pendingName,envies:[...S.selEnvies],visibility:"visible",photo:S.pendingPhoto||null,age:S.pendingAge||null,lot:S.pendingLot||null,stayStart:S.pendingStayStart||null,stayEnd:S.pendingStayEnd||null};
   S.notifs.push=S.notifSuggest;
   S.notifications=loadNotifs();
   await loadEstablishmentData();
@@ -1383,7 +1397,7 @@ function vHome(){
       <div style="min-width:0">
         <span class="lbl">Votre établissement</span>
         <b>${esc(EST.name)}</b>
-        <span>${esc(EST.place||"")}${EST.place?" · ":""}Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</span>
+        <span>${esc(EST.place||"")}${EST.place?" · ":""}Séjour jusqu'au ${fmtDate(S.user.stayEnd||iso(EST.stayEnd)).toLowerCase()}</span>
       </div>
     </div>
     <div class="cat-grid">
@@ -1499,6 +1513,8 @@ function vDetail(){
   const cc=colorOf(a);
   const inIt=isIn(a),mine=a.orga===S.user.name,full=a.parts.length>=a.cap;
   const canceled=a.status==="annulée";
+  const isPast=(a.date+"T"+a.time)<(iso(daysFrom(0))+"T"+new Date().toTimeString().slice(0,5));
+  const myRating=S.myActRatings[a.id]||0;
   const label=catLabel(a.subcat)||catLabel(a.topcat);
   return `<div class="screen"><div class="detail">
     <div class="dethero">
@@ -1543,6 +1559,12 @@ function vDetail(){
         <button class="btn btn-outline" onclick="openItinerary('${a.id}')">${svg("route")} Ouvrir l'itinéraire</button>
       </div>
       ${!canceled&&!inIt&&full?`<div class="info-banner o">${svg("info")}<span>Cette activité est complète. Créez la vôtre : d'autres voyageurs partagent sûrement la même envie.</span></div>`:""}
+      ${!canceled&&isPast&&inIt?`<div class="det-panel"><h5>${svg("star")}${myRating?"Votre note":"Comment c'était ?"}</h5>
+        <div class="stars-picker" style="display:flex;gap:6px;justify-content:center;margin:6px 0">
+          ${[1,2,3,4,5].map(n=>`<button class="iconbtn" style="width:36px;height:36px;color:${n<=myRating?"var(--amber-solid)":"var(--line)"}" onclick="rateActivity('${a.id}',${n})">${svg("star")}</button>`).join("")}
+        </div>
+        ${myRating?`<p class="small muted" style="text-align:center">Merci pour votre retour !</p>`:""}
+      </div>`:""}
       ${!canceled?`<p style="text-align:center;margin-top:16px"><button class="link-danger" onclick="report('activité','${a.id}')">Signaler cette activité</button></p>`:""}
     </div>
   </div></div>`;
@@ -1568,6 +1590,11 @@ function vDetailCta(){
     return `<div class="fixedbar"><button class="btn btn-outline" onclick="openCreate('${a.topcat}')">Proposer une activité similaire</button></div>`;
   }
   return `<div class="fixedbar"><button class="btn btn-coral" style="background:${cc.solid}" onclick="joinA('${a.id}')">${svg("users")} Rejoindre cette activité</button></div>`;
+}
+async function rateActivity(id,stars){
+  S.myActRatings[id]=stars;render();
+  const {error}=await sb.from("activity_ratings").upsert({activity_id:id,user_id:UID,stars},{onConflict:"activity_id,user_id"});
+  if(error)console.error(error);
 }
 async function joinA(id){
   const a=findA(id);
@@ -2032,7 +2059,7 @@ async function doLogin(){
     toast(`Bienvenue — espace directeur de ${esc(EST.name)}.`);
     return;
   }
-  S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null};
+  S.user={name:prof.name,envies:prof.envies||[],visibility:prof.visibility,photo:prof.photo_url||null,age:prof.age_bracket||null,lot:prof.lot_number||null,stayStart:prof.stay_start||null,stayEnd:prof.stay_end||null};
   S.role="voy";S.space="voy";S.notifications=loadNotifs();
   await loadEstablishmentData();await loadAds();
   subscribeEstablishment();
@@ -2372,7 +2399,7 @@ function vProfile(){
           <b style="font-family:'Baloo 2',sans-serif;font-size:18px">${esc(u.name)}</b>
           <button class="iconbtn" style="width:26px;height:26px" onclick="openEditName()" aria-label="Modifier mon prénom">${svg("pencil")}</button>
         </div>
-        <div class="small muted">Séjour jusqu'au ${fmtDate(iso(EST.stayEnd)).toLowerCase()}</div>
+        <div class="small muted">Séjour jusqu'au ${fmtDate(u.stayEnd||iso(EST.stayEnd)).toLowerCase()}</div>
       </div>
     </div>
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Mon compte</h5>
@@ -2396,6 +2423,16 @@ function vProfile(){
         ${AGE_BRACKETS.map(b=>`<option value="${b}" ${u.age===b?"selected":""}>${b}</option>`).join("")}
       </select>
     </div>
+    <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">N° d'emplacement / chambre <span class="muted" style="text-transform:none;font-weight:500">(optionnel)</span></h5>
+      <p class="small muted" style="margin-bottom:10px">Non visible par les autres membres — réservé à votre établissement.</p>
+      <input value="${esc(u.lot||"")}" placeholder="Ex. Emplacement 42" onchange="setProfLot(this.value)">
+    </div>
+    <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;color:var(--purple)">Dates de séjour <span class="muted" style="text-transform:none;font-weight:500">(optionnel)</span></h5>
+      <div style="display:flex;gap:8px">
+        <input type="date" value="${u.stayStart||""}" onchange="setProfStay('stayStart',this.value)" style="flex:1">
+        <input type="date" value="${u.stayEnd||""}" onchange="setProfStay('stayEnd',this.value)" style="flex:1">
+      </div>
+    </div>
     <div class="panel" style="margin-bottom:14px"><h5 style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--purple)">Notifications</h5>
       <div class="setline"><span>Nouvelles activités selon mes envies</span><button class="switch ${S.notifs.push?"on":""}" onclick="S.notifs.push=!S.notifs.push;render()"><i></i></button></div>
       <div class="setline"><span>Rappels avant mes activités</span><button class="switch ${S.notifs.rappels?"on":""}" onclick="S.notifs.rappels=!S.notifs.rappels;render()"><i></i></button></div>
@@ -2416,6 +2453,17 @@ async function setProfAge(age){
   if(age&&MINOR_BRACKETS.has(age)){toast("La communauté est réservée aux 18 ans et plus.");render();return;}
   S.user.age=age||null;render();
   const {error}=await sb.from("profiles").update({age_bracket:S.user.age}).eq("id",UID);
+  if(error)console.error(error);
+}
+async function setProfLot(lot){
+  S.user.lot=lot.trim()||null;
+  const {error}=await sb.from("profiles").update({lot_number:S.user.lot}).eq("id",UID);
+  if(error)console.error(error);
+}
+async function setProfStay(field,value){
+  S.user[field]=value||null;render();
+  const col=field==="stayStart"?"stay_start":"stay_end";
+  const {error}=await sb.from("profiles").update({[col]:S.user[field]}).eq("id",UID);
   if(error)console.error(error);
 }
 

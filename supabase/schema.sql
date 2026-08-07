@@ -23,6 +23,9 @@ create table if not exists profiles (
   visibility text default 'visible',
   is_director boolean default false,
   age_bracket text,
+  lot_number text,
+  stay_start date,
+  stay_end date,
   created_at timestamptz default now()
 );
 
@@ -112,6 +115,16 @@ create table if not exists stay_ratings (
   stars int not null check (stars between 1 and 5),
   created_at timestamptz default now(),
   unique(establishment_id, user_id)
+);
+
+-- ---------- Notes par activité (donnée par un participant, une fois l'activité passée) ----------
+create table if not exists activity_ratings (
+  id uuid primary key default gen_random_uuid(),
+  activity_id uuid not null references activities(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  stars int not null check (stars between 1 and 5),
+  created_at timestamptz default now(),
+  unique(activity_id, user_id)
 );
 
 -- ============================================================
@@ -214,10 +227,21 @@ create policy "ratings insert self" on stay_ratings for insert with check (
 );
 create policy "ratings update self" on stay_ratings for update using (user_id = auth.uid());
 
+alter table activity_ratings enable row level security;
+create policy "activity ratings select if participant" on activity_ratings for select using (
+  activity_id in (select activity_id from activity_participants where user_id = auth.uid())
+  or activity_id in (select id from activities where orga_id = auth.uid())
+);
+create policy "activity ratings insert self" on activity_ratings for insert with check (
+  user_id = auth.uid()
+  and activity_id in (select activity_id from activity_participants where user_id = auth.uid())
+);
+create policy "activity ratings update self" on activity_ratings for update using (user_id = auth.uid());
+
 -- ============================================================
 -- Active la synchronisation temps réel (chat, nouvelles activités, encarts)
 -- ============================================================
-alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports, ads, stay_ratings;
+alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports, ads, stay_ratings, activity_ratings;
 
 -- ============================================================
 -- Établissement de démo (garde le même code que le prototype)
