@@ -851,9 +851,7 @@ function seed(){
       {id:"pt2",name:"Porquerolles Bike",category:"Location de vélos",bookings:12,revenue:780,contact:"04 94 00 00 02"},
       {id:"pt3",name:"Kayak Méditerranée",category:"Sortie kayak",bookings:8,revenue:540,contact:"06 00 00 00 03"}
     ],
-    announcements:[
-      {id:"an1",title:"Piscine fermée mardi matin",body:"Entretien annuel de 8h à 11h. Merci de votre compréhension !",at:Date.now()-1000*60*60*20}
-    ],
+    announcements:[],
     activities:[],
     tips:[],
     chats:{},
@@ -908,6 +906,8 @@ async function loadEstablishmentData(){
   S.members=mbs||[];
   const {data:actRts}=await sb.from("activity_ratings").select("activity_id, stars").eq("user_id",UID);
   S.myActRatings={};(actRts||[]).forEach(r=>{S.myActRatings[r.activity_id]=r.stars;});
+  const {data:annc}=await sb.from("announcements").select("*").eq("establishment_id",EST.id).order("created_at",{ascending:false});
+  S.announcements=(annc||[]).map(x=>({id:x.id,title:x.title,body:x.body,at:new Date(x.created_at).getTime()}));
   const myChatIds=S.activities.filter(a=>isIn(a)).map(a=>a.id);
   S.chatMsgCounts={};
   if(myChatIds.length){
@@ -1406,6 +1406,7 @@ function vHome(){
         <span>${esc(EST.place||"")}${EST.place?" · ":""}Séjour jusqu'au ${fmtDate(S.user.stayEnd||iso(EST.stayEnd)).toLowerCase()}</span>
       </div>
     </div>
+    ${S.announcements[0]?`<div class="info-banner p" style="margin-bottom:14px">${svg("info")}<span><b>${esc(S.announcements[0].title)}</b><br>${esc(S.announcements[0].body||"")}</span></div>`:""}
     <div class="cat-grid">
       ${HOME_CARDS.map(c=>{const cc=CATCOLORS[c.color];return `<button class="cat-card" onclick="${c.id==='tips'?"go('tips','home')":c.id==='partages'?"go('partages','home')":`openCategory('${c.id}')`}">
         <span class="icon-circle sm" style="background:${cc.bg}">${svg(c.icon)}</span>
@@ -2332,7 +2333,13 @@ function subscribeEstablishment(){
     .on("postgres_changes",{event:"INSERT",schema:"public",table:"activities",filter:`establishment_id=eq.${EST.id}`},p=>onNewActivity(p.new))
     .on("postgres_changes",{event:"INSERT",schema:"public",table:"activity_participants"},p=>onNewParticipant(p.new))
     .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},p=>onNewMessage(p.new))
+    .on("postgres_changes",{event:"INSERT",schema:"public",table:"announcements",filter:`establishment_id=eq.${EST.id}`},p=>onNewAnnouncement(p.new))
     .subscribe();
+}
+function onNewAnnouncement(row){
+  S.announcements.unshift({id:row.id,title:row.title,body:row.body,at:new Date(row.created_at).getTime()});
+  if(S.role!=="voy")return;
+  pushNotif({id:"ann-"+row.id,kind:"announcement",ref:row.id,title:"Annonce de l'établissement",body:row.title});
 }
 async function onNewActivity(row){
   await loadEstablishmentData();
@@ -2358,7 +2365,12 @@ function onNewMessage(row){
   if(row.user_id===UID)return;
   const a=findA(row.activity_id);
   if(!a||!isIn(a))return;
-  if(S.screen==="chat"&&S.currentId===row.activity_id)return;
+  if(S.screen==="chat"&&S.currentId===row.activity_id){
+    S.chatMsgCounts[row.activity_id]=(S.chatMsgCounts[row.activity_id]||0)+1;
+    markChatRead(row.activity_id,S.chatMsgCounts[row.activity_id]);
+    return;
+  }
+  S.chatMsgCounts[row.activity_id]=(S.chatMsgCounts[row.activity_id]||0)+1;
   pushNotif({
     id:"msg-"+row.id,kind:"message",ref:row.activity_id,
     title:`${row.user_name} a écrit au groupe`,body:`${a.title} — ${row.text}`
@@ -2370,12 +2382,13 @@ function openNotifs(){
   go("notifications");
 }
 function openNotif(n){
+  if(n.kind==="announcement"){go("home","home");return;}
   const a=findA(n.ref);
   if(!a){toast("Cette activité n'est plus disponible.");return;}
   if(n.kind==="message")openChat(n.ref);else openDetail(n.ref);
 }
 function clearNotifs(){S.notifications=[];saveNotifs();render();}
-const NOTIF_ICON={activity:"cal",join:"users",message:"chat",test:"bell"};
+const NOTIF_ICON={activity:"cal",join:"users",message:"chat",test:"bell",announcement:"info"};
 function vNotifs(){
   const perm=notifPermLabel();
   return vTopbar(`go('home','home')`,"Notifications")+`<div class="catlist">
@@ -3046,13 +3059,18 @@ function openAddAnnouncement(){
       <button class="btn btn-coral" onclick="submitAnnouncement()">Publier</button>
     </div>`);
 }
-function submitAnnouncement(){
+async function submitAnnouncement(){
   const title=$("antitle").value.trim(),body=$("anbody").value.trim();
   if(!title||!body){toast("Titre et message sont nécessaires.");return;}
-  S.announcements.unshift({id:"an"+Date.now(),title,body,at:Date.now()});
-  closeModal();toast("Annonce publiée à toute la communauté.");render();
+  const {error}=await sb.from("announcements").insert({establishment_id:EST.id,title,body});
+  if(error){toast("Impossible de publier l'annonce.");console.error(error);return;}
+  await loadEstablishmentData();closeModal();toast("Annonce publiée à toute la communauté.");render();
 }
-function removeAnnouncement(id){S.announcements=S.announcements.filter(a=>a.id!==id);render();}
+async function removeAnnouncement(id){
+  const {error}=await sb.from("announcements").delete().eq("id",id);
+  if(error){console.error(error);return;}
+  S.announcements=S.announcements.filter(a=>a.id!==id);render();
+}
 
 /* ---------- Dashboard : Statistiques ---------- */
 function reportsPanelDash(){

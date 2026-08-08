@@ -107,6 +107,15 @@ create table if not exists ads (
 );
 create index if not exists ads_establishment_idx on ads(establishment_id, active);
 
+-- ---------- Annonces à la communauté (publiées par le directeur) ----------
+create table if not exists announcements (
+  id uuid primary key default gen_random_uuid(),
+  establishment_id uuid not null references establishments(id) on delete cascade,
+  title text not null,
+  body text,
+  created_at timestamptz default now()
+);
+
 -- ---------- Avis de fin de séjour (satisfaction réelle) ----------
 create table if not exists stay_ratings (
   id uuid primary key default gen_random_uuid(),
@@ -238,10 +247,21 @@ create policy "activity ratings insert self" on activity_ratings for insert with
 );
 create policy "activity ratings update self" on activity_ratings for update using (user_id = auth.uid());
 
+alter table announcements enable row level security;
+create policy "announcements select in establishment" on announcements for select using (
+  establishment_id = (select establishment_id from profiles where id = auth.uid())
+);
+create policy "announcements insert by director" on announcements for insert with check (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_director and p.establishment_id = announcements.establishment_id)
+);
+create policy "announcements delete by director" on announcements for delete using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_director and p.establishment_id = announcements.establishment_id)
+);
+
 -- ============================================================
 -- Active la synchronisation temps réel (chat, nouvelles activités, encarts)
 -- ============================================================
-alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports, ads, stay_ratings, activity_ratings;
+alter publication supabase_realtime add table activities, activity_participants, messages, tips, reports, ads, stay_ratings, activity_ratings, announcements;
 
 -- ============================================================
 -- Établissement de démo (garde le même code que le prototype)
