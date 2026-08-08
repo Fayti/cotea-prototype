@@ -844,7 +844,7 @@ function seed(){
   return {
     user:null, role:"voy", space:null, scanned:false, tab:"home", screen:"landing",
     onbStep:1, selEnvies:[], selMoments:[], selRole:null, notifSuggest:true, pendingPhoto:null,
-    catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0, ratings:[], pendingAge:null, pendingLot:null, pendingStayStart:null, pendingStayEnd:null, members:[], myActRatings:{},
+    catFilter:{topcat:null,tab:"a"}, currentId:null, ended:false, reports:[], stars:0, ratings:[], pendingAge:null, pendingLot:null, pendingStayStart:null, pendingStayEnd:null, members:[], myActRatings:{}, chatMsgCounts:{},
     dashPeriod:"week", dashPage:"tableau", dashActTab:"all", dashActSearch:"", prefillCode:null,
     partners:[
       {id:"pt1",name:"Cap Horizon Location",category:"Excursion bateau",bookings:18,revenue:2340,contact:"04 94 00 00 01"},
@@ -908,6 +908,12 @@ async function loadEstablishmentData(){
   S.members=mbs||[];
   const {data:actRts}=await sb.from("activity_ratings").select("activity_id, stars").eq("user_id",UID);
   S.myActRatings={};(actRts||[]).forEach(r=>{S.myActRatings[r.activity_id]=r.stars;});
+  const myChatIds=S.activities.filter(a=>isIn(a)).map(a=>a.id);
+  S.chatMsgCounts={};
+  if(myChatIds.length){
+    const {data:allMsgs}=await sb.from("messages").select("activity_id").in("activity_id",myChatIds);
+    (allMsgs||[]).forEach(m=>{S.chatMsgCounts[m.activity_id]=(S.chatMsgCounts[m.activity_id]||0)+1;});
+  }
 }
 function bootError(msg){
   $("screen").innerHTML=`<div class="landing" style="justify-content:center;align-items:center;text-align:center;padding:30px"><p style="font-family:'Baloo 2',sans-serif;font-size:18px;margin-bottom:8px">Connexion impossible</p><p class="small muted">${esc(msg)}</p><button class="btn btn-outline" style="margin-top:16px;max-width:220px" onclick="location.reload()">Réessayer</button></div>`;
@@ -1173,14 +1179,14 @@ function vTopbar(back,title){
   </header>`;
 }
 function vTabs(){
-  const myChats=S.activities.filter(a=>isIn(a)&&a.status!=="annulée").length;
+  const unread=unreadChatsCount();
   const t=(id,icon,label,scr,bub)=>`<button class="tab ${S.tab===id?"on":""}" onclick="go('${scr}','${id}')">${svg(icon)}${label}${bub?`<span class="bub">${bub}</span>`:""}</button>`;
   const showFab=S.screen==="category";
   return `<nav class="tabs" aria-label="Navigation">
     ${t("home","cal","Accueil","home")}
     ${t("myactivities","route","Mes activités","myactivities")}
     <span style="flex:1"></span>
-    ${t("messages","chat","Messages","messages",myChats||"")}
+    ${t("messages","chat","Messages","messages",unread||"")}
     ${t("profile","user","Profil","profile")}
   </nav>${showFab?`<button class="fab" aria-label="Proposer une activité" onclick="openCreate('${S.catFilter.topcat}')">${svg("plus")}</button>`:""}`;
 }
@@ -1929,11 +1935,14 @@ async function openChat(id){
   S.currentId=id;go("chat");
   const {data:msgs}=await sb.from("messages").select("*").eq("activity_id",id).order("created_at");
   S.chats[id]=(msgs||[]).map(mm=>({who:mm.user_name,text:mm.text}));
+  S.chatMsgCounts[id]=S.chats[id].length;
+  markChatRead(id,S.chats[id].length);
   render();
   if(chatChannel)sb.removeChannel(chatChannel);
   chatChannel=sb.channel("chat-"+id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:`activity_id=eq.${id}`},payload=>{
     (S.chats[id]=S.chats[id]||[]).push({who:payload.new.user_name,text:payload.new.text});
-    if(S.screen==="chat"&&S.currentId===id)render();
+    S.chatMsgCounts[id]=S.chats[id].length;
+    if(S.screen==="chat"&&S.currentId===id){markChatRead(id,S.chats[id].length);render();}
   }).subscribe();
 }
 function vChat(){
@@ -2258,6 +2267,18 @@ async function removeAd(id){
 /* ============================================================
    Notifications — alimentées en temps réel par Supabase
    ============================================================ */
+const CHAT_READ_KEY="cotea_chatread_";
+function loadChatReads(){
+  try{return JSON.parse(localStorage.getItem(CHAT_READ_KEY+UID)||"{}");}catch(e){return {};}
+}
+function markChatRead(activityId,count){
+  const reads=loadChatReads();reads[activityId]=count;
+  try{localStorage.setItem(CHAT_READ_KEY+UID,JSON.stringify(reads));}catch(e){}
+}
+function unreadChatsCount(){
+  const reads=loadChatReads();
+  return S.activities.filter(a=>isIn(a)&&a.status!=="annulée"&&(S.chatMsgCounts?.[a.id]||0)>(reads[a.id]||0)).length;
+}
 const NOTIF_KEY="cotea_notifs_";
 // Rapproche les centres d'intérêt du profil des catégories/sous-catégories d'activité.
 const ENVIE_MATCH={
