@@ -1755,7 +1755,7 @@ function vCreateStep1(){
     </div>
     <div class="field"><label>Nom de l'activité <span class="cnt" id="cnttitle">${draft.title.length}/60</span></label><input id="ntitle" maxlength="60" value="${esc(draft.title)}" placeholder="Ex. Sunset run sur la plage" oninput="draft.title=this.value;$('cnttitle').textContent=this.value.length+'/60'"></div>
     <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field"><label>Date</label><input type="date" min="${iso(daysFrom(0))}" max="${iso(EST.stayEnd)}" value="${draft.date}" onchange="draft.date=this.value"></div>
+      <div class="field"><label>Date</label><input type="date" min="${iso(daysFrom(0))}" value="${draft.date}" onchange="draft.date=this.value"></div>
       <div class="field"><label>Heure</label><input type="time" value="${draft.time}" onchange="draft.time=this.value"></div>
     </div>
     <div class="field"><label>Lieu de rendez-vous</label><input value="${esc(draft.lieu)}" placeholder="Ex. Réception du camping" oninput="draft.lieu=this.value"></div>
