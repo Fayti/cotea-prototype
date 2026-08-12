@@ -716,6 +716,7 @@ EST.joinUrl=()=>{
 /* ---------- Icônes SVG (outline, 24x24) ---------- */
 const IC={
   run:'<path d="M13 4a2 2 0 1 0 .1 0M6 20l4-6 3 2 1 5M8 12l3-3 4 2 3-1" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  logout:'<path d="M15 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8M18 15l3-3-3-3M10 12h11" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   boat:'<path d="M4 17h16l-2 3H6zM12 4v11M12 5c4 1 6 4 6 8M12 15H6c0-5 3-9 6-10z" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   sun:'<circle cx="12" cy="12" r="4.2" fill="none" stroke-width="1.8"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7" stroke-width="1.7" stroke-linecap="round"/>',
   dice:'<rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>',
@@ -1073,17 +1074,26 @@ async function chooseEstablishment(id,space){
   EST.id=est.id;EST.name=est.name;EST.place=est.place;EST.joinCode=est.join_code;
   hideGate();
   if(space==="dir"){
-    S.role="dir";
-    // Sans ligne dans `profiles`, la RLS masque toutes les données de l'établissement
-    // au directeur : son tableau de bord affichait 0 activité.
-    await ensureDirectorProfile();
-    await loadEstablishmentData();
-    await loadAds();
-    render();
-  }else{
-    S.role="voy";S.screen="landing";S.prefillCode=null;
-    render();
+    openModal(`
+      <h3>Espace Directeur</h3>
+      <p class="small muted" style="margin:6px 0 14px">Réservé à la direction de <b>${esc(EST.name)}</b>. Une fois confirmé, cet appareil restera identifié comme « directeur » pour cet établissement tant que vous ne vous déconnectez pas.</p>
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <button class="btn btn-outline" onclick="closeModal();renderGate()">Annuler</button>
+        <button class="btn btn-coral" onclick="closeModal();confirmDirectorAccess()">Continuer</button>
+      </div>`);
+    return;
   }
+  S.role="voy";S.screen="landing";S.prefillCode=null;
+  render();
+}
+async function confirmDirectorAccess(){
+  S.role="dir";
+  // Sans ligne dans `profiles`, la RLS masque toutes les données de l'établissement
+  // au directeur : son tableau de bord affichait 0 activité.
+  await ensureDirectorProfile();
+  await loadEstablishmentData();
+  await loadAds();
+  render();
 }
 async function ensureDirectorProfile(){
   const {data:prof}=await sb.from("profiles").select("id,name").eq("id",UID).maybeSingle();
@@ -2440,7 +2450,8 @@ function vProfile(){
       ${isAnon()?`
         <div class="info-banner o" style="align-items:flex-start;margin-bottom:12px"><span style="flex:1">${svg("info")} <b>Votre accès n'est lié à aucun identifiant.</b> Il est enregistré dans ce navigateur uniquement : si vous changez de téléphone, videz votre historique ou ouvrez le lien depuis WhatsApp, vous repartirez de zéro.</span></div>
         ${S.pendingEmail?`<p class="small muted" style="margin-bottom:10px">Un email de validation a été envoyé à <b>${esc(S.pendingEmail)}</b>. Cliquez sur le lien qu'il contient pour terminer.</p>`:""}
-        <button class="btn btn-coral" style="width:100%" onclick="openSecureAccount()">${svg("shield")} Enregistrer mes identifiants</button>
+        <button class="btn btn-coral" style="width:100%;margin-bottom:8px" onclick="openSecureAccount()">${svg("shield")} Enregistrer mes identifiants</button>
+        <button class="btn btn-outline" style="width:100%" onclick="confirmLogout()">Se déconnecter</button>
       `:`
         <div class="setline"><span style="flex:1">Connecté avec<br><b>${esc(S.authEmail)}</b></span><span class="icon-circle sm" style="background:var(--green-bg);color:var(--green)">${svg("check")}</span></div>
         <p class="small muted" style="margin:8px 0 10px">Vous pouvez vous reconnecter avec cette adresse depuis n'importe quel téléphone.</p>
@@ -2627,12 +2638,12 @@ function renderDash(){
         ${DASH_NAV.map(n=>`<button class="${S.dashPage===n.id?"on":""}" onclick="setDashPage('${n.id}')">${svg(n.icon)}${n.label}</button>`).join("")}
       </nav>
       <div class="shelp"><b>Besoin d'aide ?</b>Consultez notre centre d'aide ou contactez-nous.</div>
-      <div class="suser">${avatarEl("Paul Martin",36,'')}<div><b>Paul Martin</b><span>Directeur</span></div></div>
+      <button class="suser" style="width:100%;text-align:left;border:none;cursor:pointer" onclick="confirmLogout()">${avatarEl(S.user?.name||"Directeur",36,'')}<div><b>${esc(S.user?.name||"Directeur")}</b><span>Directeur · Se déconnecter</span></div></button>
     </aside>
     <header class="dash-mtop">
       <div class="mlogo">côté<span>a</span></div>
       <div class="mest"><b>${esc(EST.name)}</b><span>Espace directeur</span></div>
-      ${avatarEl("Paul Martin",30,'')}
+      <button class="iconbtn" onclick="confirmLogout()" aria-label="Se déconnecter" title="Se déconnecter">${svg("logout")}</button>
     </header>
     <main class="dash-main">${content}</main>
     ${dashMobileNav()}`;
