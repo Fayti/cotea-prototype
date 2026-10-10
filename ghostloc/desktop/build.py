@@ -28,6 +28,7 @@ def main() -> None:
         "--add-data", f"{HERE / 'ghostloc_desktop' / 'ui'}{SEP}ui",
         "--add-data", f"{CONFIG}{SEP}.",
         "--collect-all", "pymobiledevice3",
+        "--collect-all", "pytun_pmd3",  # embarque wintun.dll, chargé à l'import sous Windows
         # Plusieurs dépendances lisent leur propre version via importlib.metadata au chargement.
         "--recursive-copy-metadata", "pymobiledevice3",
         # Modules du CLI pymobiledevice3 sans rapport avec la localisation (vidéo, shell interactif).

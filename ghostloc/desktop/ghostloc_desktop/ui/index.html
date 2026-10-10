@@ -164,7 +164,7 @@ function toast(text, err) {
   clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 3800);
 }
 async function api(path, body) {
-  const r = await fetch(path, {method: body === undefined ? "GET" : "POST", headers: {"Content-Type": "application/json"}, body: body === undefined ? undefined : JSON.stringify(body)});
+  const r = await fetch(path, {method: body === undefined ? "GET" : "POST", headers: {"Content-Type": "application/json", "X-GhostLoc": "1"}, body: body === undefined ? undefined : JSON.stringify(body)});
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "Erreur " + r.status);
   return j;

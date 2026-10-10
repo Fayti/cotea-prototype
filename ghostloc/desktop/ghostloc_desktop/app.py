@@ -46,10 +46,17 @@ def build_app(controller: Controller, cfg: dict, port: int, key: str) -> FastAPI
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
-    async def lan_guard(request: Request, call_next):
+    async def guard(request: Request, call_next):
+        # Rebinding DNS : on n'accepte que les noms d'hôte attendus.
+        host_header = request.headers.get("host", "").rsplit(":", 1)[0].strip("[]")
+        if host_header not in LOOPBACK and host_header != lan_ip():
+            return JSONResponse({"error": "Hôte non autorisé."}, status_code=403)
+        # Un site web tiers ne peut pas ajouter cet en-tête sans autorisation CORS (que l'on ne donne pas).
+        if request.method != "GET" and request.headers.get("x-ghostloc") != "1":
+            return JSONResponse({"error": "Requête refusée."}, status_code=403)
         # Depuis un autre appareil (iPhone sur le Wi-Fi), il faut la clé affichée par l'app.
-        host = request.client.host if request.client else ""
-        if host not in LOOPBACK:
+        client = request.client.host if request.client else ""
+        if client not in LOOPBACK:
             supplied = request.query_params.get("k") or request.cookies.get("glk")
             if not supplied or not secrets.compare_digest(supplied, key):
                 return JSONResponse({"error": "Scanne le QR code affiché sur ton ordinateur."}, status_code=403)
