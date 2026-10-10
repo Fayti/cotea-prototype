@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Installation — GhostLoc</title>
+<meta name="description" content="Installer GhostLoc sur Windows ou Mac et relier ton iPhone en 10 minutes.">
+<meta name="theme-color" content="#0b0b0d">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23fffc00'/><text x='50' y='70' font-size='60' text-anchor='middle'>👻</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<style>
+main{padding:48px 0 80px}
+.guide{max-width:780px;margin:auto;display:flex;flex-direction:column;gap:18px}
+.step{display:grid;grid-template-columns:48px minmax(0,1fr);gap:16px}
+.step .n{width:44px;height:44px;border-radius:14px;background:var(--y);color:#000;font-weight:900;display:grid;place-items:center;font-size:20px}
+.step h3{font-size:20px;margin:6px 0 8px}
+.step p,.step li{color:var(--mut)}
+.step ol,.step ul{padding-left:20px;display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.step b{color:var(--txt)}
+.os{display:grid;grid-template-columns:1fr 1fr;background:var(--card);border-radius:999px;padding:4px;border:1px solid var(--line);max-width:360px;margin:0 auto 10px}
+.os button{background:none;border:0;color:var(--mut);padding:10px;border-radius:999px;font-weight:700}
+.os button.on{background:var(--y);color:#000}
+.need{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.need div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;font-size:14px;color:var(--mut)}
+.need b{display:block;color:var(--txt);font-size:15px;margin:6px 0 2px}
+.note{background:#fffc000f;border:1px solid #fffc0033;border-radius:14px;padding:12px 14px;font-size:14px;color:var(--txt);margin-top:10px}
+details{border-bottom:1px solid var(--line);padding:16px 0}summary{font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--y);font-size:22px;line-height:1}details[open] summary::after{content:"−"}
+details p,details li{color:var(--mut);margin-top:8px}
+@media(max-width:700px){.need{grid-template-columns:1fr 1fr}.step{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="./"><i>👻</i><span>Ghost<b>Loc</b></span></a>
+  <nav class="links"><a href="./#tarifs">Tarifs</a><a href="./#faq">FAQ</a></nav>
+  <a class="btn small" id="accountBtn" href="compte.html">Connexion</a>
+</div></header>
+
+<main class="wrap">
+  <span class="kicker">🛠️ Installation</span>
+  <h2>Prêt en <span>10 minutes</span>.</h2>
+  <p class="sub">Une seule fois. Ensuite tu changes de ville en un geste, depuis ton ordi ou ton iPhone.</p>
+
+  <div class="guide">
+    <div class="need">
+      <div>📱<b>iPhone</b>iOS 16 ou plus récent (17.4+ conseillé)</div>
+      <div>💻<b>Ordinateur</b>Windows 10/11 ou Mac (macOS 12+)</div>
+      <div>🔌<b>Câble USB</b>pour la première connexion</div>
+      <div>💳<b>Abonnement</b><a href="./#tarifs" style="color:var(--y)">Essentiel ou Illimité</a></div>
+    </div>
+
+    <div class="os" id="os"><button data-os="win" class="on">Windows</button><button data-os="mac">Mac</button></div>
+
+    <div class="card step"><div class="n">1</div><div>
+      <h3>Installe GhostLoc sur ton ordinateur</h3>
+      <ol data-for="win">
+        <li>Installe <b>Apple Devices</b> depuis le Microsoft Store (ou iTunes). Il fournit le pilote qui permet de parler à l'iPhone.</li>
+        <li><a id="dlWin" style="color:var(--y)">Télécharge GhostLoc pour Windows</a>, fais clic droit › <b>Extraire tout</b>.</li>
+        <li>Lance <b>GhostLoc.exe</b>. Si Windows affiche « Windows a protégé votre ordinateur », clique <b>Informations complémentaires › Exécuter quand même</b>.</li>
+        <li>Si le pare-feu demande l'accès, autorise les <b>réseaux privés</b> : c'est ce qui permet de piloter depuis ton iPhone.</li>
+      </ol>
+      <ol data-for="mac" class="hidden">
+        <li><a id="dlMac" style="color:var(--y)">Télécharge GhostLoc pour Mac</a> et double-clique sur le .zip.</li>
+        <li>Glisse <b>GhostLoc</b> dans le dossier Applications.</li>
+        <li>Première ouverture : clic droit (ou Ctrl + clic) sur GhostLoc › <b>Ouvrir</b> › <b>Ouvrir</b>. Si macOS bloque encore : Réglages Système › Confidentialité et sécurité › <b>Ouvrir quand même</b>.</li>
+        <li>Si macOS demande d'accepter les connexions entrantes, accepte : c'est ce qui permet de piloter depuis ton iPhone.</li>
+      </ol>
+      <p style="margin-top:10px">L'interface GhostLoc s'ouvre dans ton navigateur. Connecte-toi avec ton compte.</p>
+    </div></div>
+
+    <div class="card step"><div class="n">2</div><div>
+      <h3>Branche ton iPhone</h3>
+      <ol>
+        <li>Branche l'iPhone en USB et <b>déverrouille-le</b>.</li>
+        <li>Touche <b>« Se fier »</b> puis entre ton code.</li>
+        <li>GhostLoc affiche le nom de ton iPhone en haut de l'écran.</li>
+      </ol>
+    </div></div>
+
+    <div class="card step"><div class="n">3</div><div>
+      <h3>Active le mode développeur</h3>
+      <p>Obligatoire depuis iOS 16 pour que l'iPhone accepte une position simulée. Ça ne touche ni à tes données ni à ta garantie.</p>
+      <ol>
+        <li>Dans GhostLoc, touche <b>« Afficher l'option »</b>.</li>
+        <li>Sur l'iPhone : Réglages › Confidentialité et sécurité › <b>Mode développeur</b> › activer.</li>
+        <li>L'iPhone redémarre. Au réveil, touche <b>« Activer »</b> et entre ton code.</li>
+        <li>GhostLoc prépare l'iPhone automatiquement (jusqu'à 1 minute la première fois, Internet requis).</li>
+      </ol>
+    </div></div>
+
+    <div class="card step"><div class="n">4</div><div>
+      <h3>Choisis ta ville</h3>
+      <p>Touche une ville ou la carte, puis <b>« Me téléporter ici »</b>. Ouvre ta carte d'amis : ta nouvelle position s'affiche après quelques secondes. <b>« Revenir à ma vraie position »</b> annule tout.</p>
+      <div class="note">💡 Pour un rendu naturel, évite de passer de Paris à Tokyo en 2 minutes. Avec l'Illimité, utilise un trajet en avion.</div>
+    </div></div>
+
+    <div class="card step"><div class="n">5</div><div>
+      <h3>Pilote depuis ton iPhone</h3>
+      <ol>
+        <li>iPhone et ordinateur sur le <b>même Wi-Fi</b>.</li>
+        <li>Scanne le <b>QR code</b> affiché dans GhostLoc sur l'ordinateur.</li>
+        <li>Dans Safari : Partager › <b>« Sur l'écran d'accueil »</b>. GhostLoc s'ouvre ensuite comme une app.</li>
+      </ol>
+      <div class="note">L'ordinateur doit rester allumé avec GhostLoc ouvert et l'iPhone connecté : c'est lui qui transmet la position.</div>
+    </div></div>
+
+    <div class="card step"><div class="n">⚡</div><div>
+      <h3>Sans câble (expérimental)</h3>
+      <p>Après la première connexion en USB, coche <b>« Afficher cet iPhone en Wi-Fi »</b> dans Apple Devices (Windows) ou dans le Finder (Mac). GhostLoc utilise alors la connexion Wi-Fi quand le câble est débranché. Si ça ne marche pas avec ton iPhone, reste en USB.</p>
+    </div></div>
+
+    <h2 style="font-size:30px;margin-top:30px">Dépannage</h2>
+    <div>
+      <details><summary>« Service Apple introuvable »</summary><p>Sur Windows, installe Apple Devices (Microsoft Store) ou iTunes, puis relance GhostLoc. Sur Mac, redémarre l'ordinateur.</p></details>
+      <details><summary>GhostLoc ne voit pas mon iPhone</summary><ul><li>Essaie un autre câble ou un autre port USB (évite les hubs).</li><li>Déverrouille l'iPhone et accepte « Se fier ».</li><li>Si tu as refusé « Se fier » par erreur : Réglages › Général › Transférer ou réinitialiser › Réinitialiser › Réinitialiser localisation et confidentialité, puis rebranche.</li></ul></details>
+      <details><summary>Je ne trouve pas « Mode développeur »</summary><p>Garde l'iPhone branché et touche « Afficher l'option » dans GhostLoc : l'entrée apparaît tout en bas de Réglages › Confidentialité et sécurité.</p></details>
+      <details><summary>« iOS 17.0 à 17.3 non pris en charge »</summary><p>Mets ton iPhone à jour (Réglages › Général › Mise à jour logicielle). iOS 17.4 et plus récents sont pris en charge.</p></details>
+      <details><summary>Ma position ne change pas dans l'app</summary><ul><li>Vérifie d'abord dans Plans : si Plans affiche la nouvelle ville, l'iPhone est bien déplacé.</li><li>Ferme complètement l'app (balaye-la vers le haut) puis rouvre-la.</li><li>Les apps mettent parfois quelques minutes à rafraîchir la position de tes amis.</li></ul></details>
+      <details><summary>Comment retrouver ma vraie position ?</summary><p>Bouton « Revenir à ma vraie position ». Débrancher l'iPhone, fermer GhostLoc ou redémarrer l'iPhone rétablit aussi la vraie position.</p></details>
+      <details><summary>Le QR code ne s'ouvre pas sur mon iPhone</summary><p>Vérifie que les deux appareils sont sur le même Wi-Fi (pas un Wi-Fi invité) et que le pare-feu autorise GhostLoc sur les réseaux privés.</p></details>
+    </div>
+    <p class="mut" style="margin-top:10px">Toujours bloqué ? Écris-nous : <a data-support style="color:var(--y)"></a></p>
+  </div>
+</main>
+
+<footer class="bottom"><div class="wrap">
+  <p class="small">© <span data-year></span> GhostLoc · Non affilié à Snap Inc., Apple ou Life360.</p>
+  <nav><a href="legal.html#mentions">Mentions légales</a><a href="legal.html#cgv">CGV</a><a href="legal.html#confidentialite">Confidentialité</a></nav>
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+const setOs = (os) => {
+  document.querySelectorAll("#os button").forEach((b) => b.classList.toggle("on", b.dataset.os === os));
+  document.querySelectorAll("[data-for]").forEach((el) => el.classList.toggle("hidden", el.dataset.for !== os));
+};
+document.querySelectorAll("#os button").forEach((b) => b.onclick = () => setOs(b.dataset.os));
+if (/Mac/.test(navigator.platform)) setOs("mac");
+GL.config().then((c) => { const d = c.downloads || {}; document.getElementById("dlWin").href = d.windows || "#"; document.getElementById("dlMac").href = d.mac || "#"; });
+</script>
+</body>
+</html>

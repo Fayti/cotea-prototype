@@ -29,6 +29,10 @@ class LinkError(Exception):
         self.message = message
 
 
+def no_service_help() -> str:
+    return NO_SERVICE_HELP.get(sys.platform, NO_SERVICE_HELP["linux"])
+
+
 StatusCallback = Callable[[str, str], None]
 
 
@@ -47,13 +51,18 @@ class IPhoneLink:
     def ready(self) -> bool:
         return self._set is not None
 
-    async def attached_serials(self) -> list[str]:
+    @property
+    def key(self) -> Optional[str]:
+        return f"{self.serial}/{self.connection}" if self.serial else None
+
+    async def attached(self) -> Optional[list[str]]:
+        """Clés « numéro de série/transport » des iPhone visibles, None si le service Apple manque."""
         from pymobiledevice3 import usbmux
 
         try:
-            return [d.serial for d in await usbmux.list_devices()]
+            return [f"{d.serial}/{'USB' if d.is_usb else 'Wi-Fi'}" for d in await usbmux.list_devices()]
         except Exception:
-            return []
+            return None
 
     async def connect(self, on_status: StatusCallback) -> None:
         from pymobiledevice3 import usbmux
@@ -71,7 +80,7 @@ class IPhoneLink:
         try:
             devices = await usbmux.list_devices()
         except Exception as e:
-            raise LinkError("no_service", NO_SERVICE_HELP.get(sys.platform, NO_SERVICE_HELP["win32"])) from e
+            raise LinkError("no_service", no_service_help()) from e
         if not devices:
             raise LinkError("none", "Branche ton iPhone en USB et déverrouille-le.")
         device = sorted(devices, key=lambda d: not d.is_usb)[0]
@@ -176,8 +185,8 @@ class IPhoneLink:
 class DemoLink(IPhoneLink):
     """iPhone simulé pour essayer l'interface sans appareil (--demo)."""
 
-    async def attached_serials(self) -> list[str]:
-        return ["DEMO"]
+    async def attached(self) -> Optional[list[str]]:
+        return ["DEMO/USB"]
 
     async def connect(self, on_status: StatusCallback) -> None:
         on_status("preparing", "Préparation de l'iPhone de démonstration…")

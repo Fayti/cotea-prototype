@@ -78,51 +78,64 @@ def build_app(controller: Controller, cfg: dict, port: int, key: str) -> FastAPI
         }
         return snap
 
-    async def run(action):
+    async def run(make_action):
         try:
-            await action
+            await make_action()
         except UserError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
         return controller.snapshot()
 
+    def point(body: dict) -> tuple[float, float]:
+        try:
+            lat, lng = float(body["lat"]), float(body["lng"])
+        except (KeyError, TypeError, ValueError):
+            raise UserError("Coordonnées invalides.") from None
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            raise UserError("Coordonnées invalides.")
+        return lat, lng
+
+    def label(body: dict, default: str) -> str:
+        return str(body.get("name") or default).strip()[:80] or default
+
     @app.post("/api/login")
     async def login(body: dict):
-        return await run(controller.login(str(body.get("email", "")).strip(), str(body.get("password", ""))))
+        return await run(lambda: controller.login(str(body.get("email", "")).strip(), str(body.get("password", ""))))
 
     @app.post("/api/logout")
     async def logout():
-        return await run(controller.logout())
+        return await run(controller.logout)
 
     @app.post("/api/refresh")
     async def refresh():
-        return await run(controller.refresh_entitlement())
+        return await run(controller.refresh_entitlement)
 
     @app.post("/api/connect")
     async def connect():
-        return await run(controller.connect())
+        return await run(controller.connect)
 
     @app.post("/api/devmode")
     async def devmode():
-        return await run(controller.reveal_developer_mode())
+        return await run(controller.reveal_developer_mode)
 
     @app.post("/api/teleport")
     async def teleport(body: dict):
-        return await run(controller.teleport(float(body["lat"]), float(body["lng"]), str(body.get("name") or "Point choisi")[:80]))
+        return await run(lambda: controller.teleport(*point(body), label(body, "Point choisi")))
 
     @app.post("/api/route")
     async def route(body: dict):
-        return await run(controller.start_route(
-            float(body["lat"]), float(body["lng"]), str(body.get("name") or "Destination")[:80],
-            str(body.get("mode", "voiture")), body.get("speed"),
+        speed = body.get("speed")
+        return await run(lambda: controller.start_route(
+            *point(body), label(body, "Destination"), str(body.get("mode", "voiture")),
+            float(speed) if isinstance(speed, (int, float)) else None,
         ))
 
     @app.post("/api/route/stop")
     async def route_stop():
-        return await run(controller.stop_route())
+        return await run(controller.stop_route)
 
     @app.post("/api/home")
     async def home():
-        return await run(controller.go_home())
+        return await run(controller.go_home)
 
     return app
 

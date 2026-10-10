@@ -7,7 +7,7 @@ from typing import Optional
 
 from ghostloc_desktop import routes
 from ghostloc_desktop.account import Account, AccountError
-from ghostloc_desktop.device import IPhoneLink, LinkError
+from ghostloc_desktop.device import IPhoneLink, LinkError, no_service_help
 
 log = logging.getLogger(__name__)
 
@@ -116,16 +116,21 @@ class Controller:
         """Connexion automatique au branchement, nettoyage au débranchement."""
         last_attempt = 0.0
         while True:
-            serials = await self.link.attached_serials()
+            attached = await self.link.attached()
             status = self.device["status"]
-            if self.link.ready and self.link.serial not in serials:
+            if self.link.ready and (attached is None or self.link.key not in attached):
                 log.info("iPhone débranché")
                 await self._drop_session("iPhone débranché : position réelle rétablie.")
                 await self.link.close()
                 self._status("none", "Branche ton iPhone en USB et déverrouille-le.")
+            elif attached is None:
+                self._status("no_service", no_service_help())
+            elif not attached:
+                if not self.link.ready and status not in ("pairing", "preparing"):
+                    self._status("none", "Branche ton iPhone en USB et déverrouille-le.")
             elif not self.link.ready and status not in ("pairing", "preparing", "denied", "unsupported"):
                 # Nouvel essai rapide tant que l'utilisateur agit sur l'iPhone, plus espacé après une erreur.
-                delay = 20 if status in ("error", "no_service") else 3
+                delay = 20 if status == "error" else 3
                 if time.monotonic() - last_attempt >= delay:
                     last_attempt = time.monotonic()
                     await self.connect()

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mon compte — GhostLoc</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b0b0d">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23fffc00'/><text x='50' y='70' font-size='60' text-anchor='middle'>👻</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<style>
+main{padding:40px 0 80px}
+.auth{max-width:420px;margin:30px auto;display:flex;flex-direction:column;gap:14px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:999px;padding:4px;border:1px solid var(--line)}
+.tabs button{background:none;border:0;color:var(--mut);padding:10px;border-radius:999px;font-weight:700}
+.tabs button.on{background:var(--y);color:#000}
+.auth form{display:flex;flex-direction:column;gap:12px}
+.linkbtn{background:none;border:0;color:var(--mut);text-decoration:underline;font-size:14px;align-self:center}
+.dash{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;align-items:start}
+.dash .card{display:flex;flex-direction:column;gap:14px}
+.hello{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.hello h1{font-size:clamp(28px,5vw,40px);letter-spacing:-1px}
+.planname{font-size:30px;font-weight:900}
+.badge{display:inline-block;font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;vertical-align:middle;margin-left:8px}
+.badge.ok{background:#5be08a22;color:var(--green)}.badge.warn{background:#fffc0022;color:var(--y)}.badge.bad{background:#ff6b6b22;color:var(--red)}
+.meter{height:12px;background:var(--bg);border-radius:9px;overflow:hidden}.meter i{display:block;height:100%;background:var(--y);transition:width .6s}
+.big{font-size:38px;font-weight:900;line-height:1}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row .btn{flex:1 1 180px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;padding:9px 4px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:600}
+.dl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:860px){.dash{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="./"><i>👻</i><span>Ghost<b>Loc</b></span></a>
+  <nav class="links"><a href="./#tarifs">Tarifs</a><a href="installation.html">Installation</a><a href="./#faq">FAQ</a></nav>
+  <a class="btn small sec" href="./">← Accueil</a>
+</div></header>
+
+<main class="wrap">
+  <div class="card hidden" id="notConfigured" style="max-width:560px;margin:auto">
+    <h3>Site pas encore relié au serveur</h3>
+    <p class="mut">Renseigne <code>supabaseUrl</code> et <code>supabaseAnonKey</code> dans <code>config.json</code> (voir le README).</p>
+  </div>
+
+  <!-- Connexion / inscription -->
+  <div class="card auth hidden" id="authCard">
+    <h2 style="font-size:28px" id="authTitle">Ton compte GhostLoc</h2>
+    <p class="mut small hidden" id="planHint" style="text-align:center"></p>
+    <div class="tabs" id="tabs"><button class="on" data-t="login">Connexion</button><button data-t="signup">Créer un compte</button></div>
+    <form id="authForm">
+      <div><label for="email">E-mail</label><input type="email" id="email" autocomplete="email" required></div>
+      <div id="pwBox"><label for="password">Mot de passe</label><input type="password" id="password" autocomplete="current-password" required></div>
+      <label class="small hidden" id="cgvBox" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="cgv" style="width:auto;margin-top:3px"> <span>J'accepte les <a href="legal.html#cgv" target="_blank" style="color:var(--y)">CGV</a> et la <a href="legal.html#confidentialite" target="_blank" style="color:var(--y)">politique de confidentialité</a>.</span></label>
+      <button class="btn block" type="submit" id="authBtn">Se connecter</button>
+    </form>
+    <button class="linkbtn" id="forgotBtn">Mot de passe oublié ?</button>
+  </div>
+
+  <!-- Nouveau mot de passe (lien de réinitialisation) -->
+  <div class="card auth hidden" id="resetCard">
+    <h2 style="font-size:28px">Nouveau mot de passe</h2>
+    <form id="resetForm"><input type="password" id="newPassword" minlength="8" placeholder="8 caractères minimum" autocomplete="new-password" required><button class="btn block" type="submit">Enregistrer</button></form>
+  </div>
+
+  <!-- Tableau de bord -->
+  <div class="hidden" id="dashboard">
+    <div class="hello"><h1>Salut 👋 <span class="mut" style="font-size:.5em;font-weight:600" id="who"></span></h1><button class="btn small sec" id="logoutBtn">Déconnexion</button></div>
+    <div class="dash">
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="card" id="subCard">
+          <span class="mut small">Ma formule</span>
+          <div><span class="planname" id="planName">—</span><span class="badge" id="planBadge"></span></div>
+          <p class="mut small" id="planPeriod"></p>
+          <div id="usageBox" class="hidden">
+            <div class="row" style="justify-content:space-between;align-items:flex-end"><div><span class="mut small">Restant ce mois-ci</span><div class="big" id="remaining">—</div></div><span class="mut small" id="usedTxt"></span></div>
+            <div class="meter" style="margin-top:10px"><i id="meter"></i></div>
+          </div>
+          <div class="row" id="subActions"></div>
+          <div id="packsBox" class="hidden">
+            <span class="mut small">Ajouter des heures (valables jusqu'à la fin du mois d'abonnement)</span>
+            <div class="row" style="margin-top:8px"><button class="btn sec" data-item="pack10">+10 h · 2,99 €</button><button class="btn sec" data-item="pack25">+25 h · 5,99 €</button></div>
+          </div>
+        </div>
+
+        <div class="card hidden" id="choosePlan">
+          <h3>Choisis ta formule</h3>
+          <div class="prices" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+            <div class="card price" style="padding:20px"><h3>Essentiel</h3><div class="amt" style="font-size:34px">9,99 € <small>/mois</small></div><ul><li>48 h de position par mois</li><li>Packs d'heures en option</li></ul><button class="btn sec block" data-item="essentiel">Choisir</button></div>
+            <div class="card price hot" style="padding:20px"><span class="tag">Le plus complet</span><h3>Illimité</h3><div class="amt" style="font-size:34px">29,99 € <small>/mois</small></div><ul><li>Sans limite d'heures</li><li>Trajets A → B</li></ul><button class="btn block" data-item="illimite">Choisir</button></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Dernières utilisations</h3>
+          <table><thead><tr><th>Appareil</th><th>Début</th><th>Durée</th></tr></thead><tbody id="sessions"><tr><td colspan="3" class="mut">Aucune pour l'instant.</td></tr></tbody></table>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="card">
+          <h3>⬇️ Télécharger GhostLoc</h3>
+          <p class="mut small">L'app pour ordinateur relie ton compte à ton iPhone. Connecte-toi dedans avec le même e-mail.</p>
+          <div class="dl"><a class="btn" id="dlWin">Windows</a><a class="btn sec" id="dlMac">macOS</a></div>
+          <a href="installation.html" class="mut small" style="text-decoration:underline">Guide d'installation pas à pas ›</a>
+        </div>
+        <div class="card">
+          <h3>Besoin d'aide ?</h3>
+          <p class="mut small">Écris-nous à <a data-support style="color:var(--y)"></a>. Abonnés Illimité : réponse prioritaire.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="bottom"><div class="wrap">
+  <p class="small">© <span data-year></span> GhostLoc · Non affilié à Snap Inc., Apple ou Life360.</p>
+  <nav><a href="legal.html#mentions">Mentions légales</a><a href="legal.html#cgv">CGV</a><a href="legal.html#confidentialite">Confidentialité</a><a href="legal.html#retractation">Rétractation</a></nav>
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const PLAN_LABEL = {essentiel: "Essentiel", illimite: "Illimité"};
+const STATUS = {active: ["Actif", "ok"], trialing: ["Essai", "ok"], past_due: ["Paiement en retard", "warn"], canceled: ["Résilié", "bad"], unpaid: ["Impayé", "bad"], incomplete: ["Paiement incomplet", "warn"], incomplete_expired: ["Expiré", "bad"]};
+const AUTH_ERRORS = {
+  "Invalid login credentials": "E-mail ou mot de passe incorrect.",
+  "Email not confirmed": "Confirme d'abord ton e-mail (lien reçu à l'inscription).",
+  "User already registered": "Un compte existe déjà avec cet e-mail : connecte-toi.",
+};
+let mode = "login", sb = null;
+
+const hours = (s) => { const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h + " h " + String(m).padStart(2, "0"); };
+const date = (iso) => new Date(iso).toLocaleDateString("fr-FR", {day: "numeric", month: "long", year: "numeric"});
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === m));
+  $("tabs").classList.toggle("hidden", m === "forgot");
+  $("pwBox").classList.toggle("hidden", m === "forgot");
+  $("password").required = m !== "forgot";
+  $("password").autocomplete = m === "signup" ? "new-password" : "current-password";
+  if (m === "signup") $("password").minLength = 8; else $("password").removeAttribute("minlength");
+  $("cgvBox").classList.toggle("hidden", m !== "signup");
+  $("authBtn").textContent = {login: "Se connecter", signup: "Créer mon compte", forgot: "Recevoir le lien"}[m];
+  $("forgotBtn").textContent = m === "forgot" ? "← Retour à la connexion" : "Mot de passe oublié ?";
+}
+document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => setMode(b.dataset.t));
+$("forgotBtn").onclick = () => setMode(mode === "forgot" ? "login" : "forgot");
+
+$("authForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const email = $("email").value.trim(), password = $("password").value, btn = $("authBtn");
+  if (mode === "signup" && !$("cgv").checked) return GL.toast("Accepte les CGV pour continuer.", true);
+  btn.disabled = true;
+  try {
+    const back = location.origin + location.pathname + (params.get("plan") ? "?plan=" + params.get("plan") : "");
+    if (mode === "login") {
+      const {error} = await sb.auth.signInWithPassword({email, password}); if (error) throw error;
+    } else if (mode === "signup") {
+      const {data, error} = await sb.auth.signUp({email, password, options: {emailRedirectTo: back}}); if (error) throw error;
+      if (!data.session) { GL.toast("📩 Vérifie ta boîte mail pour confirmer ton compte."); return; }
+    } else {
+      const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname}); if (error) throw error;
+      GL.toast("📩 Lien envoyé si un compte existe pour cet e-mail."); setMode("login"); return;
+    }
+  } catch (err) { GL.toast(AUTH_ERRORS[err.message] || err.message, true); }
+  finally { btn.disabled = false; }
+};
+
+$("resetForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const {error} = await sb.auth.updateUser({password: $("newPassword").value});
+  if (error) return GL.toast(error.message, true);
+  GL.toast("Mot de passe modifié ✅"); $("resetCard").classList.add("hidden"); render();
+};
+$("logoutBtn").onclick = async () => { await sb.auth.signOut(); location.href = "compte.html"; };
+
+async function portal(btn) {
+  btn.disabled = true;
+  const {data, error} = await sb.functions.invoke("gl-portal", {body: {returnUrl: location.origin + location.pathname}});
+  btn.disabled = false;
+  if (error || !data.url) return GL.toast("Portail de paiement indisponible, réessaie.", true);
+  location.href = data.url;
+}
+function actionButton(label, cls, onclick) {
+  const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = () => onclick(b); return b;
+}
+
+async function loadEntitlement() {
+  const {data, error} = await sb.rpc("gl_entitlement");
+  if (error) throw error;
+  return data;
+}
+
+async function render() {
+  const user = await GL.user();
+  $("authCard").classList.toggle("hidden", !!user);
+  $("dashboard").classList.toggle("hidden", !user);
+  if (!user) {
+    const plan = params.get("plan");
+    if (plan && PLAN_LABEL[plan]) { $("planHint").textContent = "Crée ton compte ou connecte-toi pour finaliser l'abonnement " + PLAN_LABEL[plan] + "."; $("planHint").classList.remove("hidden"); setMode("signup"); }
+    return;
+  }
+  $("who").textContent = user.email;
+
+  let ent;
+  try { ent = await loadEntitlement(); } catch (e) { GL.toast("Impossible de charger ton abonnement.", true); return; }
+  const active = ent.active;
+  $("choosePlan").classList.toggle("hidden", active);
+  $("planName").textContent = ent.plan ? PLAN_LABEL[ent.plan] : "Aucune formule";
+  const st = STATUS[ent.status] || (ent.plan ? [ent.status, "warn"] : ["Inactif", "bad"]);
+  $("planBadge").textContent = active ? (ent.cancel_at_period_end ? "Résiliation programmée" : st[0]) : (ent.plan ? st[0] : "");
+  $("planBadge").className = "badge " + (active ? (ent.cancel_at_period_end ? "warn" : st[1]) : "bad");
+  $("planBadge").classList.toggle("hidden", !$("planBadge").textContent);
+  $("planPeriod").textContent = !ent.plan ? "Choisis une formule pour activer GhostLoc." :
+    active ? (ent.cancel_at_period_end ? "Accès jusqu'au " : "Renouvellement le ") + date(ent.period_end) : "Abonnement inactif depuis le " + date(ent.period_end) + ".";
+
+  const essentiel = active && ent.plan === "essentiel";
+  $("usageBox").classList.toggle("hidden", !active);
+  if (active) {
+    if (ent.plan === "illimite") {
+      $("remaining").textContent = "♾️ Illimité"; $("usedTxt").textContent = hours(ent.used_seconds) + " utilisées ce mois-ci"; $("meter").style.width = "100%";
+    } else {
+      const total = ent.quota_seconds + ent.pack_seconds;
+      $("remaining").textContent = hours(ent.remaining_seconds);
+      $("usedTxt").textContent = hours(ent.used_seconds) + " / " + hours(total) + (ent.pack_seconds ? " (dont " + hours(ent.pack_seconds) + " de packs)" : "");
+      $("meter").style.width = Math.max(0, Math.min(100, 100 * ent.remaining_seconds / Math.max(total, 1))) + "%";
+    }
+  }
+  $("packsBox").classList.toggle("hidden", !essentiel);
+
+  const actions = $("subActions"); actions.innerHTML = "";
+  if (active && ent.plan === "essentiel") actions.appendChild(actionButton("Passer à l'Illimité", "", (b) => GL.checkout("illimite", b)));
+  if (active && ent.plan === "illimite") actions.appendChild(actionButton("Passer à l'Essentiel", "sec", (b) => confirm("Passer à l'Essentiel (48 h/mois) ? Le changement est calculé au prorata.") && GL.checkout("essentiel", b)));
+  if (ent.plan) actions.appendChild(actionButton(active ? "Gérer / résilier" : "Factures et paiement", "sec", portal));
+
+  const {data: rows} = await sb.from("gl_sessions").select("device,started_at,seconds,ended_at").order("started_at", {ascending: false}).limit(10);
+  if (rows && rows.length) {
+    $("sessions").innerHTML = "";
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      [r.device, new Date(r.started_at).toLocaleString("fr-FR", {dateStyle: "short", timeStyle: "short"}), (r.ended_at ? "" : "🟢 ") + (r.seconds >= 3600 ? hours(r.seconds) : Math.max(1, Math.round(r.seconds / 60)) + " min")]
+        .forEach((v) => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); });
+      $("sessions").appendChild(tr);
+    });
+  }
+  return ent;
+}
+
+document.querySelectorAll("[data-item]").forEach((b) => b.onclick = () => GL.checkout(b.dataset.item, b));
+
+(async () => {
+  const cfg = await GL.config();
+  $("dlWin").href = (cfg.downloads || {}).windows || "#"; $("dlMac").href = (cfg.downloads || {}).mac || "#";
+  sb = await GL.sb();
+  if (!sb) { $("notConfigured").classList.remove("hidden"); return; }
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") { $("authCard").classList.add("hidden"); $("dashboard").classList.add("hidden"); $("resetCard").classList.remove("hidden"); }
+    else if (event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(afterAuth, 0);
+  });
+  await afterAuth();
+})();
+
+let started = false;
+async function afterAuth() {
+  if (!$("resetCard").classList.contains("hidden")) return;
+  const ent = await render();
+  if (started || !ent) return;
+  started = true;
+  const pay = params.get("paiement");
+  if (pay === "annule") GL.toast("Paiement annulé.", true);
+  if (pay === "ok") {
+    GL.toast("✅ Paiement reçu, activation en cours…");
+    // Le webhook Stripe arrive en général en quelques secondes.
+    const before = JSON.stringify([ent.plan, ent.status, ent.pack_seconds]);
+    let now = ent;
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      now = (await render()) || now;
+      if (JSON.stringify([now.plan, now.status, now.pack_seconds]) !== before) break;
+    }
+    if (now.active) GL.toast("🎉 C'est activé ! Ouvre l'app GhostLoc sur ton ordi.");
+    else GL.toast("Activation plus longue que prévu : recharge la page dans une minute.", true);
+    history.replaceState(null, "", location.pathname);
+  }
+  const plan = params.get("plan");
+  if (plan && PLAN_LABEL[plan] && !ent.active) { history.replaceState(null, "", location.pathname); GL.checkout(plan); }
+}
+</script>
+</body>
+</html>
