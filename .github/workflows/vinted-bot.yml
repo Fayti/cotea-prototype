@@ -82,16 +82,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          path: assets
+          path: release-files
           merge-multiple: true
       - name: Publier en téléchargement direct
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp vinted-bot/install-mac.sh assets/
-          ls -la assets
+          cp vinted-bot/install-mac.sh release-files/
+          ls -la release-files
           gh release delete vinted-bot-latest --cleanup-tag --yes || true
-          gh release create vinted-bot-latest assets/* \
+          gh release create vinted-bot-latest release-files/* \
             --target "$GITHUB_SHA" --prerelease \
             --title "VintedBot (Windows et Mac)" \
             --notes "Windows : télécharge VintedBot.exe puis double-clique dessus.
