@@ -6,6 +6,9 @@
 <title>GhostLoc — Change ta localisation sur iPhone</title>
 <meta name="description" content="Choisis une ville, ton iPhone s'y retrouve en quelques secondes. Ta nouvelle position apparaît sur ta carte d'amis, dans Plans ou Life360. Retour à ta vraie position en un geste.">
 <meta name="theme-color" content="#0b0b0d">
+<meta property="og:title" content="GhostLoc — Apparais où tu veux">
+<meta property="og:description" content="Choisis une ville, ton iPhone s'y retrouve en quelques secondes. Retour à ta vraie position en un geste.">
+<meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23fffc00'/><text x='50' y='70' font-size='60' text-anchor='middle'>👻</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -194,7 +197,7 @@ details p{color:var(--mut);margin-top:10px}
 <div class="modal hidden" id="goModal" role="dialog" aria-modal="true">
   <div class="card">
     <h3>👻 Aller à <span id="goName" style="color:var(--y)"></span></h3>
-    <p class="mut small">La position est envoyée par l'app GhostLoc installée sur ton ordinateur.</p>
+    <p class="mut small" id="goHint">La position est envoyée par l'app GhostLoc installée sur ton ordinateur.</p>
     <a class="btn block" id="goApp" target="_blank" rel="noopener">Ouvrir dans l'app GhostLoc</a>
     <a class="btn sec block" href="#tarifs" id="goPlans">Pas encore client ? Voir les formules</a>
     <button class="btn sec block" id="goClose">Fermer</button>
@@ -227,6 +230,9 @@ map.on("click",e=>pick("Point choisi",e.latlng.lat,e.latlng.lng));
 $("goBtn").onclick=()=>{if(!cur)return;
   mini.flyTo([cur.lat,cur.lng],12,{duration:2});$("minitag").textContent=cur.name;$("ministat").textContent=cur.name;
   $("goName").textContent=cur.name;$("goApp").href="http://127.0.0.1:8765/?go="+cur.lat.toFixed(6)+","+cur.lng.toFixed(6)+","+encodeURIComponent(cur.name);
+  const touch=matchMedia("(pointer:coarse)").matches;
+  $("goApp").classList.toggle("hidden",touch);
+  $("goHint").textContent=touch?"Sur iPhone, ouvre GhostLoc depuis ton écran d'accueil (QR code affiché par l'app sur ton ordinateur), puis choisis "+cur.name+".":"La position est envoyée par l'app GhostLoc installée sur ton ordinateur (elle doit être ouverte).";
   $("goModal").classList.remove("hidden")};
 $("goClose").onclick=$("goPlans").onclick=()=>$("goModal").classList.add("hidden");
 $("goModal").onclick=e=>{if(e.target.id==="goModal")$("goModal").classList.add("hidden")};

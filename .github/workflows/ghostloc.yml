@@ -37,9 +37,12 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.1.4
-      - name: Fonctions Stripe (vérification des types)
+      - name: Fonctions Stripe (types, lint, test du webhook)
         working-directory: ghostloc/supabase/functions
-        run: deno check gl-checkout/index.ts gl-portal/index.ts gl-stripe-webhook/index.ts
+        run: |
+          deno check gl-checkout/index.ts gl-portal/index.ts gl-stripe-webhook/index.ts
+          deno lint
+          deno test --allow-env --allow-net gl-stripe-webhook/handler.test.ts
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
