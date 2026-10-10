@@ -1,1 +1,2 @@
 curl_cffi>=0.7
+aiohttp>=3.9

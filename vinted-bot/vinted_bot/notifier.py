@@ -113,3 +113,41 @@ class DiscordNotifier:
 
     async def close(self) -> None:
         await self.http.close()
+
+
+def build_notifiers(cfg) -> list:
+    notifiers = []
+    if cfg.console:
+        notifiers.append(ConsoleNotifier())
+    if cfg.telegram_token and cfg.telegram_chat_id:
+        notifiers.append(TelegramNotifier(cfg.telegram_token, cfg.telegram_chat_id))
+    if cfg.discord_webhook:
+        notifiers.append(DiscordNotifier(cfg.discord_webhook))
+    return notifiers
+
+
+def sample_alert() -> tuple[Item, Deal]:
+    item = Item(
+        id=1, title="Test — Nike Air Max 90", price=25.0, currency="EUR", total_price=27.95,
+        brand="Nike", size="42", status="Très bon état", url="https://www.vinted.fr/",
+        photo_url="", seller="vinted_bot", created_ts=None, favourites=0,
+    )
+    return item, Deal(median=45.0, discount=1 - 25 / 45, is_deal=True)
+
+
+async def telegram_detect(token: str) -> tuple[str, str | None]:
+    """Renvoie (nom du bot, chat_id du dernier message reçu par le bot ou None)."""
+    token = token.strip()
+    async with AsyncSession(timeout=10) as http:
+        me = await http.get(f"https://api.telegram.org/bot{token}/getMe")
+        if me.status_code != 200:
+            raise ValueError("Token Telegram invalide : recopie-le depuis le message de @BotFather")
+        username = me.json()["result"]["username"]
+        updates = await http.get(f"https://api.telegram.org/bot{token}/getUpdates")
+        chat_id = None
+        if updates.status_code == 200:
+            for update in updates.json().get("result", []):
+                message = update.get("message") or update.get("my_chat_member") or {}
+                if chat := message.get("chat"):
+                    chat_id = str(chat["id"])
+        return username, chat_id

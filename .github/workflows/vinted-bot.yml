@@ -1,0 +1,68 @@
+name: VintedBot
+
+on:
+  push:
+    branches: [claude/busy-archimedes-xdeifv, main]
+    paths: ["vinted-bot/**", ".github/workflows/vinted-bot.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vinted-bot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vinted-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q tests
+      - name: Sonde du vrai Vinted (informative)
+        continue-on-error: true
+        run: python scripts/probe_vinted.py
+
+  windows-exe:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: vinted-bot
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pyinstaller
+      - name: Construire VintedBot.exe
+        run: >
+          pyinstaller --noconfirm --onefile --name VintedBot --console
+          --collect-all curl_cffi --add-data "vinted_bot/web;vinted_bot/web" launcher.py
+      - name: Autotest de l'exécutable
+        run: ./dist/VintedBot.exe selftest
+      - name: Sonde du vrai Vinted depuis Windows (informative)
+        continue-on-error: true
+        run: python scripts/probe_vinted.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VintedBot-windows
+          path: vinted-bot/dist/VintedBot.exe
+      - name: Publier en téléchargement direct
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete vinted-bot-latest --cleanup-tag --yes || true
+          gh release create vinted-bot-latest dist/VintedBot.exe \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "VintedBot (Windows)" \
+            --notes "Télécharge VintedBot.exe puis double-clique dessus. Construit depuis ${GITHUB_SHA::7}."

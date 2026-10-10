@@ -32,51 +32,55 @@ contre la médiane des prix récents de la même recherche.
 - **Telegram** : `sendMessage` avec la photo en aperçu. Ce message part plus vite qu'un
   `sendPhoto`, qui oblige Telegram à télécharger l'image d'abord.
 
-## Installation
+## Installation (Windows, sans rien installer)
+
+1. Télécharge **VintedBot.exe** :
+   https://github.com/Fayti/cotea-prototype/releases/download/vinted-bot-latest/VintedBot.exe
+2. Double-clique dessus. Windows peut afficher « Windows a protégé votre ordinateur » : le
+   fichier n'est pas signé (une signature coûte plusieurs centaines d'euros par an). Clique
+   sur « Informations complémentaires », puis « Exécuter quand même ».
+3. Une fenêtre noire s'ouvre (laisse-la ouverte : la fermer arrête le bot) et l'interface
+   s'affiche dans ton navigateur à l'adresse http://127.0.0.1:8765.
+4. Dans l'interface : **Recherches → Ajouter**, colle le lien d'une recherche Vinted, puis
+   **Réglages → Telegram** pour recevoir les alertes sur ton téléphone.
+
+Les réglages et l'historique sont enregistrés dans le dossier `VintedBot` de ton dossier
+utilisateur. Relancer le .exe reprend là où le bot s'était arrêté.
+
+L'exécutable est construit et testé automatiquement par GitHub Actions
+(`.github/workflows/vinted-bot.yml`) à chaque modification du dossier `vinted-bot/`.
+
+## Depuis le code source (Linux, macOS, Windows)
 
 ```bash
 cd vinted-bot
 python3 -m venv .venv && source .venv/bin/activate   # Python ≥ 3.11
 pip install -r requirements.txt
-cp config.example.toml config.toml
+python -m vinted_bot              # interface dans le navigateur
 ```
 
-### Alertes Telegram (recommandé : notification push sur le téléphone)
+Mode ligne de commande, sans interface, avec un fichier de configuration :
 
-1. Sur Telegram, écrire à `@BotFather`, envoyer `/newbot` et récupérer le **token**.
-2. Envoyer un message quelconque à votre nouveau bot.
-3. Ouvrir `https://api.telegram.org/bot<TOKEN>/getUpdates` et noter `"chat":{"id": ...}`.
-4. Renseigner `[telegram]` dans `config.toml`, ou les variables `TELEGRAM_TOKEN` et
-   `TELEGRAM_CHAT_ID`.
+```bash
+cp config.example.toml config.toml   # puis éditer
+python -m vinted_bot check -c config.toml        # une requête par recherche : vérifie l'accès et les filtres
+python -m vinted_bot test-notify -c config.toml  # alerte factice sur chaque canal
+python -m vinted_bot run -c config.toml          # surveillance continue
+python -m pytest -q tests                        # tests
+python scripts/probe_vinted.py                   # sonde le vrai Vinted (accès, format, latence)
+```
 
-Pour Discord : Paramètres du salon → Intégrations → Webhooks → copier l'URL dans `[discord]`.
-
-### Définir les recherches
-
-Faites la recherche sur vinted.fr avec tous vos filtres (catégorie, marque, taille, état,
-prix), puis copiez l'URL de la page dans `url` d'une section `[[search]]`. Les filtres de
-l'URL sont appliqués côté serveur. Les filtres locaux viennent en plus :
+Dans `config.toml`, la section `[[search]]` accepte :
 
 | Clé | Effet |
 |---|---|
+| `url` | lien de recherche copié depuis vinted.fr (filtres appliqués côté serveur) |
 | `exclude` | rejette si le titre contient un mot commençant ainsi (accents ignorés) |
 | `include_any` | exige au moins un de ces mots dans le titre |
 | `max_price` / `min_price` | bornes de prix (`max_price` est aussi envoyé à l'API) |
 | `exclude_sellers` | logins ignorés |
 | `only_deals` | n'alerte que les annonces sous le seuil de médiane |
 | `weight` | fréquence relative de passage (2 = deux fois plus souvent) |
-
-## Utilisation
-
-```bash
-python -m vinted_bot check -c config.toml        # une requête par recherche : vérifie l'accès et les filtres
-python -m vinted_bot test-notify -c config.toml  # envoie une alerte factice sur chaque canal
-python -m vinted_bot run -c config.toml          # surveillance continue (Ctrl+C pour arrêter)
-python -m pytest -q tests                        # tests
-```
-
-Pour tourner 24 h/24, utiliser une machine allumée en permanence (Raspberry Pi, VPS) et un
-service systemd ou `tmux`.
 
 ## Réglage de la vitesse
 

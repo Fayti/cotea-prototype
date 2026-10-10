@@ -168,6 +168,22 @@ def test_restart_does_not_rewarm(tmp_path):
     assert len(rec2.sent) == 1
 
 
+def test_item_matching_two_searches_alerts_once(tmp_path):
+    a, b = Search(name="a"), Search(name="b")
+    cfg = Config(searches=[a, b], deal_min_samples=3)
+    fake, rec = FakeClient(), Recorder()
+    mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [rec], client_factory=lambda d: fake)
+
+    async def scenario():
+        fake.pages = [[raw_item(1)], [raw_item(1)], [raw_item(2), raw_item(1)], [raw_item(2), raw_item(1)]]
+        for s in (a, b, a, b):
+            await mon.poll(s)
+        await asyncio.sleep(0)
+
+    asyncio.run(scenario())
+    assert [item.id for item, _ in rec.sent] == [2]
+
+
 # --- client HTTP (serveur local) -------------------------------------------
 
 class FakeVinted(BaseHTTPRequestHandler):

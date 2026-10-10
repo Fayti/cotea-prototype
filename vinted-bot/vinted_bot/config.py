@@ -1,6 +1,7 @@
-"""Chargement de la configuration (TOML, bibliothèque standard)."""
+"""Chargement de la configuration (TOML pour la ligne de commande, JSON pour l'interface)."""
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from dataclasses import dataclass, field
@@ -50,6 +51,10 @@ class Search:
     exclude_sellers: list[str] = field(default_factory=list)
     only_deals: bool = False
     weight: int = 1
+    key: str = ""  # identifiant stable pour la base (filigrane, prix) ; le nom par défaut
+
+    def __post_init__(self):
+        self.key = self.key or self.name
 
     def api_params(self, per_page: int) -> dict[str, str]:
         p = dict(self.params)
@@ -107,21 +112,26 @@ def _build_search(raw: dict) -> Search:
         exclude_sellers=[s.lower() for s in raw.get("exclude_sellers", [])],
         only_deals=bool(raw.get("only_deals", False)),
         weight=max(1, int(raw.get("weight", 1))),
+        key=str(raw.get("id") or ""),
     )
 
 
 def load_config(path: str) -> Config:
     with open(path, "rb") as f:
-        raw = tomllib.load(f)
+        raw = json.load(f) if path.endswith(".json") else tomllib.load(f)
+    return config_from_dict(raw)
+
+
+def config_from_dict(raw: dict, require_searches: bool = True) -> Config:
     general = raw.get("general", {})
     deals = raw.get("deals", {})
     telegram = raw.get("telegram", {})
     discord = raw.get("discord", {})
-    searches = [_build_search(s) for s in raw.get("search", [])]
-    if not searches:
+    searches = [_build_search(s) for s in raw.get("search", []) if s.get("enabled", True)]
+    if require_searches and not searches:
         raise ValueError("Aucune recherche [[search]] définie dans la configuration")
-    names = [s.name for s in searches]
-    if len(names) != len(set(names)):
+    keys = [s.key for s in searches]
+    if len(keys) != len(set(keys)):
         raise ValueError("Les noms de recherche doivent être uniques")
     return Config(
         searches=searches,

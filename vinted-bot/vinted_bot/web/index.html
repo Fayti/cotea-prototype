@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VintedBot</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
+<style>
+:root {
+  --bg: #f6f7f8; --surface: #ffffff; --surface-2: #f0f2f4; --text: #15191e; --muted: #5f6b77;
+  --border: #e1e5e9; --accent: #0a8f97; --accent-ink: #ffffff; --accent-soft: #e0f4f5;
+  --hot: #e8590c; --hot-soft: #fff0e6; --ok: #2b8a3e; --warn: #c27c0e; --err: #c92a2a;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1215; --surface: #171b20; --surface-2: #1f252b; --text: #e8ecef; --muted: #98a4af;
+    --border: #2a3138; --accent: #19b3bc; --accent-ink: #061314; --accent-soft: #10343a;
+    --hot: #ff8a3d; --hot-soft: #3a2214; --ok: #51cf66; --warn: #fcc419; --err: #ff6b6b;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+
+/* barre du haut */
+header { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--border); }
+.top { display: flex; align-items: center; gap: 14px; padding: 12px 0; flex-wrap: wrap; }
+.brand { font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px;
+  font-size: 13px; font-weight: 600; background: var(--surface-2); color: var(--muted); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.on { background: var(--accent-soft); color: var(--accent); }
+.pill.on .dot { animation: pulse 1.6s infinite; }
+.pill.warn { background: var(--hot-soft); color: var(--hot); }
+@keyframes pulse { 50% { opacity: .3; } }
+.stats { color: var(--muted); font-size: 13px; flex: 1; min-width: 200px; }
+#toggleRun { margin-left: auto; }
+nav { display: flex; gap: 4px; }
+nav button { border: 0; background: none; padding: 10px 14px; cursor: pointer; color: var(--muted);
+  font-weight: 600; border-bottom: 2px solid transparent; }
+nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+.badge { background: var(--hot); color: #fff; border-radius: 99px; font-size: 11px; padding: 1px 6px; margin-left: 4px; }
+
+.btn { border: 1px solid var(--border); background: var(--surface); padding: 8px 14px; border-radius: 9px;
+  cursor: pointer; font-weight: 600; white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn.danger { color: var(--err); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+main { padding: 20px 0 60px; }
+.tab { display: none; }
+.tab.active { display: block; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+.stack > * + * { margin-top: 14px; }
+h2 { font-size: 17px; margin: 0 0 4px; }
+.sub { color: var(--muted); font-size: 14px; margin: 0; }
+.banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: var(--accent-soft); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+.banner.hot { background: var(--hot-soft); }
+
+/* annonces */
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.toolbar .grow { flex: 1; }
+select, input[type=text], input[type=number], input[type=url], input[type=password], textarea {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 9px; padding: 8px 10px; min-width: 0; }
+textarea { width: 100%; min-height: 70px; }
+label.check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; font-size: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow); text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: transform .12s; }
+.item:hover { transform: translateY(-2px); }
+.item.fresh { animation: pop .5s ease-out; outline: 2px solid var(--accent); }
+@keyframes pop { from { transform: scale(.94); opacity: 0; } }
+.ph { position: relative; aspect-ratio: 3/4; background: var(--surface-2); }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tag { position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 7px; font-size: 12px; font-weight: 700;
+  background: var(--surface); color: var(--text); }
+.tag.hot { background: var(--hot); color: #fff; }
+.age { position: absolute; top: 8px; right: 8px; padding: 3px 7px; border-radius: 7px; font-size: 12px;
+  background: rgba(0,0,0,.6); color: #fff; }
+.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; }
+.price { font-weight: 700; font-size: 17px; }
+.price small { font-weight: 500; color: var(--muted); font-size: 12px; }
+.title { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { color: var(--muted); font-size: 12px; }
+.chip { display: inline-block; background: var(--surface-2); color: var(--muted); border-radius: 6px; padding: 2px 7px; font-size: 12px; }
+.empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty .big { font-size: 40px; }
+
+/* recherches */
+.search { display: flex; gap: 14px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.search .info { flex: 1; min-width: 220px; }
+.search .name { font-weight: 700; }
+.search .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.live { font-size: 13px; color: var(--muted); }
+.live.ok { color: var(--ok); } .live.err { color: var(--err); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.switch { position: relative; width: 40px; height: 22px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; background: var(--border); border-radius: 99px; cursor: pointer; transition: .15s; }
+.switch span::after { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(18px); }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.form .full { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > span { font-size: 13px; font-weight: 600; }
+.field small { color: var(--muted); }
+.steps { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+.steps li + li { margin-top: 4px; }
+.preview { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.preview a { flex: none; width: 90px; text-decoration: none; color: inherit; font-size: 12px; }
+.preview img { width: 90px; height: 120px; object-fit: cover; border-radius: 8px; background: var(--surface-2); display: block; }
+
+/* réglages */
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row > input { flex: 1; }
+.okline { color: var(--ok); font-weight: 600; font-size: 14px; }
+.errline { color: var(--err); font-size: 14px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.logs { font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--surface-2); border-radius: 9px; padding: 10px;
+  max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.logs .WARNING { color: var(--warn); } .logs .ERROR { color: var(--err); }
+details summary { cursor: pointer; font-weight: 600; }
+
+#toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); opacity: 0; pointer-events: none; transition: .2s; z-index: 50; }
+#toast.show { opacity: 1; }
+#toast.err { background: var(--err); color: #fff; }
+
+@media (max-width: 640px) {
+  .form { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stats { order: 5; flex-basis: 100%; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top">
+      <span class="brand">🛍️ VintedBot</span>
+      <span id="pill" class="pill"><span class="dot"></span><span id="pillText">…</span></span>
+      <span id="stats" class="stats"></span>
+      <button id="toggleRun" class="btn">…</button>
+    </div>
+    <nav>
+      <button data-tab="feed" class="active">Annonces<span id="unseen" class="badge" hidden></span></button>
+      <button data-tab="searches">Recherches</button>
+      <button data-tab="settings">Réglages</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ANNONCES -->
+  <section id="tab-feed" class="tab active">
+    <div id="onboard" class="banner" hidden>
+      <div><strong>Bienvenue !</strong> Ajoute ta première recherche Vinted : le bot te montrera chaque nouvelle annonce ici, quelques secondes après sa publication.</div>
+      <button class="btn primary" data-goto="searches" data-open-form>Ajouter une recherche</button>
+    </div>
+    <div id="tgHint" class="banner hot" hidden>
+      <div>📱 Pour recevoir les alertes sur ton téléphone, même loin de l'ordinateur, connecte Telegram (2 minutes).</div>
+      <button class="btn" data-goto="settings">Connecter Telegram</button>
+    </div>
+    <div class="toolbar">
+      <select id="filterSearch"><option value="">Toutes les recherches</option></select>
+      <label class="check"><input type="checkbox" id="onlyHot"> Seulement les 🔥 bonnes affaires</label>
+      <span class="grow"></span>
+      <button id="soundBtn" class="btn small">🔔 Son activé</button>
+      <button id="notifBtn" class="btn small" hidden>Notifications de l'ordinateur</button>
+      <button id="clearBtn" class="btn small">Vider</button>
+    </div>
+    <div id="grid" class="grid"></div>
+    <div id="feedEmpty" class="empty" hidden>
+      <div class="big">👀</div>
+      <p id="feedEmptyText">En attente de nouvelles annonces…</p>
+    </div>
+  </section>
+
+  <!-- RECHERCHES -->
+  <section id="tab-searches" class="tab">
+    <div class="stack">
+      <div class="toolbar" style="margin:0">
+        <div class="grow"><h2>Mes recherches</h2><p class="sub">Le bot les vérifie en boucle, à tour de rôle, aussi vite que Vinted le tolère.</p></div>
+        <button id="addBtn" class="btn primary">+ Ajouter une recherche</button>
+      </div>
+
+      <form id="searchForm" class="card stack" hidden autocomplete="off">
+        <h2 id="formTitle">Nouvelle recherche</h2>
+        <ol class="steps">
+          <li>Sur Vinted, fais ta recherche avec tous les filtres voulus (catégorie, marque, taille, état…). <a href="https://www.vinted.fr/catalog" target="_blank" rel="noopener">Ouvrir Vinted ↗</a></li>
+          <li>Copie l'adresse de la page dans la barre du haut du navigateur (Ctrl+L puis Ctrl+C).</li>
+          <li>Colle-la ci-dessous, puis clique sur « Tester le lien ».</li>
+        </ol>
+        <div class="form">
+          <label class="field full"><span>Lien de la recherche Vinted</span>
+            <div class="row"><input type="url" name="url" required placeholder="https://www.vinted.fr/catalog?search_text=…">
+            <button type="button" id="previewBtn" class="btn">Tester le lien</button></div>
+          </label>
+          <div id="previewBox" class="full" hidden></div>
+          <label class="field"><span>Nom (facultatif)</span><input type="text" name="name" placeholder="ex. Air Max taille 42"></label>
+          <label class="field"><span>Prix maximum (€)</span><input type="number" name="max_price" min="0" step="0.5" placeholder="sans limite"></label>
+          <label class="field"><span>Mots interdits dans le titre</span><input type="text" name="exclude" placeholder="lot, enfant, abîmé, copie">
+            <small>Séparés par des virgules. « abîmé » bloque aussi « abîmée ».</small></label>
+          <label class="field"><span>Priorité</span>
+            <select name="weight"><option value="1">Normale</option><option value="2">Haute (2× plus souvent)</option><option value="3">Maximale (3× plus souvent)</option></select>
+            <small>Une recherche prioritaire passe plus souvent, au détriment des autres.</small></label>
+          <label class="check full"><input type="checkbox" name="only_deals"> M'alerter seulement pour les bonnes affaires 🔥 (prix bien en dessous des autres annonces de cette recherche)</label>
+        </div>
+        <div class="row">
+          <button type="submit" class="btn primary">Enregistrer</button>
+          <button type="button" id="cancelForm" class="btn">Annuler</button>
+        </div>
+      </form>
+
+      <div id="searchList" class="stack"></div>
+    </div>
+  </section>
+
+  <!-- RÉGLAGES -->
+  <section id="tab-settings" class="tab">
+    <div class="settings">
+      <div class="card stack">
+        <div><h2>📱 Alertes Telegram</h2><p class="sub">Une notification sur ton téléphone pour chaque annonce, avec la photo et un bouton pour l'ouvrir dans l'appli Vinted.</p></div>
+        <div id="tgDone" class="okline" hidden>✓ Telegram est connecté</div>
+        <ol class="steps">
+          <li>Dans Telegram, ouvre <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather ↗</a>, envoie <code>/newbot</code>, puis choisis un nom et un identifiant qui finit par « bot ».</li>
+          <li>BotFather te répond avec un <strong>token</strong> (ex. <code>123456:ABC-xyz…</code>). Colle-le ici :</li>
+        </ol>
+        <div class="row"><input id="tgToken" type="password" placeholder="Token du bot"><button id="tgCheck" class="btn">Vérifier</button></div>
+        <div id="tgStep3" hidden class="stack">
+          <ol class="steps" start="3">
+            <li>Ouvre ton bot <a id="tgBotLink" target="_blank" rel="noopener"></a> et envoie-lui « salut ».</li>
+            <li>Clique ici :</li>
+          </ol>
+          <div class="row"><button id="tgDetect" class="btn primary">Détecter mon compte</button></div>
+        </div>
+        <div id="tgMsg"></div>
+        <div class="row"><button id="tgTest" class="btn" disabled>Envoyer une alerte de test</button>
+          <button id="tgReset" class="btn small danger" hidden>Déconnecter</button></div>
+      </div>
+
+      <div class="card stack">
+        <div><h2>⚡ Vitesse</h2><p class="sub">Plus c'est rapide, plus tu vois les annonces tôt, mais plus Vinted risque de bloquer temporairement ta connexion. Le bot ralentit tout seul s'il est bloqué, puis réaccélère.</p></div>
+        <label class="field"><span>Une requête toutes les <b id="gapVal"></b> s</span>
+          <input id="gap" type="range" min="0.5" max="3" step="0.1"></label>
+        <p class="sub" id="gapExplain"></p>
+        <details>
+          <summary>Avancé : proxies (pour aller plus vite)</summary>
+          <p class="sub">Chaque proxy est une connexion de plus : le bot va d'autant plus vite. Un par ligne, au format <code>http://utilisateur:motdepasse@hote:port</code>. Préfère des proxies « résidentiels ».</p>
+          <textarea id="proxies" placeholder="http://user:pass@host:port"></textarea>
+          <label class="check"><input type="checkbox" id="useDirect"> Utiliser aussi ma propre connexion</label>
+        </details>
+        <div><button id="saveSpeed" class="btn primary">Enregistrer</button></div>
+      </div>
+
+      <div class="card stack">
+        <div><h2>🔥 Bonne affaire</h2><p class="sub">Une annonce est marquée 🔥 quand elle est nettement moins chère que la médiane des prix récents de sa recherche (calculée après une quinzaine d'annonces).</p></div>
+        <label class="field"><span>Au moins <b id="thrVal"></b> % moins chère</span>
+          <input id="thr" type="range" min="10" max="60" step="5"></label>
+        <div><button id="saveDeal" class="btn primary">Enregistrer</button></div>
+      </div>
+
+      <div class="card stack">
+        <div><h2>🩺 Journal</h2><p class="sub">Ce que fait le bot en ce moment. En cas de problème, fais une capture de cette zone.</p></div>
+        <div id="lanes" class="sub"></div>
+        <div id="logs" class="logs"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pref = {
+  get(k, d) { try { const v = localStorage.getItem("vb." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("vb." + k, JSON.stringify(v)); } catch {} },
+};
+
+let S = { settings: null, status: null, alerts: [] };
+let editingId = null;
+let unseen = 0;
+const freshIds = new Set();
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method, headers: { "Content-Type": "application/json", "X-VB": "1" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
+function toast(msg, isErr = false) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = "show" + (isErr ? " err" : "");
+  clearTimeout(t._h); t._h = setTimeout(() => (t.className = ""), isErr ? 6000 : 2500);
+}
+
+async function guarded(btn, fn) {
+  if (btn) btn.disabled = true;
+  try { return await fn(); } catch (e) { toast(e.message, true); } finally { if (btn) btn.disabled = false; }
+}
+
+// ---------- formats ----------
+function money(v, cur = "EUR") {
+  if (v === null || v === undefined) return "?";
+  try { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur || "EUR" }).format(v); }
+  catch { return v.toFixed(2) + " " + cur; }
+}
+function ago(ts) {
+  if (!ts) return "";
+  const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
+  if (s < 60) return `il y a ${s} s`;
+  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
+  return `il y a ${Math.floor(s / 86400)} j`;
+}
+
+// ---------- onglets ----------
+function showTab(name) {
+  $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  $$(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
+  if (name === "feed") { unseen = 0; renderUnseen(); }
+  pref.set("tab", name);
+}
+$$("nav button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+document.addEventListener("click", (e) => {
+  const g = e.target.closest("[data-goto]");
+  if (!g) return;
+  showTab(g.dataset.goto);
+  if (g.hasAttribute("data-open-form")) openForm();
+});
+function renderUnseen() {
+  const b = $("#unseen");
+  b.hidden = unseen === 0; b.textContent = unseen;
+  document.title = (unseen ? `(${unseen}) ` : "") + "VintedBot";
+}
+
+// ---------- en-tête ----------
+function cycleOf(key) { return S.status?.monitor?.searches?.[key]?.cycle_s; }
+function renderHeader() {
+  const st = S.status || {};
+  const searches = S.settings?.search || [];
+  const enabled = searches.filter((s) => s.enabled !== false);
+  const pill = $("#pill"), txt = $("#pillText");
+  const m = st.monitor;
+  const paused = m?.lanes?.length && m.lanes.every((l) => l.paused_s > 0);
+  if (!st.running) { pill.className = "pill"; txt.textContent = "Arrêté"; }
+  else if (!enabled.length) { pill.className = "pill warn"; txt.textContent = "Aucune recherche"; }
+  else if (st.crash) { pill.className = "pill warn"; txt.textContent = "Erreur"; }
+  else if (paused) { pill.className = "pill warn"; txt.textContent = "Pause (Vinted freine)"; }
+  else { pill.className = "pill on"; txt.textContent = "En surveillance"; }
+  $("#toggleRun").textContent = st.running ? "Arrêter le bot" : "Démarrer le bot";
+  $("#toggleRun").classList.toggle("primary", !st.running);
+
+  let parts = [];
+  if (m && st.running) {
+    parts.push(`${m.rate.toFixed(1)} requête/s`);
+    if (m.rtt_ms) parts.push(`Vinted répond en ${m.rtt_ms} ms`);
+    if (m.blocked) parts.push(`${m.blocked} blocage(s) cette minute`);
+    if (m.errors) parts.push(`${m.errors} erreur(s) cette minute`);
+  }
+  if (st.crash) parts.push(st.crash);
+  $("#stats").textContent = parts.join(" · ");
+  $("#onboard").hidden = searches.length > 0;
+  $("#tgHint").hidden = !searches.length || !!(S.settings?.telegram?.token && S.settings?.telegram?.chat_id) || pref.get("tgHintHidden", false);
+}
+$("#toggleRun").addEventListener("click", (e) => guarded(e.target, async () => {
+  S.status = await api("POST", S.status?.running ? "/api/stop" : "/api/start");
+  renderHeader(); renderSearches();
+}));
+
+// ---------- annonces ----------
+function visibleAlerts() {
+  const f = $("#filterSearch").value, hot = $("#onlyHot").checked;
+  return S.alerts.filter((a) => (!f || a.search_key === f) && (!hot || a.deal));
+}
+function cardHTML(a) {
+  const tag = a.deal && a.discount != null
+    ? `<span class="tag hot">🔥 -${Math.round(a.discount * 100)} %</span>`
+    : `<span class="tag">Nouveau</span>`;
+  const meta = [a.brand, a.size, a.status].filter(Boolean).map(esc).join(" · ");
+  return `<a class="item${freshIds.has(a.id) ? " fresh" : ""}" href="${esc(a.url)}" target="_blank" rel="noopener" data-id="${a.id}">
+    <div class="ph">${a.photo ? `<img loading="lazy" src="${esc(a.photo)}" alt="">` : ""}${tag}
+      <span class="age" data-ts="${a.detected_ts}">${ago(a.detected_ts)}</span></div>
+    <div class="body">
+      <div class="price">${money(a.price, a.currency)} ${a.total_price ? `<small>${money(a.total_price, a.currency)} avec frais</small>` : ""}</div>
+      <div class="title">${esc(a.title)}</div>
+      ${meta ? `<div class="meta">${meta}</div>` : ""}
+      ${a.median ? `<div class="meta">Médiane de la recherche : ${money(a.median, a.currency)}</div>` : ""}
+      <div><span class="chip">${esc(a.search)}</span></div>
+    </div></a>`;
+}
+function renderFeed() {
+  const list = visibleAlerts();
+  $("#grid").innerHTML = list.map(cardHTML).join("");
+  $("#feedEmpty").hidden = list.length > 0;
+  const has = (S.settings?.search || []).length;
+  $("#feedEmptyText").textContent = !has ? "Ajoute une recherche pour commencer."
+    : S.alerts.length ? "Aucune annonce ne correspond à ce filtre."
+    : "En attente de nouvelles annonces… Au premier lancement, le bot mémorise d'abord les annonces déjà en ligne, puis ne te montre que les nouvelles.";
+  const sel = $("#filterSearch"), cur = sel.value;
+  sel.innerHTML = `<option value="">Toutes les recherches</option>` +
+    (S.settings?.search || []).map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+  sel.value = cur;
+}
+$("#filterSearch").addEventListener("change", renderFeed);
+$("#onlyHot").checked = pref.get("onlyHot", false);
+$("#onlyHot").addEventListener("change", (e) => { pref.set("onlyHot", e.target.checked); renderFeed(); });
+$("#clearBtn").addEventListener("click", (e) => guarded(e.target, async () => {
+  if (!confirm("Effacer toutes les annonces affichées ?")) return;
+  await api("DELETE", "/api/alerts"); S.alerts = []; renderFeed();
+}));
+setInterval(() => $$(".age").forEach((el) => (el.textContent = ago(+el.dataset.ts))), 1000);
+
+// son + notifications
+let soundOn = pref.get("sound", true), audio = null;
+function renderSound() { $("#soundBtn").textContent = soundOn ? "🔔 Son activé" : "🔕 Son coupé"; }
+$("#soundBtn").addEventListener("click", () => { soundOn = !soundOn; pref.set("sound", soundOn); renderSound(); if (soundOn) beep(false); });
+document.addEventListener("click", () => { if (!audio && window.AudioContext) audio = new AudioContext(); }, { once: true });
+function beep(hot) {
+  if (!soundOn || !audio) return;
+  const notes = hot ? [880, 1175, 1568] : [880, 1175];
+  notes.forEach((f, i) => {
+    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * 0.12;
+    o.frequency.value = f; o.type = "sine";
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.12);
+  });
+}
+function renderNotifBtn() {
+  const b = $("#notifBtn");
+  b.hidden = !("Notification" in window) || Notification.permission === "granted";
+}
+$("#notifBtn").addEventListener("click", async () => { await Notification.requestPermission(); renderNotifBtn(); });
+
+function onAlert(a) {
+  S.alerts.unshift(a); S.alerts = S.alerts.slice(0, 150);
+  freshIds.add(a.id); setTimeout(() => freshIds.delete(a.id), 4000);
+  renderFeed();
+  if (!$("#tab-feed").classList.contains("active") || document.hidden) { unseen++; renderUnseen(); }
+  beep(a.deal);
+  if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+    const n = new Notification((a.deal ? `🔥 -${Math.round(a.discount * 100)} % · ` : "") + `${money(a.price, a.currency)} · ${a.title}`,
+      { body: a.search, icon: a.photo || undefined, tag: String(a.id) });
+    n.onclick = () => { window.open(a.url, "_blank"); n.close(); };
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && $("#tab-feed").classList.contains("active")) { unseen = 0; renderUnseen(); }
+});
+function connectEvents() {
+  const es = new EventSource("/api/events");
+  es.onmessage = (e) => onAlert(JSON.parse(e.data));
+  es.onerror = () => { es.close(); setTimeout(connectEvents, 3000); };
+}
+
+// ---------- recherches ----------
+const weightLabel = { 1: "", 2: "Priorité haute", 3: "Priorité maximale" };
+function renderSearches() {
+  const list = S.settings?.search || [];
+  const live = S.status?.monitor?.searches || {};
+  $("#searchList").innerHTML = list.length ? list.map((s) => {
+    const st = live[s.id];
+    let line = "";
+    if (s.enabled === false) line = `<span class="live">En pause</span>`;
+    else if (!S.status?.running) line = `<span class="live">Bot arrêté</span>`;
+    else if (!st) line = `<span class="live">Démarrage…</span>`;
+    else if (st.last_error) line = `<span class="live err">⚠ ${esc(st.last_error)}</span>`;
+    else if (!st.ready) line = `<span class="live">Préparation : mémorisation des annonces déjà en ligne…</span>`;
+    else line = `<span class="live ok">✓ Vérifiée ${ago(st.last_ok)} · un passage toutes les ${String(st.cycle_s).replace(".", ",")} s environ</span>`;
+    const chips = [
+      s.max_price != null ? `≤ ${money(s.max_price)}` : "",
+      s.exclude?.length ? `sans : ${s.exclude.join(", ")}` : "",
+      weightLabel[s.weight] || "",
+      s.only_deals ? "🔥 seulement" : "",
+    ].filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join("");
+    return `<div class="card search" data-id="${esc(s.id)}">
+      <div class="info"><div class="name">${esc(s.name)}</div>
+        ${chips ? `<div class="chips">${chips}</div>` : ""}${line}</div>
+      <div class="actions">
+        <label class="switch" title="Activer / mettre en pause"><input type="checkbox" data-act="toggle" ${s.enabled !== false ? "checked" : ""}><span></span></label>
+        <a class="btn small" href="${esc(s.url)}" target="_blank" rel="noopener">Voir sur Vinted</a>
+        <button class="btn small" data-act="edit">Modifier</button>
+        <button class="btn small danger" data-act="del">Supprimer</button>
+      </div></div>`;
+  }).join("") : `<div class="empty"><div class="big">🔎</div><p>Aucune recherche pour l'instant.</p></div>`;
+}
+$("#searchList").addEventListener("click", (e) => {
+  const act = e.target.dataset.act; if (!act || act === "toggle") return;
+  const id = e.target.closest("[data-id]").dataset.id;
+  const s = S.settings.search.find((x) => x.id === id);
+  if (act === "edit") openForm(s);
+  if (act === "del") guarded(e.target, async () => {
+    if (!confirm(`Supprimer « ${s.name} » ?`)) return;
+    await api("DELETE", "/api/searches/" + id);
+    await refresh(); toast("Recherche supprimée");
+  });
+});
+$("#searchList").addEventListener("change", (e) => {
+  if (e.target.dataset.act !== "toggle") return;
+  const id = e.target.closest("[data-id]").dataset.id;
+  guarded(null, async () => { await api("PUT", "/api/searches/" + id, { enabled: e.target.checked }); await refresh(); });
+});
+
+function openForm(s = null) {
+  editingId = s?.id || null;
+  const f = $("#searchForm");
+  f.reset(); $("#previewBox").hidden = true;
+  $("#formTitle").textContent = s ? "Modifier la recherche" : "Nouvelle recherche";
+  if (s) {
+    f.url.value = s.url; f.name.value = s.name; f.max_price.value = s.max_price ?? "";
+    f.exclude.value = (s.exclude || []).join(", "); f.weight.value = s.weight || 1; f.only_deals.checked = !!s.only_deals;
+  }
+  f.hidden = false; f.url.focus(); f.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("#addBtn").addEventListener("click", () => openForm());
+$("#cancelForm").addEventListener("click", () => ($("#searchForm").hidden = true));
+$("#previewBtn").addEventListener("click", (e) => guarded(e.target, async () => {
+  const box = $("#previewBox"), url = $("#searchForm").url.value.trim();
+  if (!url) throw new Error("Colle d'abord le lien de ta recherche Vinted");
+  box.hidden = false; box.innerHTML = `<p class="sub">Interrogation de Vinted…</p>`;
+  try {
+    const r = await api("POST", "/api/preview", { url });
+    box.innerHTML = r.count
+      ? `<p class="okline">✓ Le lien fonctionne : ${r.count} annonce(s) récente(s) trouvée(s).</p>
+         <div class="preview">${r.items.map((i) => `<a href="${esc(i.url)}" target="_blank" rel="noopener">
+           <img src="${esc(i.photo)}" alt="" loading="lazy">${money(i.price, i.currency)}</a>`).join("")}</div>`
+      : `<p class="errline">Le lien fonctionne mais ne renvoie aucune annonce. Vérifie tes filtres sur Vinted.</p>`;
+  } catch (err) {
+    box.innerHTML = `<p class="errline">✗ ${esc(err.message)}</p>`;
+  }
+}));
+$("#searchForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = {
+    url: f.url.value.trim(), name: f.name.value.trim(), max_price: f.max_price.value,
+    exclude: f.exclude.value, weight: +f.weight.value, only_deals: f.only_deals.checked,
+  };
+  guarded(f.querySelector("[type=submit]"), async () => {
+    await api(editingId ? "PUT" : "POST", editingId ? "/api/searches/" + editingId : "/api/searches", body);
+    f.hidden = true; await refresh();
+    toast(editingId ? "Recherche modifiée" : "Recherche ajoutée : le bot la surveille");
+  });
+});
+
+// ---------- réglages ----------
+function totalWeight() { return (S.settings?.search || []).filter((s) => s.enabled !== false).reduce((a, s) => a + (s.weight || 1), 0); }
+function renderSettings() {
+  const st = S.settings; if (!st) return;
+  const tg = st.telegram || {};
+  const connected = !!(tg.token && tg.chat_id);
+  $("#tgDone").hidden = !connected;
+  $("#tgTest").disabled = !connected;
+  $("#tgReset").hidden = !connected;
+  if (document.activeElement !== $("#tgToken")) $("#tgToken").value = tg.token || "";
+  if (document.activeElement !== $("#gap")) $("#gap").value = st.general.request_gap;
+  if (document.activeElement !== $("#proxies")) $("#proxies").value = (st.general.proxies || []).join("\n");
+  $("#useDirect").checked = st.general.use_direct !== false;
+  $("#thr").value = Math.round((st.deals.threshold ?? 0.3) * 100);
+  updateSliders();
+}
+function updateSliders() {
+  const gap = +$("#gap").value;
+  $("#gapVal").textContent = gap.toFixed(1).replace(".", ",");
+  const lanes = Math.max(1, ($("#proxies").value.split("\n").filter((x) => x.trim()).length) + ($("#useDirect").checked ? 1 : 0));
+  const w = Math.max(1, totalWeight());
+  const n = (S.settings?.search || []).filter((s) => s.enabled !== false).length;
+  const cycle = (gap * w / lanes).toFixed(1).replace(".", ",");
+  $("#gapExplain").textContent = `Avec ${n || 1} recherche(s) active(s) et ${lanes} connexion(s), une recherche de priorité normale est vérifiée environ toutes les ${cycle} s (2× plus souvent en priorité haute). En dessous de 0,8 s, les blocages deviennent fréquents.`;
+  $("#thrVal").textContent = $("#thr").value;
+}
+["#gap", "#thr", "#proxies", "#useDirect"].forEach((s) => $(s).addEventListener("input", updateSliders));
+$("#saveSpeed").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("PUT", "/api/settings", { general: { request_gap: +$("#gap").value, proxies: $("#proxies").value, use_direct: $("#useDirect").checked } });
+  await refresh(); toast("Vitesse enregistrée");
+}));
+$("#saveDeal").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("PUT", "/api/settings", { deals: { threshold: +$("#thr").value / 100 } });
+  await refresh(); toast("Seuil enregistré");
+}));
+
+$("#tgCheck").addEventListener("click", (e) => guarded(e.target, async () => {
+  const token = $("#tgToken").value.trim();
+  if (!token) throw new Error("Colle le token donné par @BotFather");
+  const r = await api("POST", "/api/telegram/detect", { token });
+  const link = $("#tgBotLink"); link.href = "https://t.me/" + r.username; link.textContent = "@" + r.username + " ↗";
+  $("#tgStep3").hidden = false;
+  if (r.chat_id) await saveTelegram(token, r.chat_id);
+  else $("#tgMsg").innerHTML = `<p class="okline">✓ Token valide (bot @${esc(r.username)}).</p>`;
+}));
+$("#tgDetect").addEventListener("click", (e) => guarded(e.target, async () => {
+  const token = $("#tgToken").value.trim();
+  const r = await api("POST", "/api/telegram/detect", { token });
+  if (!r.chat_id) { $("#tgMsg").innerHTML = `<p class="errline">Aucun message reçu par @${esc(r.username)}. Ouvre-le dans Telegram, appuie sur « Démarrer » ou envoie « salut », puis réessaie.</p>`; return; }
+  await saveTelegram(token, r.chat_id);
+}));
+async function saveTelegram(token, chat_id) {
+  await api("PUT", "/api/settings", { telegram: { token, chat_id } });
+  await refresh();
+  $("#tgStep3").hidden = true;
+  $("#tgMsg").innerHTML = `<p class="okline">✓ Compte détecté et enregistré. Envoi d'une alerte de test…</p>`;
+  try { await api("POST", "/api/telegram/test"); $("#tgMsg").innerHTML = `<p class="okline">✓ C'est prêt : tu as dû recevoir une alerte de test sur Telegram.</p>`; }
+  catch (e) { $("#tgMsg").innerHTML = `<p class="errline">${esc(e.message)}</p>`; }
+}
+$("#tgTest").addEventListener("click", (e) => guarded(e.target, async () => { await api("POST", "/api/telegram/test"); toast("Alerte de test envoyée"); }));
+$("#tgReset").addEventListener("click", (e) => guarded(e.target, async () => {
+  if (!confirm("Déconnecter Telegram ?")) return;
+  await api("PUT", "/api/settings", { telegram: { token: "", chat_id: "" } }); $("#tgMsg").innerHTML = ""; await refresh();
+}));
+
+function renderLogs() {
+  const m = S.status?.monitor;
+  $("#lanes").textContent = m?.lanes?.length ? "Connexions : " + m.lanes.map((l) =>
+    `${l.label} (1 requête / ${String(l.gap).replace(".", ",")} s${l.paused_s ? `, en pause ${l.paused_s} s` : ""})`).join(" · ") : "";
+  const box = $("#logs"), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
+  box.innerHTML = (S.status?.logs || []).map((l) =>
+    `<div class="${l.level}">${new Date(l.t * 1000).toLocaleTimeString("fr-FR")}  ${esc(l.msg)}</div>`).join("") || "Rien pour l'instant.";
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+// ---------- boucle ----------
+async function refresh() {
+  const r = await api("GET", "/api/state");
+  S.settings = r.settings; S.status = r.status; S.alerts = r.alerts;
+  renderHeader(); renderFeed(); renderSearches(); renderSettings(); renderLogs();
+}
+async function pollStatus() {
+  try { S.status = await api("GET", "/api/status"); renderHeader(); renderSearches(); renderLogs(); }
+  catch { $("#pill").className = "pill warn"; $("#pillText").textContent = "Bot injoignable (fenêtre fermée ?)"; }
+}
+
+renderSound(); renderNotifBtn();
+showTab(pref.get("tab", "feed"));
+refresh().then(() => { connectEvents(); setInterval(pollStatus, 2000); }).catch((e) => toast(e.message, true));
+</script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 """Persistance SQLite : annonces vues, filigrane d'ID par recherche, historique de prix."""
 from __future__ import annotations
 
+import json
 import sqlite3
 import statistics
 import time
@@ -10,6 +11,7 @@ class Store:
     def __init__(self, path: str):
         self.db = sqlite3.connect(path)
         self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(
             """
             CREATE TABLE IF NOT EXISTS seen (
@@ -21,6 +23,8 @@ class Store:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 search TEXT NOT NULL, price REAL NOT NULL, ts REAL NOT NULL);
             CREATE INDEX IF NOT EXISTS prices_search ON prices(search, id);
+            CREATE TABLE IF NOT EXISTS alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, payload TEXT NOT NULL);
             """
         )
 
@@ -63,10 +67,23 @@ class Store:
             return None
         return statistics.median(prices)
 
+    def add_alert(self, payload: dict) -> None:
+        self.db.execute("INSERT INTO alerts(ts, payload) VALUES(?, ?)", (time.time(), json.dumps(payload)))
+        self.db.commit()
+
+    def recent_alerts(self, limit: int = 150) -> list[dict]:
+        rows = self.db.execute("SELECT payload FROM alerts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [json.loads(r[0]) for r in rows]
+
+    def clear_alerts(self) -> None:
+        self.db.execute("DELETE FROM alerts")
+        self.db.commit()
+
     def prune(self, keep_days: float = 14) -> None:
         cutoff = time.time() - keep_days * 86400
         self.db.execute("DELETE FROM seen WHERE ts < ?", (cutoff,))
         self.db.execute("DELETE FROM prices WHERE ts < ?", (cutoff,))
+        self.db.execute("DELETE FROM alerts WHERE id NOT IN (SELECT id FROM alerts ORDER BY id DESC LIMIT 500)")
         self.db.commit()
 
     def close(self) -> None:
