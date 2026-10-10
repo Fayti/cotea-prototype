@@ -74,6 +74,7 @@ async def main(duration: float) -> int:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # titres avec emojis, console Windows
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)-7s %(message)s")
