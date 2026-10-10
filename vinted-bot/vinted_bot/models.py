@@ -32,8 +32,10 @@ class Item:
     url: str
     photo_url: str
     seller: str
-    created_ts: int | None
+    created_ts: float | None
     favourites: int
+    promoted: bool = False
+    age_estimated: bool = False
 
     @classmethod
     def from_api(cls, raw: dict, domain: str) -> "Item":
@@ -42,25 +44,38 @@ class Item:
         total, _ = _amount(raw.get("total_item_price"))
         photo = raw.get("photo") or {}
         hires = photo.get("high_resolution") or {}
-        url = raw.get("url") or ""
-        if not url and raw.get("path"):
-            url = f"https://www.{domain}{raw['path']}"
-        if not url:
-            url = f"https://www.{domain}/items/{raw['id']}"
+        title = raw.get("title") or ""
+        url = raw.get("url") or raw.get("path") or f"/items/{raw['id']}"
+        if url.startswith("/"):
+            url = f"https://www.{domain}{url}"  # l'API svc-catalogue renvoie des URL relatives
+        # API svc-catalogue (septembre 2026) : marque en première ligne, « taille · état » en
+        # seconde. Sans marque, la première ligne reprend le titre.
+        box = raw.get("item_box") or {}
+        brand = raw.get("brand_title") or ""
+        size = raw.get("size_title") or ""
+        status = raw.get("status") or ""
+        if box:
+            first = box.get("first_line") or ""
+            brand = brand or ("" if first == title else first)
+            parts = [p.strip() for p in (box.get("second_line") or "").split("·") if p.strip()]
+            if parts:
+                status = status or parts[-1]
+                size = size or " · ".join(parts[:-1])
         return cls(
             id=int(raw["id"]),
-            title=raw.get("title") or "",
+            title=title,
             price=price,
             currency=currency or "EUR",
             total_price=total,
-            brand=raw.get("brand_title") or "",
-            size=raw.get("size_title") or "",
-            status=raw.get("status") or "",
+            brand=brand,
+            size=size,
+            status=status,
             url=url,
             photo_url=photo.get("url") or "",
             seller=(raw.get("user") or {}).get("login") or "",
-            created_ts=hires.get("timestamp"),
+            created_ts=hires.get("timestamp"),  # absent depuis septembre 2026 : estimé par IdClock
             favourites=int(raw.get("favourite_count") or 0),
+            promoted=bool(raw.get("promoted")) or raw.get("content_source") == "catalog_promoted_items",
         )
 
 

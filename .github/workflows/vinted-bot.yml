@@ -3,7 +3,7 @@ name: VintedBot
 on:
   push:
     branches: [claude/busy-archimedes-xdeifv, main]
-    paths: ["vinted-bot/**", "!vinted-bot/scripts/discover_vinted.py", ".github/workflows/vinted-bot.yml"]
+    paths: ["vinted-bot/**", ".github/workflows/vinted-bot.yml"]
   workflow_dispatch:
 
 permissions:
@@ -26,9 +26,9 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt pytest
       - run: python -m pytest -q tests
-      - name: Sonde du vrai Vinted (informative)
+      - name: Test de bout en bout contre le vrai Vinted (informatif)
         continue-on-error: true
-        run: python scripts/probe_vinted.py
+        run: python scripts/probe_vinted.py 90
 
   windows-exe:
     needs: test
@@ -49,9 +49,9 @@ jobs:
           --collect-all curl_cffi --add-data "vinted_bot/web;vinted_bot/web" launcher.py
       - name: Autotest de l'exécutable
         run: ./dist/VintedBot.exe selftest
-      - name: Sonde du vrai Vinted depuis Windows (informative)
+      - name: Test de bout en bout depuis Windows (informatif)
         continue-on-error: true
-        run: python scripts/probe_vinted.py
+        run: python scripts/probe_vinted.py 90
       - uses: actions/upload-artifact@v4
         with:
           name: VintedBot-windows

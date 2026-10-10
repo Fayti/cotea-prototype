@@ -24,7 +24,8 @@ def _age(item: Item) -> str:
     if not item.created_ts:
         return ""
     seconds = max(0, int(time.time() - item.created_ts))
-    return f"{seconds} s" if seconds < 120 else f"{seconds // 60} min"
+    approx = "~" if item.age_estimated else ""
+    return f"{approx}{seconds} s" if seconds < 120 else f"{approx}{seconds // 60} min"
 
 
 def headline(item: Item, deal: Deal) -> str:

@@ -6,8 +6,12 @@ contre la médiane des prix récents de la même recherche.
 
 ## Comment ça marche
 
-- **Source** : Vinted n'a ni API publique ni flux temps réel. Le bot interroge l'endpoint
-  interne `/api/v2/catalog/items?order=newest_first`, celui qu'utilise le site.
+- **Source** : Vinted n'a ni API publique ni flux temps réel. Le bot interroge l'API interne
+  du site, `https://api.vinted.fr/svc-catalogue/items?order=newest_first`, avec le jeton
+  anonyme que le site pose dans le cookie `access_token_web`. Cette adresse remplace
+  `/api/v2/catalog/items` depuis septembre 2026. Les filtres catégorie, marque, taille, état,
+  couleur et matière passent désormais par `attribute_ids[...]`. Le bot convertit
+  automatiquement les liens copiés depuis le site.
 - **Délai d'alerte** = délai d'indexation chez Vinted (incompressible, inconnu, probablement
   quelques secondes) + attente du prochain passage sur la recherche + requête (≈ 0,2 à 1 s) +
   envoi Telegram (≈ 0,3 s).
@@ -16,10 +20,17 @@ contre la médiane des prix récents de la même recherche.
   ne ralentit pas la cadence. Temps entre deux passages sur une recherche ≈
   `request_gap × nombre de recherches / nombre d'IP`. Avec 1 IP, `request_gap = 1` et 3
   recherches : un passage toutes les 3 s, soit ≈ 1,5 s d'attente moyenne.
-- **Détection des nouveautés** : les ID d'annonce sont croissants. Le bot garde le plus grand
-  ID vu (le « filigrane ») pour chaque recherche. Une annonce remontée ou sponsorisée garde son
-  ancien ID et n'est donc pas signalée. Le filigrane est persisté en SQLite : un redémarrage ne
-  renvoie pas d'anciennes alertes.
+- **Détection des nouveautés** : une annonce est nouvelle si elle n'a jamais été vue dans
+  cette recherche **et** qu'elle est récente. Les numéros d'annonce ne suivent pas l'ordre
+  d'apparition : mesuré sur le vrai Vinted, 43 % des nouveautés arrivent avec un numéro
+  inférieur au plus grand déjà vu, car Vinted indexe avec un léger décalage. Un simple
+  « numéro > dernier vu » en raterait donc près de la moitié. La condition de récence écarte
+  les annonces anciennes remontées, sponsorisées, ou révélées quand une annonce au-dessus est
+  vendue. Tout est persisté en SQLite : un redémarrage ne renvoie pas d'anciennes alertes.
+- **Âge des annonces** : Vinted ne renvoie plus de date de publication. Les numéros sont
+  attribués au rythme d'environ 15 000 par minute. Toutes les 30 s, le bot relève le numéro
+  le plus récent du catalogue et en déduit l'âge de chaque annonce (« repérée ~8 s après sa
+  mise en ligne »), à quelques secondes près.
 - **Premier lancement** : 96 annonces sont chargées comme référence pour la médiane, sans
   alerte.
 - **Bonne affaire** : `1 - prix / médiane(200 derniers prix de la recherche) ≥ 30 %`.
@@ -110,6 +121,10 @@ Stats : 0.98 req/s · réponse Vinted médiane 310 ms · passage toutes les : Ai
   en un clic depuis l'application Vinted.
 
 ## Limites
+
+- Le catalogue renvoyé dépend du pays de l'adresse IP. Depuis une IP américaine (serveurs de
+  GitHub), Vinted renvoie des annonces américaines en dollars. Le bot doit donc tourner depuis
+  une connexion française, ou derrière des proxies français.
 
 - L'API utilisée n'est pas documentée : Vinted peut la modifier ou durcir son anti-bot à tout
   moment. L'utilisation automatisée est contraire aux conditions d'utilisation de Vinted et

@@ -10,6 +10,7 @@ import time
 class Store:
     def __init__(self, path: str):
         self.db = sqlite3.connect(path)
+        self._seen: dict[str, set[int]] = {}  # cache mémoire de la table seen
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(
@@ -42,12 +43,19 @@ class Store:
 
     def mark_seen(self, search: str, item_id: int) -> bool:
         """Renvoie True si l'annonce n'avait jamais été vue pour cette recherche."""
-        cur = self.db.execute(
+        seen = self._seen.get(search)
+        if seen is None:
+            rows = self.db.execute("SELECT item_id FROM seen WHERE search=?", (search,)).fetchall()
+            seen = self._seen[search] = {r[0] for r in rows}
+        if item_id in seen:
+            return False
+        seen.add(item_id)
+        self.db.execute(
             "INSERT OR IGNORE INTO seen(search, item_id, ts) VALUES(?, ?, ?)",
             (search, item_id, time.time()),
         )
         self.db.commit()
-        return cur.rowcount == 1
+        return True
 
     def add_price(self, search: str, price: float) -> None:
         self.db.execute(
@@ -82,6 +90,7 @@ class Store:
     def prune(self, keep_days: float = 14) -> None:
         cutoff = time.time() - keep_days * 86400
         self.db.execute("DELETE FROM seen WHERE ts < ?", (cutoff,))
+        self._seen.clear()
         self.db.execute("DELETE FROM prices WHERE ts < ?", (cutoff,))
         self.db.execute("DELETE FROM alerts WHERE id NOT IN (SELECT id FROM alerts ORDER BY id DESC LIMIT 500)")
         self.db.commit()

@@ -7,21 +7,25 @@ import tomllib
 from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, urlparse
 
-# Paramètres d'URL du site web -> paramètres de l'API catalogue.
-_URL_PARAM_MAP = {
-    "catalog": "catalog_ids",
-    "catalog_ids": "catalog_ids",
-    "brand_ids": "brand_ids",
-    "size_ids": "size_ids",
-    "status_ids": "status_ids",
-    "color_ids": "color_ids",
-    "material_ids": "material_ids",
-    "video_game_platform_ids": "video_game_platform_ids",
-    "search_text": "search_text",
-    "price_from": "price_from",
-    "price_to": "price_to",
-    "currency": "currency",
-}
+# Paramètres scalaires transmis tels quels à l'API.
+_SCALAR_PARAMS = {"search_text", "price_from", "price_to"}
+
+
+def _api_key(key: str) -> str | None:
+    """Nom de paramètre du site -> nom attendu par l'API svc-catalogue (septembre 2026).
+
+    L'API ignore en silence les anciens noms (`brand_ids`, `catalog_ids`…) : les filtres
+    de catégorie, marque, taille, état, couleur, matière passent par `attribute_ids[...]`.
+    """
+    if key in _SCALAR_PARAMS:
+        return key
+    if key == "catalog":
+        return "attribute_ids[catalog]"
+    if key.endswith("_ids") and key not in ("search_ids",):
+        return f"attribute_ids[{key[:-4]}]"
+    if key.startswith("attribute_ids[") and key.endswith("]"):
+        return key
+    return None
 
 
 def parse_vinted_url(url: str) -> tuple[str, dict[str, str]]:
@@ -32,11 +36,10 @@ def parse_vinted_url(url: str) -> tuple[str, dict[str, str]]:
         raise ValueError(f"URL non Vinted : {url}")
     grouped: dict[str, list[str]] = {}
     for key, value in parse_qsl(parsed.query, keep_blank_values=False):
-        key = key.removesuffix("[]")
-        api_key = _URL_PARAM_MAP.get(key)
+        api_key = _api_key(key.removesuffix("[]"))
         if api_key:
-            grouped.setdefault(api_key, []).append(value)
-    return host, {k: ",".join(v) for k, v in grouped.items()}
+            grouped.setdefault(api_key, []).extend(v for v in value.split(",") if v)
+    return host, {k: ",".join(v) for k, v in grouped.items() if v}
 
 
 @dataclass

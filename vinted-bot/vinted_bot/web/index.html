@@ -375,6 +375,7 @@ function renderHeader() {
   if (m && st.running) {
     parts.push(`${m.rate.toFixed(1)} requête/s`);
     if (m.rtt_ms) parts.push(`Vinted répond en ${m.rtt_ms} ms`);
+    if (m.photo_age_s != null) parts.push(`annonces repérées ~${m.photo_age_s} s après leur mise en ligne`);
     if (m.blocked) parts.push(`${m.blocked} blocage(s) cette minute`);
     if (m.errors) parts.push(`${m.errors} erreur(s) cette minute`);
   }
@@ -406,6 +407,7 @@ function cardHTML(a) {
       <div class="title">${esc(a.title)}</div>
       ${meta ? `<div class="meta">${meta}</div>` : ""}
       ${a.median ? `<div class="meta">Médiane de la recherche : ${money(a.median, a.currency)}</div>` : ""}
+      ${a.created_ts ? `<div class="meta">⚡ Repérée ${a.age_estimated ? "~" : ""}${Math.max(0, Math.round(a.detected_ts - a.created_ts))} s après sa mise en ligne</div>` : ""}
       <div><span class="chip">${esc(a.search)}</span></div>
     </div></a>`;
 }

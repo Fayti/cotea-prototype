@@ -1,45 +1,80 @@
-"""Interroge le vrai Vinted et affiche ce qui revient : accès, format des annonces, latence.
+"""Test de bout en bout contre le vrai Vinted : le moteur du bot tourne N secondes.
 
-Sert en CI à vérifier que l'API répond toujours au format attendu par le bot.
+Rapporte le nombre d'annonces détectées, leur âge estimé au moment de l'alerte, le débit
+et les blocages. Sert en CI à vérifier que l'API répond toujours au format attendu.
+Usage : python scripts/probe_vinted.py [durée_en_secondes]
 """
 import asyncio
+import logging
 import os
+import statistics
 import sys
+import tempfile
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from vinted_bot.client import VintedClient  # noqa: E402
-from vinted_bot.models import Item  # noqa: E402
+from vinted_bot.config import Config, Search  # noqa: E402
+from vinted_bot.monitor import Monitor  # noqa: E402
+from vinted_bot.store import Store  # noqa: E402
 
 
-async def main() -> int:
-    client = VintedClient("vinted.fr", request_gap=1.0)
-    params = {"search_text": "nike", "order": "newest_first", "per_page": "10", "page": "1"}
-    try:
-        for attempt in range(3):
-            t0 = time.monotonic()
-            raw = await client.search(params)
-            rtt = (time.monotonic() - t0) * 1000
-            print(f"requête {attempt + 1} : {len(raw)} annonces en {rtt:.0f} ms")
-        if not raw:
-            print("ÉCHEC : aucune annonce renvoyée")
-            return 1
-        print("clés d'une annonce :", sorted(raw[0].keys()))
-        now = time.time()
-        for r in raw[:5]:
-            item = Item.from_api(r, "vinted.fr")
-            age = f"{now - item.created_ts:.0f} s" if item.created_ts else "?"
-            print(f"  #{item.id} {item.price} {item.currency} | {item.title[:40]!r} | photo il y a {age} | {item.url}")
-        missing = [k for k in ("id", "title", "price", "url", "photo") if k not in raw[0]]
-        print("champs attendus manquants :", missing or "aucun")
-        return 1 if missing else 0
-    except Exception as e:
-        print(f"ÉCHEC : {type(e).__name__}: {e}")
-        return 1
-    finally:
-        await client.close()
+class Recorder:
+    def __init__(self):
+        self.items = []
+
+    async def send(self, item, deal, search):
+        self.items.append((time.time(), item, search.name))
+
+    async def close(self):
+        pass
+
+
+async def main(duration: float) -> int:
+    searches = [
+        Search(name="tout le catalogue", weight=2),
+        Search(name="nike", params={"search_text": "nike"}),
+        Search(name="vestes Nike/adidas < 30", params={"attribute_ids[brand]": "53,14", "price_to": "30"}),
+    ]
+    cfg = Config(searches=searches, request_gap=1.0, per_page=48, stats_every=0)
+    rec = Recorder()
+    with tempfile.TemporaryDirectory() as tmp:
+        store = Store(os.path.join(tmp, "probe.sqlite3"))
+        mon = Monitor(cfg, store, [rec])
+        task = asyncio.create_task(mon.run())
+        await asyncio.sleep(duration)
+        summary, status = mon.summary(), mon.status()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        store.close()
+
+    print("\n=== RÉSULTAT ===")
+    print("Stats :", summary)
+    print("Horloge :", f"{mon.clock.rate():.0f} numéros/s" if len(mon.clock.samples) > 1 else "pas assez de relevés")
+    for key, st in status["searches"].items():
+        print(f"  {key}: {st}")
+    print(f"Alertes : {len(rec.items)}")
+    ages = [t - it.created_ts for t, it, _ in rec.items if it.created_ts]
+    if ages:
+        q = statistics.quantiles(ages, n=10) if len(ages) >= 10 else sorted(ages)
+        print(f"Âge estimé à l'alerte : médiane {statistics.median(ages):.0f} s, déciles {[round(x) for x in q]}")
+    for _, it, name in rec.items[:8]:
+        print(f"  [{name}] {it.price} {it.currency} | {it.title[:40]!r} | {it.brand} | {it.size} | {it.status}"
+              f" | {it.url}")
+    by_search = {}
+    for _, _, name in rec.items:
+        by_search[name] = by_search.get(name, 0) + 1
+    print("Par recherche :", by_search)
+    ok = len(rec.items) > 0 and status["blocked"] == 0
+    print("VERDICT :", "OK" if ok else "ÉCHEC")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)-7s %(message)s")
+    sys.exit(asyncio.run(main(float(sys.argv[1]) if len(sys.argv) > 1 else 90)))

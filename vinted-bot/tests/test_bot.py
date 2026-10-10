@@ -10,7 +10,7 @@ from vinted_bot import filters
 from vinted_bot.client import RateLimited, VintedClient
 from vinted_bot.config import Config, Search, load_config, parse_vinted_url
 from vinted_bot.models import Item
-from vinted_bot.monitor import Monitor, weighted_cycle
+from vinted_bot.monitor import IdClock, Monitor, weighted_cycle
 from vinted_bot.store import Store
 
 
@@ -26,6 +26,23 @@ def raw_item(id, price="20.0", title="Nike Air Max", ts=None, new_price_format=T
     }
 
 
+B = 10_315_000_000  # ordre de grandeur réel des numéros d'annonce (octobre 2026)
+
+
+def svc_item(id, price="20.00", title="Nike Air Max 90", brand="Nike", second="42 · Très bon état", promoted=False):
+    """Annonce au format de l'API svc-catalogue (relevé réel de septembre-octobre 2026)."""
+    return {
+        "content_source": "catalog_promoted_items" if promoted else "catalog",
+        "id": id, "title": title, "promoted": promoted, "favourite_count": 0,
+        "item_box": {"first_line": brand or title, "second_line": second, "item_id": id},
+        "photo": {"url": f"https://images1.vinted.net/t/{id}/f800/x.webp", "high_resolution": {"id": "x"}},
+        "price": {"amount": price, "currency_code": "EUR"},
+        "total_item_price": {"amount": f"{float(price) + 0.9:.2f}", "currency_code": "EUR"},
+        "url": f"/items/{id}-nike-air-max-90",
+        "user": {"business": False, "id": 1, "login": "bob"},
+    }
+
+
 # --- config ---------------------------------------------------------------
 
 def test_parse_vinted_url():
@@ -34,7 +51,18 @@ def test_parse_vinted_url():
         "&brand_ids[]=53&price_to=60&order=relevance&time=123"
     )
     assert domain == "vinted.de"
-    assert params == {"search_text": "air max", "catalog_ids": "1206,79", "brand_ids": "53", "price_to": "60"}
+    assert params == {"search_text": "air max", "attribute_ids[catalog]": "1206,79",
+                      "attribute_ids[brand]": "53", "price_to": "60"}
+
+
+def test_parse_url_maps_every_filter_to_attribute_ids():
+    _, params = parse_vinted_url(
+        "https://www.vinted.fr/catalog?size_ids[]=207&size_ids[]=208&status_ids[]=6&color_ids[]=1"
+        "&material_ids[]=44&catalog_ids=5&search_id=999&disabled_personalization=true&currency=EUR"
+    )
+    assert params == {"attribute_ids[size]": "207,208", "attribute_ids[status]": "6",
+                      "attribute_ids[color]": "1", "attribute_ids[material]": "44",
+                      "attribute_ids[catalog]": "5"}
 
 
 def test_parse_rejects_other_sites():
@@ -46,7 +74,7 @@ def test_load_example_config():
     cfg = load_config("config.example.toml")
     assert len(cfg.searches) == 2
     s = cfg.searches[0]
-    assert s.domain == "vinted.fr" and s.params["brand_ids"] == "53"
+    assert s.domain == "vinted.fr" and s.params["attribute_ids[brand]"] == "53"
     assert s.api_params(20)["order"] == "newest_first"
     assert cfg.searches[1].params == {"search_text": "carhartt detroit jacket"}
     assert s.weight == 2 and cfg.searches[1].weight == 1 and cfg.searches[1].only_deals
@@ -113,12 +141,14 @@ def make_monitor(tmp_path, search, **cfg_kw):
 def test_warmup_then_only_new_items(tmp_path):
     search = Search(name="s", exclude=["lot"])
     mon, fake, rec = make_monitor(tmp_path, search)
+    old = B - 5_000_000  # ≈ 5 h plus tôt au rythme réel de 250 numéros/s
 
     async def scenario():
         fake.pages = [
-            [raw_item(i, "40.0") for i in (103, 102, 101, 100)],               # amorçage
-            [raw_item(i, p) for i, p in ((105, "20.0"), (104, "50.0"), (103, "40.0"))],
-            [raw_item(106, "10.0", "Lot chaussures"), raw_item(50, "5.0"), raw_item(105, "20.0")],
+            [svc_item(B + i, "40.00") for i in (3, 2, 1, 0)],                       # amorçage
+            [svc_item(B + 5, "20.00"), svc_item(B + 4, "50.00"), svc_item(B + 3, "40.00")],
+            [svc_item(B + 6, "10.00", "Lot chaussures"), svc_item(old, "5.00", promoted=True),
+             svc_item(B + 5, "20.00")],
         ]
         assert await mon.poll(search) == []
         assert fake.calls[0]["per_page"] == "96" and fake.calls[0]["order"] == "newest_first"
@@ -129,11 +159,73 @@ def test_warmup_then_only_new_items(tmp_path):
         return second, third
 
     second, third = asyncio.run(scenario())
-    assert [i.id for i in second] == [104, 105]
-    assert third == []  # 106 exclu par mot-clé, 50 = vieille annonce remontée, 105 déjà vue
+    assert [i.id for i in second] == [B + 4, B + 5]
+    assert third == []  # mot exclu, vieille annonce sponsorisée, annonce déjà vue
     deals = {item.id: deal for item, deal in rec.sent}
-    assert deals[105].is_deal and deals[105].median == 40.0
-    assert not deals[104].is_deal
+    assert deals[B + 5].is_deal and deals[B + 5].median == 40.0
+    assert not deals[B + 4].is_deal
+
+
+def test_out_of_order_ids_are_not_missed(tmp_path):
+    """Régression : sur le vrai Vinted, 43 % des nouveautés arrivent avec un numéro
+    inférieur au plus grand déjà vu (indexation décalée). Elles doivent être signalées."""
+    search = Search(name="s")
+    mon, fake, rec = make_monitor(tmp_path, search)
+
+    async def scenario():
+        fake.pages = [
+            [svc_item(B + 1000), svc_item(B + 900)],
+            [svc_item(B + 1500), svc_item(B + 1000), svc_item(B + 900)],
+            [svc_item(B + 1500), svc_item(B + 1200), svc_item(B + 1000), svc_item(B + 950)],
+        ]
+        await mon.poll(search)
+        a = await mon.poll(search)
+        b = await mon.poll(search)
+        return a, b
+
+    a, b = asyncio.run(scenario())
+    assert [i.id for i in a] == [B + 1500]
+    assert [i.id for i in b] == [B + 950, B + 1200]
+
+
+def test_old_item_revealed_by_a_sale_is_ignored_with_clock(tmp_path):
+    """Une vente dans le haut de la liste fait remonter une annonce jamais vue mais ancienne."""
+    search = Search(name="s")
+    mon, fake, rec = make_monitor(tmp_path, search)
+    mon.clock.observe(time.time(), B + 10_000)
+
+    async def scenario():
+        fake.pages = [
+            [svc_item(B + 9_000), svc_item(B + 8_000)],
+            [svc_item(B + 9_500), svc_item(B + 8_000), svc_item(B + 9_000 - 3 * 3600 * 250)],
+        ]
+        await mon.poll(search)
+        return await mon.poll(search)
+
+    found = asyncio.run(scenario())
+    assert [i.id for i in found] == [B + 9_500]
+    assert found[0].age_estimated and 0 <= time.time() - found[0].created_ts < 5
+
+
+def test_id_clock():
+    clock = IdClock()
+    assert clock.age(1) is None and clock.rate() == IdClock.DEFAULT_RATE
+    clock.observe(1000.0, B)
+    clock.observe(1120.0, B + 120 * 300)  # 300 numéros/s
+    assert clock.rate() == pytest.approx(300)
+    assert clock.age(B + 120 * 300 - 3000, now=1120.0) == pytest.approx(10)
+    assert clock.age(B + 120 * 300, now=1130.0) == pytest.approx(10)  # extrapolation
+
+
+def test_item_from_svc_catalogue():
+    item = Item.from_api(svc_item(B, "12.50"), "vinted.fr")
+    assert (item.brand, item.size, item.status) == ("Nike", "42", "Très bon état")
+    assert item.url == f"https://www.vinted.fr/items/{B}-nike-air-max-90"
+    assert item.price == 12.5 and item.total_price == 13.4 and item.currency == "EUR"
+    assert item.seller == "bob" and item.created_ts is None and not item.promoted
+    no_brand = Item.from_api(svc_item(B, title="Wax Warmer", brand="", second="Bon état"), "vinted.fr")
+    assert (no_brand.brand, no_brand.size, no_brand.status) == ("", "", "Bon état")
+    assert Item.from_api(svc_item(B, promoted=True), "vinted.fr").promoted
 
 
 def test_only_deals_and_max_age(tmp_path):
@@ -154,17 +246,17 @@ def test_only_deals_and_max_age(tmp_path):
 def test_restart_does_not_rewarm(tmp_path):
     search = Search(name="s")
     mon, fake, _ = make_monitor(tmp_path, search)
-    fake.pages = [[raw_item(1)]]
+    fake.pages = [[svc_item(B + 1)]]
     asyncio.run(mon.poll(search))
     mon2, fake2, rec2 = make_monitor(tmp_path, search)
-    fake2.pages = [[raw_item(2), raw_item(1)]]
+    fake2.pages = [[svc_item(B + 2), svc_item(B + 1)]]
 
     async def go():
         found = await mon2.poll(search)
         await asyncio.sleep(0)
         return found
 
-    assert [i.id for i in asyncio.run(go())] == [2]
+    assert [i.id for i in asyncio.run(go())] == [B + 2]
     assert len(rec2.sent) == 1
 
 
@@ -188,19 +280,23 @@ def test_item_matching_two_searches_alerts_once(tmp_path):
 
 class FakeVinted(BaseHTTPRequestHandler):
     api_statuses = []
-    seen_cookies = []
+    seen_auth = []
 
     def log_message(self, *a):
         pass
 
     def do_GET(self):
-        if self.path == "/":
+        if self.path == "/catalog":
             self.send_response(200)
             self.send_header("Set-Cookie", "access_token_web=tok; Path=/")
             self.end_headers()
             self.wfile.write(b"<html></html>")
             return
-        FakeVinted.seen_cookies.append(self.headers.get("Cookie"))
+        if not self.path.startswith("/svc-catalogue/items"):
+            self.send_response(404)
+            self.end_headers()
+            return
+        FakeVinted.seen_auth.append(self.headers.get("Authorization"))
         status = FakeVinted.api_statuses.pop(0) if FakeVinted.api_statuses else 200
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -213,7 +309,7 @@ class FakeVinted(BaseHTTPRequestHandler):
 def server():
     srv = HTTPServer(("127.0.0.1", 0), FakeVinted)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    FakeVinted.api_statuses, FakeVinted.seen_cookies = [], []
+    FakeVinted.api_statuses, FakeVinted.seen_auth = [], []
     yield f"http://127.0.0.1:{srv.server_address[1]}"
     srv.shutdown()
 
@@ -223,7 +319,7 @@ def test_client_refreshes_on_401_and_raises_on_429(server, monkeypatch):
     monkeypatch.setenv("no_proxy", "127.0.0.1")
 
     async def scenario():
-        c = VintedClient("vinted.fr", base_url=server, request_gap=0.01)
+        c = VintedClient("vinted.fr", base_url=server, api_url=server + "/svc-catalogue/items", request_gap=0.01)
         FakeVinted.api_statuses = [401, 200]
         items = await c.search({"order": "newest_first"})
         FakeVinted.api_statuses = [429]
@@ -237,7 +333,7 @@ def test_client_refreshes_on_401_and_raises_on_429(server, monkeypatch):
 
     items = asyncio.run(scenario())
     assert items[0]["id"] == 1
-    assert all("access_token_web=tok" in (c or "") for c in FakeVinted.seen_cookies)
+    assert FakeVinted.seen_auth and all(a == "Bearer tok" for a in FakeVinted.seen_auth)
 
 
 # --- vitesse : cadencement, voies, pipelining -------------------------------

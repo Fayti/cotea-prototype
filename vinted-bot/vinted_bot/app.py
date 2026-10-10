@@ -60,7 +60,7 @@ def alert_payload(item: Item, deal, search) -> dict:
         "title": item.title, "price": item.price, "total_price": item.total_price,
         "currency": item.currency, "brand": item.brand, "size": item.size, "status": item.status,
         "url": item.url, "photo": item.photo_url, "seller": item.seller,
-        "created_ts": item.created_ts, "detected_ts": time.time(),
+        "created_ts": item.created_ts, "age_estimated": item.age_estimated, "detected_ts": time.time(),
         "deal": deal.is_deal, "discount": deal.discount, "median": deal.median,
     }
 

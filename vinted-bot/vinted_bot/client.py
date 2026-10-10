@@ -1,12 +1,14 @@
 """Client HTTP pour l'API catalogue de Vinted.
 
-Vinted n'offre aucun flux temps réel : la seule source est l'endpoint catalogue trié
+Vinted n'offre aucun flux temps réel : la seule source est l'API catalogue du site
+(`https://api.vinted.<pays>/svc-catalogue/items` depuis septembre 2026), triée
 par « newest_first ». La vitesse de détection est donc bornée par le nombre de requêtes
 qu'une IP peut envoyer sans être bloquée. Chaque IP (connexion directe ou proxy) est une
 « voie » avec sa propre session, ses cookies et son propre rythme, ajusté automatiquement :
 plus lent après un blocage, puis retour progressif vers le rythme plancher configuré.
 
-L'API exige le cookie de session `access_token_web`, obtenu en chargeant la page d'accueil.
+Le jeton anonyme `access_token_web` (cookie posé par la page /catalog) est envoyé en
+`Authorization: Bearer`, comme le fait le site.
 curl_cffi imite l'empreinte TLS/HTTP2 d'un vrai Chrome, ce qui évite la majorité des
 blocages anti-bot qui visent `requests`/`httpx`.
 """
@@ -80,9 +82,11 @@ class VintedClient:
         request_gap: float = 1.0,
         timeout: float = 10.0,
         base_url: str | None = None,
+        api_url: str | None = None,
     ):
         self.domain = domain
         self.base = base_url or f"https://www.{domain}"
+        self.api_url = api_url or f"https://api.{domain}/svc-catalogue/items"
         self._impersonate = impersonate
         self._timeout = timeout
         lanes = ([None] if use_direct or not proxies else []) + list(proxies or [])
@@ -115,15 +119,19 @@ class VintedClient:
                 timeout=self._timeout,
                 headers={"Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"},
             )
-            resp = await session.get(self.base + "/")
+            # /catalog plutôt que / : Cloudflare met parfois la page d'accueil au défi, pas /catalog.
+            resp = await session.get(self.base + "/catalog")
             if resp.status_code in (403, 429):
                 await session.close()
-                raise RateLimited(f"page d'accueil {self.domain} via {lane.label} : HTTP {resp.status_code}")
+                raise RateLimited(f"page catalogue {self.domain} via {lane.label} : HTTP {resp.status_code}")
             if resp.status_code >= 400:
                 await session.close()
-                raise VintedError(f"page d'accueil {self.domain} via {lane.label} : HTTP {resp.status_code}")
-            if "access_token_web" not in session.cookies:
-                log.warning("Cookie access_token_web absent après chargement de %s", self.base)
+                raise VintedError(f"page catalogue {self.domain} via {lane.label} : HTTP {resp.status_code}")
+            token = session.cookies.get("access_token_web")
+            if token:
+                session.headers["Authorization"] = f"Bearer {token}"
+            else:
+                log.warning("Jeton access_token_web absent après chargement de %s/catalog", self.base)
             log.info("Session Vinted ouverte sur %s via %s", self.domain, lane.label)
             lane.session = session
             return session
@@ -140,18 +148,23 @@ class VintedClient:
             for attempt in range(2):
                 session = await self._session(lane)
                 resp = await session.get(
-                    f"{self.base}/api/v2/catalog/items",
+                    self.api_url,
                     params=params,
-                    headers={"Accept": "application/json, text/plain, */*", "Referer": self.base + "/catalog"},
+                    headers={"Accept": "application/json, text/plain, */*", "Origin": self.base,
+                             "Referer": self.base + "/catalog"},
                 )
-                if resp.status_code == 401 and attempt == 0:
-                    log.info("Jeton expiré sur %s (%s), renouvellement", self.domain, lane.label)
+                if resp.status_code in (401, 403) and attempt == 0:
+                    log.info("Jeton refusé sur %s (%s), renouvellement", self.domain, lane.label)
                     await self._reset(lane)
                     continue
                 if resp.status_code in (403, 429):
                     raise RateLimited(f"API {self.domain} via {lane.label} : HTTP {resp.status_code}")
+                if resp.status_code == 404:
+                    raise VintedError(f"API {self.domain} introuvable (404) : Vinted a probablement changé "
+                                      "d'adresse, une mise à jour du bot est nécessaire")
                 if resp.status_code >= 400:
-                    raise VintedError(f"API {self.domain} via {lane.label} : HTTP {resp.status_code}")
+                    raise VintedError(f"API {self.domain} via {lane.label} : HTTP {resp.status_code} "
+                                      f"{resp.text[:120]!r}")
                 try:
                     data = resp.json()
                 except ValueError as e:

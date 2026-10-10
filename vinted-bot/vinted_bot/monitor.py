@@ -33,6 +33,49 @@ def weighted_cycle(searches: list[Search]):
         yield searches[best]
 
 
+CLOCK_EVERY = 30.0  # secondes entre deux relevés du numéro d'annonce le plus récent
+
+
+class IdClock:
+    """Estime l'âge d'une annonce à partir de son numéro.
+
+    Vinted ne renvoie plus de date de publication (septembre 2026). Les numéros sont attribués
+    à la création de l'annonce, au rythme d'environ 15 000 par minute : en relevant
+    régulièrement le numéro le plus récent du catalogue, on convertit un écart de numéros
+    en secondes. Précision : quelques secondes, plus le temps passé par le vendeur à remplir
+    son annonce après l'envoi des photos.
+    """
+
+    DEFAULT_RATE = 250.0  # numéros par seconde, mesuré en octobre 2026
+
+    def __init__(self):
+        self.samples: deque[tuple[float, int]] = deque(maxlen=40)
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.samples)
+
+    def observe(self, ts: float, frontier: int) -> None:
+        if self.samples and frontier < self.samples[-1][1]:
+            frontier = self.samples[-1][1]
+        self.samples.append((ts, frontier))
+
+    def rate(self) -> float:
+        if len(self.samples) >= 2:
+            (t0, i0), (t1, i1) = self.samples[0], self.samples[-1]
+            if t1 - t0 >= 60 and i1 > i0:
+                return (i1 - i0) / (t1 - t0)
+        return self.DEFAULT_RATE
+
+    def age(self, item_id: int, now: float | None = None) -> float | None:
+        if not self.samples:
+            return None
+        now = now or time.time()
+        t, frontier = self.samples[-1]
+        rate = self.rate()
+        return max(0.0, (frontier + (now - t) * rate - item_id) / rate)
+
+
 class Stats:
     """Statistiques glissantes (dernière minute pour le débit, 100 derniers points sinon)."""
 
@@ -83,6 +126,7 @@ class Monitor:
         self.clients: dict[str, VintedClient] = {}
         self._pending: set[asyncio.Task] = set()
         self._alerted: OrderedDict[int, None] = OrderedDict()  # une annonce = une seule alerte
+        self.clock = IdClock()
         self.stats = Stats()
         # État par recherche, lu par l'interface.
         self.state: dict[str, dict] = {
@@ -115,12 +159,34 @@ class Monitor:
     async def _drive(self, domain: str, searches: list[Search]) -> None:
         client = self.client(domain)
         inflight = asyncio.Semaphore(self.cfg.max_inflight * len(client.lanes))
-        for search in weighted_cycle(searches):
+        cycle = weighted_cycle(searches)
+        next_clock = 0.0
+        while True:
             await inflight.acquire()
             lane = await client.acquire()
-            task = asyncio.create_task(self._poll_safe(search, lane, inflight))
+            if time.monotonic() >= next_clock:
+                next_clock = time.monotonic() + CLOCK_EVERY
+                coro = self._tick_clock(domain, lane, inflight)
+            else:
+                coro = self._poll_safe(next(cycle), lane, inflight)
+            task = asyncio.create_task(coro)
             self._pending.add(task)
             task.add_done_callback(self._pending.discard)
+
+    async def _tick_clock(self, domain: str, lane, inflight: asyncio.Semaphore) -> None:
+        """Relève le numéro d'annonce le plus récent de tout le catalogue (sert à dater)."""
+        try:
+            raw = await self.client(domain).search({"order": "newest_first", "per_page": "10", "page": "1"}, lane)
+            ids = [Item.from_api(r, domain) for r in raw]
+            ids = [i.id for i in ids if not i.promoted]
+            if ids:
+                self.clock.observe(time.time(), max(ids))
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.debug("Relevé d'horloge impossible : %s", e)
+        finally:
+            inflight.release()
 
     async def _poll_safe(self, search: Search, lane, inflight: asyncio.Semaphore) -> None:
         state = self.state.setdefault(search.key, {"last_ok": None, "last_error": None, "polls": 0, "ready": False})
@@ -162,20 +228,24 @@ class Monitor:
                 self.store.set_watermark(search.key, 0)
             return []
 
-        # Les ID Vinted sont croissants : une annonce « remontée » garde son vieil ID.
-        # Le filigrane élimine donc les remontées et les annonces sponsorisées anciennes.
-        watermark = self.store.watermark(search.key) or 0
-        fresh = sorted((i for i in items if i.id > watermark), key=lambda i: i.id)
+        # Nouvelle annonce = jamais vue dans cette recherche ET récente.
+        # Les numéros ne suivent pas l'ordre d'apparition (mesuré : 43 % des nouveautés ont un
+        # numéro inférieur au plus grand déjà vu, Vinted indexant avec un léger décalage). Un
+        # simple « numéro > dernier vu » en raterait donc près de la moitié. La récence écarte
+        # les annonces anciennes remontées, sponsorisées ou révélées par une vente au-dessus.
+        newest = self.store.watermark(search.key) or 0
+        floor = newest - self.cfg.max_age * self.clock.rate()
         self.store.set_watermark(search.key, max(i.id for i in items))
-        if not warmup and len(fresh) >= self.cfg.per_page:
-            log.warning("[%s] page pleine de nouveautés : des annonces ont pu être manquées "
-                        "(augmenter per_page ou weight, ou affiner la recherche)", search.name)
 
-        notified = []
+        notified, new_count = [], 0
         now = time.time()
-        for item in fresh:
-            if not self.store.mark_seen(search.key, item.id):
+        for item in sorted(items, key=lambda i: i.id):
+            if item.id <= floor or not self.store.mark_seen(search.key, item.id):
                 continue
+            new_count += 1
+            if item.created_ts is None and self.clock.ready:
+                item.created_ts, item.age_estimated = now - self.clock.age(item.id, now), True
+            age = now - item.created_ts if item.created_ts else None
             ok, reason = filters.accept(item, search)
             if not ok:
                 log.debug("[%s] rejet %s : %s", search.name, item.id, reason)
@@ -185,9 +255,8 @@ class Monitor:
                 self.store.add_price(search.key, item.price)
             if warmup:
                 continue
-            age = now - item.created_ts if item.created_ts else None
             if age is not None and age > self.cfg.max_age:
-                continue  # annonce publiée pendant un arrêt prolongé du bot
+                continue  # ancienne annonce remontée, ou publiée pendant un arrêt du bot
             deal = filters.evaluate_deal(item.price, median, self.cfg.deal_threshold)
             if search.only_deals and not deal.is_deal:
                 continue
@@ -202,9 +271,12 @@ class Monitor:
                 self.stats.ages.append(age)
             self._dispatch(item, deal, search)
             log.info("[%s] %s — %s%s", search.name, item.title, item.url,
-                     f" (photo de il y a {age:.0f} s)" if age is not None else "")
+                     f" (publiée il y a ~{age:.0f} s)" if age is not None else "")
         if warmup:
             log.info("[%s] initialisé (%d annonces de référence, aucune alerte)", search.name, len(items))
+        elif new_count >= self.cfg.per_page * 0.8:
+            log.warning("[%s] presque toute la page est nouvelle : des annonces ont pu être manquées "
+                        "(augmenter la priorité ou affiner la recherche)", search.name)
         return notified
 
     def _dispatch(self, item, deal, search) -> None:
@@ -237,7 +309,7 @@ class Monitor:
         if snap["blocked"] or snap["errors"]:
             parts.append(f"{snap['blocked']} blocage(s), {snap['errors']} erreur(s) en 1 min")
         if snap["photo_age_s"] is not None:
-            parts.append(f"{snap['alerts']} alerte(s), âge photo médian {snap['photo_age_s']} s")
+            parts.append(f"{snap['alerts']} alerte(s), publiées il y a ~{snap['photo_age_s']} s (médiane)")
         return " · ".join(parts)
 
     def status(self) -> dict:
