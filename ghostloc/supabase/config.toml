@@ -1,0 +1,4 @@
+# Seules les fonctions GhostLoc sont décrites ici.
+# Déploiement : supabase functions deploy gl-checkout gl-portal gl-stripe-webhook
+[functions.gl-stripe-webhook]
+verify_jwt = false

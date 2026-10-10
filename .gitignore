@@ -1,2 +1,6 @@
 .DS_Store
 supabase/.temp/
+__pycache__/
+*.pyc
+ghostloc/desktop/build/
+ghostloc/desktop/dist/

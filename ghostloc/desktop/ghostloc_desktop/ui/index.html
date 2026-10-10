@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GhostLoc">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>GhostLoc</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--y:#fffc00;--bg:#0b0b0d;--card:#151518;--card2:#1d1d21;--line:#ffffff1c;--txt:#f2f2f4;--mut:#9a9aa3;--red:#ff6b6b;--green:#5be08a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button{font:inherit;cursor:pointer}
+.app{max-width:1280px;margin:auto;padding:12px 16px 24px;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
+header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:8px;font-weight:900;font-size:19px}.logo b{color:var(--y)}
+.logo i{width:30px;height:30px;background:var(--y);border-radius:9px;display:grid;place-items:center;font-style:normal}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--mut)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mut)}.dot.ok{background:var(--green)}.dot.wait{background:var(--y)}.dot.bad{background:var(--red)}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.card h3{font-size:15px}
+.mut{color:var(--mut);font-size:13px}
+input,select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:11px 12px;color:var(--txt);font:inherit}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--y);color:#000;font-weight:800;border:0;border-radius:999px;padding:12px 16px;width:100%}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sec{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+.btn.small{width:auto;padding:7px 12px;font-size:13px}
+.row{display:flex;gap:8px}
+.mapwrap{position:sticky;top:12px;height:calc(100vh - 90px);min-height:420px;min-width:0;border-radius:18px;overflow:hidden;border:1px solid var(--line)}
+.dark-tiles{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)}
+#map{position:absolute;inset:0;background:#111}
+.search{position:absolute;top:12px;left:12px;right:12px;z-index:500;display:flex;gap:8px}
+.search input{box-shadow:0 6px 20px #0008}
+.cities{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.cities button{flex:none;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:999px;padding:6px 11px;font-size:13px}
+.cities button:hover{border-color:var(--y);color:var(--y)}
+.dest b{font-size:17px;color:var(--y);display:block}
+.bar{height:8px;background:var(--bg);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--y);width:0}
+.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.modes button{background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:8px 0;font-size:12px}
+.modes button.on{border-color:var(--y);color:var(--y)}
+.badge{font-size:11px;background:var(--y);color:#000;border-radius:999px;padding:1px 8px;font-weight:800;margin-left:6px}
+.steps{padding-left:18px;color:var(--mut);font-size:13px}.steps li{margin:3px 0}
+#qr{background:#fff;padding:10px;border-radius:12px;align-self:center}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translate(-50%,calc(100% + 40px));opacity:0;pointer-events:none;background:var(--y);color:#000;font-weight:700;padding:12px 18px;border-radius:14px;z-index:9999;transition:transform .25s;max-width:calc(100% - 32px)}
+.toast.err{background:var(--red);color:#fff}.toast.show{transform:translate(-50%,0);opacity:1}
+.hidden{display:none!important}
+.live{border-color:var(--y);box-shadow:0 0 0 1px var(--y)}
+a{color:var(--y)}
+@media(max-width:860px){.app{grid-template-columns:minmax(0,1fr)}.mapwrap{position:relative;top:0;height:52vh;min-height:300px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><i>👻</i>Ghost<b>Loc</b></div>
+    <div class="row" style="flex-wrap:wrap">
+      <span class="chip"><span class="dot" id="devDot"></span><span id="devChip">iPhone…</span></span>
+      <span class="chip" id="planChip">Non connecté</span>
+    </div>
+  </header>
+
+  <div class="mapwrap">
+    <div id="map"></div>
+    <form class="search" id="searchForm"><input id="q" placeholder="🔎 Ville, adresse, lieu…" autocomplete="off"></form>
+  </div>
+
+  <div class="side">
+    <div class="card hidden" id="cfgCard"><h3>⚠️ Application non configurée</h3><p class="mut">Le fichier config.json ne contient pas l'adresse du serveur GhostLoc.</p></div>
+
+    <div class="card hidden" id="loginCard">
+      <h3>Connexion à ton compte</h3>
+      <form id="loginForm" style="display:flex;flex-direction:column;gap:8px">
+        <input type="email" id="email" placeholder="E-mail" autocomplete="username" required>
+        <input type="password" id="password" placeholder="Mot de passe" autocomplete="current-password" required>
+        <button class="btn" type="submit">Se connecter</button>
+      </form>
+      <p class="mut">Pas encore de compte ? <a id="signupLink" target="_blank" href="#">Crée-le sur le site</a>.</p>
+    </div>
+
+    <div class="card" id="deviceCard">
+      <h3 id="devTitle">iPhone</h3>
+      <p class="mut" id="devMsg">Recherche…</p>
+      <ol class="steps hidden" id="devmodeSteps">
+        <li>Touche « Afficher l'option » ci-dessous.</li>
+        <li>Sur l'iPhone : Réglages › Confidentialité et sécurité › <b>Mode développeur</b> › activer.</li>
+        <li>Redémarre, puis touche « Activer » au réveil de l'iPhone.</li>
+      </ol>
+      <div class="row">
+        <button class="btn sec small hidden" id="devmodeBtn">Afficher l'option</button>
+        <button class="btn sec small hidden" id="retryBtn">Réessayer</button>
+      </div>
+    </div>
+
+    <div class="card" id="destCard">
+      <div class="cities" id="cities"></div>
+      <div class="dest"><span class="mut">Destination</span><b id="destName">Touche la carte</b><span class="mut" id="destCoord"></span></div>
+      <button class="btn" id="tpBtn" disabled>👻 Me téléporter ici</button>
+      <details id="routeBox">
+        <summary class="mut" style="cursor:pointer">🛫 Y aller en trajet <span class="badge">Illimité</span></summary>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+          <div class="modes" id="modes">
+            <button data-m="marche">🚶 Marche</button><button data-m="velo">🚲 Vélo</button>
+            <button data-m="voiture" class="on">🚗 Voiture</button><button data-m="avion">✈️ Avion</button>
+          </div>
+          <div class="row" style="align-items:center"><input id="speed" type="number" min="1" max="1200" step="1"><span class="mut" style="flex:none">km/h</span></div>
+          <button class="btn sec" id="routeBtn" disabled>Partir depuis ma position actuelle</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="card hidden" id="liveCard">
+      <h3>📍 Position simulée</h3>
+      <p><b id="liveName" style="color:var(--y)"></b></p>
+      <div id="routeInfo" class="hidden">
+        <div class="bar"><i id="routeBar"></i></div>
+        <p class="mut" id="routeTxt" style="margin-top:6px"></p>
+        <button class="btn sec small" id="stopRouteBtn" style="margin-top:6px">⏸ Mettre en pause</button>
+      </div>
+      <button class="btn sec" id="homeBtn">↩️ Revenir à ma vraie position</button>
+    </div>
+
+    <div class="card hidden" id="qrCard">
+      <h3>📱 Piloter depuis ton iPhone</h3>
+      <p class="mut">Même Wi-Fi que ce PC. Scanne, puis Partager › « Sur l'écran d'accueil ». Laisse cette fenêtre ouverte.</p>
+      <div id="qr"></div>
+    </div>
+
+    <div class="card" id="accCard">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <span class="mut" id="accEmail"></span>
+        <span class="row"><button class="btn sec small" id="refreshBtn">↻</button><button class="btn sec small" id="logoutBtn">Déconnexion</button></span>
+      </div>
+      <a id="manageLink" target="_blank" href="#" class="mut">Gérer mon abonnement ›</a>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const CITIES = [["🇦🇪","Dubaï",25.1972,55.2744],["🇫🇷","Paris",48.8584,2.2945],["🇺🇸","Miami",25.7907,-80.1300],["🇲🇨","Monaco",43.7384,7.4246],["🇪🇸","Marbella",36.5101,-4.8825],["🇺🇸","New York",40.7580,-73.9855],["🇬🇷","Santorin",36.4618,25.3753],["🇯🇵","Tokyo",35.6595,139.7005],["🇪🇸","Ibiza",38.9087,1.4320],["🇬🇧","Londres",51.5074,-0.1278],["🇺🇸","Los Angeles",34.1016,-118.3267],["🇬🇷","Mykonos",37.4467,25.3289],["🇮🇩","Bali",-8.4095,115.1889],["🇺🇸","Las Vegas",36.1147,-115.1728],["🇮🇹","Rome",41.8902,12.4922],["🇲🇦","Marrakech",31.6258,-7.9891],["🇲🇻","Maldives",4.1755,73.5093],["🇪🇸","Barcelone",41.4036,2.1744],["🇫🇷","Nice",43.6950,7.2650],["🇧🇷","Rio",-22.9711,-43.1822],["🇮🇹","Milan",45.4642,9.1900],["🇳🇱","Amsterdam",52.3731,4.8926],["🇹🇷","Istanbul",41.0082,28.9784],["🇸🇬","Singapour",1.2834,103.8607],["🇹🇭","Bangkok",13.7563,100.5018],["🇲🇽","Tulum",20.2114,-87.4654],["🇵🇹","Lisbonne",38.7223,-9.1393],["🇰🇷","Séoul",37.5665,126.9780],["🇦🇺","Sydney",-33.8568,151.2153],["🇨🇦","Montréal",45.5017,-73.5673]];
+const SPEEDS = {marche:5, velo:16, voiture:50, avion:850};
+const MODE_LABEL = {marche:"à pied", velo:"à vélo", voiture:"en voiture", avion:"en avion"};
+let S = null, dest = null, mode = "voiture", qrDone = false;
+
+const map = L.map("map", {zoomControl: false, worldCopyJump: true}).setView([30, 10], 2);
+L.control.zoom({position: "bottomright"}).addTo(map);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© OpenStreetMap", maxZoom: 19, className: "dark-tiles"}).addTo(map);
+const ghost = L.divIcon({html: '<div style="font-size:34px;filter:drop-shadow(0 2px 6px #000)">👻</div>', className: "", iconSize: [34, 34], iconAnchor: [17, 30]});
+const pin = L.divIcon({html: '<div style="font-size:28px;filter:drop-shadow(0 2px 6px #000)">📍</div>', className: "", iconSize: [28, 28], iconAnchor: [14, 26]});
+let ghostMk = null, destMk = null, routeLine = null, firstFix = true;
+
+function toast(text, err) {
+  const t = $("toast"); t.textContent = text; t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 3800);
+}
+async function api(path, body) {
+  const r = await fetch(path, {method: body === undefined ? "GET" : "POST", headers: {"Content-Type": "application/json"}, body: body === undefined ? undefined : JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Erreur " + r.status);
+  return j;
+}
+async function act(btn, path, body, ok) {
+  if (btn) btn.disabled = true;
+  try { const s = await api(path, body || {}); if (s.account) render(s); if (ok) toast(ok); }
+  catch (e) { toast(e.message, true); }
+  finally { if (btn) btn.disabled = false; poll(); }
+}
+function setDest(name, lat, lng, fly) {
+  dest = {name, lat, lng};
+  if (destMk) destMk.setLatLng([lat, lng]); else destMk = L.marker([lat, lng], {icon: pin}).addTo(map);
+  if (fly) map.flyTo([lat, lng], Math.max(map.getZoom(), 12), {duration: 1});
+  $("destName").textContent = name;
+  $("destCoord").textContent = lat.toFixed(5) + ", " + lng.toFixed(5);
+  render(S);
+}
+CITIES.forEach(([f, n, la, lo]) => {
+  const b = document.createElement("button"); b.textContent = f + " " + n;
+  b.onclick = () => setDest(n, la, lo, true); $("cities").appendChild(b);
+});
+map.on("click", (e) => setDest("Point choisi", e.latlng.lat, e.latlng.lng, false));
+$("searchForm").onsubmit = async (e) => {
+  e.preventDefault(); const q = $("q").value.trim(); if (!q) return;
+  try {
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=fr&q=" + encodeURIComponent(q));
+    const j = await r.json();
+    if (!j[0]) return toast("Lieu introuvable", true);
+    setDest(j[0].display_name.split(",").slice(0, 2).join(","), +j[0].lat, +j[0].lon, true); $("q").blur();
+  } catch { toast("Recherche indisponible", true); }
+};
+document.querySelectorAll("#modes button").forEach((b) => b.onclick = () => {
+  mode = b.dataset.m; document.querySelectorAll("#modes button").forEach((x) => x.classList.toggle("on", x === b));
+  $("speed").value = SPEEDS[mode];
+});
+$("speed").value = SPEEDS[mode];
+
+$("loginForm").onsubmit = (e) => { e.preventDefault(); act(e.submitter, "/api/login", {email: $("email").value, password: $("password").value}, "Connecté ✅"); };
+$("logoutBtn").onclick = (e) => act(e.target, "/api/logout", {});
+$("refreshBtn").onclick = (e) => act(e.target, "/api/refresh", {}, "Compte à jour");
+$("retryBtn").onclick = (e) => act(e.target, "/api/connect", {});
+$("devmodeBtn").onclick = (e) => act(e.target, "/api/devmode", {}, "Option affichée dans Réglages › Confidentialité et sécurité");
+$("tpBtn").onclick = (e) => dest && act(e.target, "/api/teleport", dest, "👻 Tu es à " + dest.name);
+$("routeBtn").onclick = (e) => dest && act(e.target, "/api/route", {...dest, mode, speed: +$("speed").value}, "Trajet lancé " + MODE_LABEL[mode]);
+$("stopRouteBtn").onclick = (e) => act(e.target, "/api/route/stop", {});
+$("homeBtn").onclick = (e) => act(e.target, "/api/home", {}, "↩️ Position réelle rétablie");
+
+function hours(sec) { const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60); return h + " h " + String(m).padStart(2, "0"); }
+function dur(sec) { return sec > 3600 ? hours(sec) : Math.ceil(sec / 60) + " min"; }
+
+function render(s) {
+  if (!s) return; S = s;
+  const acc = s.account, ent = acc.entitlement, dev = s.device;
+  $("cfgCard").classList.toggle("hidden", acc.configured);
+  $("loginCard").classList.toggle("hidden", !acc.configured || !!acc.email);
+  $("accCard").classList.toggle("hidden", !acc.email);
+  $("accEmail").textContent = acc.email || "";
+  const site = (s.app && s.app.siteUrl) || "";
+  $("signupLink").href = site + "/compte.html"; $("manageLink").href = site + "/compte.html";
+
+  let plan = "Non connecté";
+  if (acc.email) {
+    if (!ent || !ent.active) plan = "Aucun abonnement";
+    else if (ent.plan === "illimite") plan = "♾️ Illimité";
+    else plan = "Essentiel · " + hours(ent.remaining_seconds || 0) + " restantes";
+  }
+  $("planChip").textContent = plan;
+
+  const st = dev.status;
+  $("devDot").className = "dot " + (st === "ready" ? "ok" : ["pairing", "preparing", "devmode", "locked"].includes(st) ? "wait" : "bad");
+  $("devChip").textContent = st === "ready" ? (dev.name + " · iOS " + dev.ios + " · " + dev.connection) : "iPhone non prêt";
+  $("devTitle").textContent = st === "ready" ? "✅ " + dev.name : "iPhone";
+  $("devMsg").textContent = dev.message;
+  $("devmodeSteps").classList.toggle("hidden", st !== "devmode");
+  $("devmodeBtn").classList.toggle("hidden", st !== "devmode");
+  $("retryBtn").classList.toggle("hidden", ["ready", "pairing", "preparing"].includes(st));
+  $("deviceCard").classList.toggle("hidden", st === "ready" && !!s.location);
+
+  const canUse = st === "ready" && !!acc.email && ent && ent.active;
+  $("tpBtn").disabled = !dest || !canUse;
+  $("routeBtn").disabled = !dest || !canUse || !s.location || !ent.routes;
+  $("routeBtn").textContent = !ent || !ent.routes ? "Réservé à l'Illimité" : s.location ? "Partir depuis ma position actuelle" : "Téléporte-toi d'abord au départ";
+
+  const loc = s.location;
+  $("liveCard").classList.toggle("hidden", !loc);
+  $("liveCard").classList.toggle("live", !!loc);
+  if (loc) {
+    $("liveName").textContent = loc.name;
+    if (ghostMk) ghostMk.setLatLng([loc.lat, loc.lng]); else ghostMk = L.marker([loc.lat, loc.lng], {icon: ghost, zIndexOffset: 1000}).addTo(map);
+    if (firstFix) { map.setView([loc.lat, loc.lng], 12); firstFix = false; }
+  } else if (ghostMk) { ghostMk.remove(); ghostMk = null; firstFix = true; }
+
+  const r = s.route;
+  $("routeInfo").classList.toggle("hidden", !r);
+  if (r) {
+    $("routeBar").style.width = Math.min(100, 100 * r.done_m / Math.max(r.distance_m, 1)) + "%";
+    $("routeTxt").textContent = MODE_LABEL[r.mode] + " vers " + r.to.name + " · " + (r.distance_m - r.done_m > 1000 ? ((r.distance_m - r.done_m) / 1000).toFixed(1) + " km" : Math.round(r.distance_m - r.done_m) + " m") + " · arrivée dans " + dur(r.eta_s);
+    if (!routeLine) routeLine = L.polyline(r.path, {color: "#fffc00", weight: 4, opacity: .8, dashArray: "6 8"}).addTo(map);
+  } else if (routeLine) { routeLine.remove(); routeLine = null; }
+
+  if (s.notice && s.notice !== render._lastNotice) toast(s.notice, true);
+  render._lastNotice = s.notice;
+
+  const local = ["127.0.0.1", "localhost"].includes(location.hostname);
+  $("qrCard").classList.toggle("hidden", !local || !s.app);
+  if (local && s.app && !qrDone && window.QRCode) {
+    new QRCode($("qr"), {text: s.app.lanUrl, width: 180, height: 180}); qrDone = true;
+  }
+}
+
+async function poll() { try { render(await api("/api/state")); } catch {} }
+setInterval(poll, 1500); poll();
+
+// Destination transmise par le site (?go=lat,lng,nom)
+const go = new URLSearchParams(location.search).get("go");
+if (go) { const [la, lo, ...n] = go.split(","); if (!isNaN(+la) && !isNaN(+lo)) setTimeout(() => setDest(decodeURIComponent(n.join(",")) || "Destination", +la, +lo, true), 300); }
+</script>
+</body>
+</html>
