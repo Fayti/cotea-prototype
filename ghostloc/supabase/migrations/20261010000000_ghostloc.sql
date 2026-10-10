@@ -40,6 +40,7 @@ create table if not exists public.gl_sessions (
   seconds integer not null default 0
 );
 create index if not exists gl_sessions_user_period on public.gl_sessions (user_id, period_start);
+create index if not exists gl_hour_packs_user_period on public.gl_hour_packs (user_id, period_start);
 
 alter table public.gl_customers enable row level security;
 alter table public.gl_subscriptions enable row level security;
@@ -47,17 +48,17 @@ alter table public.gl_hour_packs enable row level security;
 alter table public.gl_sessions enable row level security;
 
 drop policy if exists gl_customers_read on public.gl_customers;
-create policy gl_customers_read on public.gl_customers for select using (auth.uid() = user_id);
+create policy gl_customers_read on public.gl_customers for select to authenticated using ((select auth.uid()) = user_id);
 drop policy if exists gl_subscriptions_read on public.gl_subscriptions;
-create policy gl_subscriptions_read on public.gl_subscriptions for select using (auth.uid() = user_id);
+create policy gl_subscriptions_read on public.gl_subscriptions for select to authenticated using ((select auth.uid()) = user_id);
 drop policy if exists gl_hour_packs_read on public.gl_hour_packs;
-create policy gl_hour_packs_read on public.gl_hour_packs for select using (auth.uid() = user_id);
+create policy gl_hour_packs_read on public.gl_hour_packs for select to authenticated using ((select auth.uid()) = user_id);
 drop policy if exists gl_sessions_read on public.gl_sessions;
-create policy gl_sessions_read on public.gl_sessions for select using (auth.uid() = user_id);
+create policy gl_sessions_read on public.gl_sessions for select to authenticated using ((select auth.uid()) = user_id);
 
 -- Quota inclus dans l'Essentiel : 48 h par période payée.
 create or replace function public.gl_quota_seconds(p_plan text)
-returns integer language sql immutable as $$
+returns integer language sql immutable set search_path = public as $$
   select case p_plan when 'essentiel' then 48 * 3600 else null end
 $$;
 

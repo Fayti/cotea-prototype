@@ -161,7 +161,8 @@ L.control.zoom({position: "bottomright"}).addTo(map);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© OpenStreetMap", maxZoom: 19, className: "dark-tiles"}).addTo(map);
 const ghost = L.divIcon({html: '<div style="font-size:34px;filter:drop-shadow(0 2px 6px #000)">👻</div>', className: "", iconSize: [34, 34], iconAnchor: [17, 30]});
 const pin = L.divIcon({html: '<div style="font-size:28px;filter:drop-shadow(0 2px 6px #000)">📍</div>', className: "", iconSize: [28, 28], iconAnchor: [14, 26]});
-let ghostMk = null, destMk = null, routeLine = null, firstFix = true;
+let ghostMk = null, destMk = null, routeLine = null, firstFix = true, follow = true;
+map.on("dragstart", () => { follow = false; });
 
 function toast(text, err) {
   const t = $("toast"); t.textContent = text; t.className = "toast show" + (err ? " err" : "");
@@ -226,7 +227,7 @@ function drawRecents() {
   list.forEach((r) => { const b = document.createElement("button"); b.textContent = "🕘 " + r.name; b.onclick = () => setDest(r.name, r.lat, r.lng, true); $("recent").appendChild(b); });
 }
 drawRecents();
-$("routeBtn").onclick = (e) => { if (!dest) return; remember(dest); act(e.target, "/api/route", {...dest, mode, speed: +$("speed").value}, "Trajet lancé " + MODE_LABEL[mode]); };
+$("routeBtn").onclick = (e) => { if (!dest) return; remember(dest); follow = true; act(e.target, "/api/route", {...dest, mode, speed: +$("speed").value}, "Trajet lancé " + MODE_LABEL[mode]); };
 $("stopRouteBtn").onclick = (e) => act(e.target, "/api/route/stop", {});
 $("diagBtn").onclick = async () => {
   try {
@@ -290,6 +291,7 @@ function render(s) {
     $("routeBar").style.width = Math.min(100, 100 * r.done_m / Math.max(r.distance_m, 1)) + "%";
     $("routeTxt").textContent = MODE_LABEL[r.mode] + " vers " + r.to.name + " · " + (r.distance_m - r.done_m > 1000 ? ((r.distance_m - r.done_m) / 1000).toFixed(1) + " km" : Math.round(r.distance_m - r.done_m) + " m") + " · arrivée dans " + dur(r.eta_s);
     if (!routeLine) routeLine = L.polyline(r.path, {color: "#fffc00", weight: 4, opacity: .8, dashArray: "6 8"}).addTo(map);
+    if (follow && loc) map.panTo([loc.lat, loc.lng], {animate: true, duration: 0.8});
   } else if (routeLine) { routeLine.remove(); routeLine = null; }
 
   if (s.notice && s.notice !== render._lastNotice) toast(s.notice, true);
