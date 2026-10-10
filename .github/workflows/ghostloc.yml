@@ -78,6 +78,13 @@ jobs:
       - run: python build.py
       - name: Vérifie l'exécutable
         run: ${{ matrix.exe }} --selftest
+      - name: Démarre l'exécutable (iPhone simulé) et interroge son API
+        run: |
+          ${{ matrix.exe }} --demo --no-browser --local-only --port 8799 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8799/api/state > state.json && grep -q '"status":"ready"' state.json && break; sleep 1; done
+          cat state.json
+          grep -q '"status":"ready"' state.json
+          curl -sf http://127.0.0.1:8799/ | grep -q "GhostLoc"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.zip }}

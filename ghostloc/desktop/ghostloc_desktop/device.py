@@ -37,6 +37,11 @@ StatusCallback = Callable[[str, str], None]
 
 
 class IPhoneLink:
+    DEVMODE_HELP = (
+        "Active le mode développeur : Réglages › Confidentialité et sécurité › Mode développeur, "
+        "puis redémarre l'iPhone et confirme « Activer »."
+    )
+
     def __init__(self) -> None:
         self.serial: Optional[str] = None
         self.name = ""
@@ -68,6 +73,7 @@ class IPhoneLink:
         from pymobiledevice3 import usbmux
         from pymobiledevice3.exceptions import (
             AlreadyMountedError,
+            DeveloperModeIsNotEnabledError,
             PairingDialogResponsePendingError,
             PasswordRequiredError,
             UserDeniedPairingError,
@@ -106,11 +112,7 @@ class IPhoneLink:
 
         try:
             if version >= Version("16.0") and not await lockdown.get_developer_mode_status():
-                raise LinkError(
-                    "devmode",
-                    "Active le mode développeur : Réglages › Confidentialité et sécurité › Mode développeur, "
-                    "puis redémarre l'iPhone et confirme « Activer ».",
-                )
+                raise LinkError("devmode", self.DEVMODE_HELP)
 
             on_status("preparing", "Préparation de l'iPhone (première fois : jusqu'à 1 minute)…")
             if version >= Version("17.0"):
@@ -144,6 +146,10 @@ class IPhoneLink:
             await stack.aclose()
             self._lockdown = None
             raise
+        except DeveloperModeIsNotEnabledError as e:
+            await stack.aclose()
+            self._lockdown = None
+            raise LinkError("devmode", self.DEVMODE_HELP) from e
         except Exception as e:
             await stack.aclose()
             self._lockdown = None
