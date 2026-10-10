@@ -1,7 +1,7 @@
 {
   "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
   "supabaseAnonKey": "YOUR-ANON-KEY",
-  "siteUrl": "https://ghostloc.example",
+  "siteUrl": "https://fayti.github.io/cotea-prototype/ghostloc",
   "downloads": {
     "windows": "https://github.com/Fayti/cotea-prototype/releases/latest/download/GhostLoc-Windows.zip",
     "mac": "https://github.com/Fayti/cotea-prototype/releases/latest/download/GhostLoc-macOS.zip"

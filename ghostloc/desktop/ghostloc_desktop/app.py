@@ -145,13 +145,40 @@ def port_in_use(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def selftest() -> int:
+    """Importe tout ce que le chemin iPhone réel charge à la demande (utile après PyInstaller)."""
+    import importlib
+
+    modules = [
+        "pymobiledevice3.usbmux",
+        "pymobiledevice3.lockdown",
+        "pymobiledevice3.exceptions",
+        "pymobiledevice3.remote.userspace_tunnel",
+        "pymobiledevice3.services.mobile_image_mounter",
+        "pymobiledevice3.services.dvt.instruments.dvt_provider",
+        "pymobiledevice3.services.dvt.instruments.location_simulation",
+        "pymobiledevice3.services.simulate_location",
+        "pymobiledevice3.services.amfi",
+        "pymobiledevice3.services.cryptexd",
+    ]
+    for name in modules:
+        importlib.import_module(name)
+    assert (ui_dir() / "index.html").exists(), "interface absente"
+    cfg = load_config()
+    print(f"GhostLoc {__version__} selftest OK — {len(modules)} modules, serveur : {cfg['supabaseUrl'] or '(non configuré)'}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ghostloc")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--demo", action="store_true", help="iPhone simulé, pour tester sans appareil")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--local-only", action="store_true", help="refuser les connexions depuis le Wi-Fi")
+    parser.add_argument("--selftest", action="store_true", help="vérifie que l'exécutable embarque tout le nécessaire")
     args = parser.parse_args()
+    if args.selftest:
+        sys.exit(selftest())
 
     folder = data_dir()
     handler = RotatingFileHandler(folder / "ghostloc.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8")

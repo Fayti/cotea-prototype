@@ -1,0 +1,97 @@
+name: GhostLoc
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["ghostloc/**", ".github/workflows/ghostloc.yml"]
+    tags: ["ghostloc-v*"]
+  pull_request:
+    paths: ["ghostloc/**", ".github/workflows/ghostloc.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Base de données (migration jouée deux fois + tests de quota)
+        run: |
+          psql -v ON_ERROR_STOP=1 -f ghostloc/supabase/tests/auth_stub.sql
+          psql -v ON_ERROR_STOP=1 -q -f ghostloc/supabase/migrations/20261010000000_ghostloc.sql
+          psql -v ON_ERROR_STOP=1 -q -f ghostloc/supabase/migrations/20261010000000_ghostloc.sql
+          psql -v ON_ERROR_STOP=1 -f ghostloc/supabase/tests/quota_test.sql
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.1.4
+      - name: Fonctions Stripe (vérification des types)
+        working-directory: ghostloc/supabase/functions
+        run: deno check gl-checkout/index.ts gl-portal/index.ts gl-stripe-webhook/index.ts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: App PC (tests)
+        working-directory: ghostloc/desktop
+        run: |
+          pip install -r requirements.txt pytest httpx
+          python -m pytest -q tests
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            exe: dist/GhostLoc/GhostLoc.exe
+            zip: GhostLoc-Windows.zip
+          - os: macos-latest
+            exe: dist/GhostLoc/GhostLoc
+            zip: GhostLoc-macOS.zip
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ghostloc/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pyinstaller
+      - run: python build.py
+      - name: Vérifie l'exécutable
+        run: ${{ matrix.exe }} --selftest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.zip }}
+          path: ghostloc/desktop/dist/${{ matrix.zip }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/ghostloc-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.zip
+          make_latest: true
