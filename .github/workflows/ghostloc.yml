@@ -46,7 +46,7 @@ jobs:
         run: |
           deno check gl-checkout/index.ts gl-portal/index.ts gl-stripe-webhook/index.ts
           deno lint
-          deno test --allow-env --allow-net gl-stripe-webhook/handler.test.ts
+          deno test --allow-env --allow-net gl-stripe-webhook/handler.test.ts gl-checkout/handler.test.ts
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

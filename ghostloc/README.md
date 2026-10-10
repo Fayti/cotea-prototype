@@ -7,7 +7,7 @@ Service payant qui change la position GPS d'un iPhone (carte d'amis Snapchat, Pl
 | Site | `index.html`, `compte.html`, `installation.html`, `legal.html`, `assets/` | Vitrine, comptes, paiement, téléchargement |
 | Configuration | `config.json` | Adresse Supabase, clé publique, URL du site, liens de téléchargement (lue par le site **et** embarquée dans l'app PC) |
 | Base + quota | `supabase/migrations/` | Abonnements, packs d'heures, décompte du temps (fonctions SQL `gl_*`) |
-| Paiement | `supabase/functions/` | `gl-checkout` (Stripe Checkout, changement de formule), `gl-portal` (résiliation, factures), `gl-stripe-webhook` |
+| Paiement | `supabase/functions/` | `gl-checkout` (Stripe Checkout, changement de formule, réactivation), `gl-portal` (résiliation, factures), `gl-stripe-webhook` ; tests `*/handler.test.ts` |
 | App PC | `desktop/` | Pilote l'iPhone (pymobiledevice3), interface web locale, pilotage depuis l'iPhone par QR code |
 
 ## Formules

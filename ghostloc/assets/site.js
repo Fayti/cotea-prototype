@@ -37,7 +37,7 @@ window.GL = (() => {
         throw new Error(MESSAGES[code] || code);
       }
       if (data.url) { location.href = data.url; return; }
-      if (data.updated) { toast("Formule modifiée ✅"); setTimeout(() => location.href = "compte.html?paiement=ok", 1200); }
+      if (data.updated) { toast("C'est fait ✅"); setTimeout(() => location.href = "compte.html?paiement=ok", 1200); }
     } catch (e) { toast(e.message, true); }
     finally { if (btn) btn.disabled = false; }
   }

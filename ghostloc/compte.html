@@ -239,6 +239,7 @@ async function render() {
   const actions = $("subActions"); actions.innerHTML = "";
   if (active && ent.plan === "essentiel") actions.appendChild(actionButton("Passer à l'Illimité", "", (b) => GL.checkout("illimite", b)));
   if (active && ent.plan === "illimite") actions.appendChild(actionButton("Passer à l'Essentiel", "sec", (b) => confirm("Passer à l'Essentiel (48 h/mois) ? Le changement est calculé au prorata.") && GL.checkout("essentiel", b)));
+  if (active && ent.cancel_at_period_end) actions.appendChild(actionButton("Réactiver mon abonnement", "", (b) => GL.checkout(ent.plan, b)));
   if (ent.plan) actions.appendChild(actionButton(active ? "Gérer / résilier" : "Factures et paiement", "sec", portal));
 
   const {data: rows} = await sb.from("gl_sessions").select("device,started_at,seconds,ended_at").order("started_at", {ascending: false}).limit(10);
