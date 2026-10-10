@@ -1,7 +1,9 @@
 """Exploration ponctuelle de la nouvelle API catalogue de Vinted (CI uniquement)."""
 import asyncio
+import collections
 import json
-import re
+import statistics
+import time
 
 from curl_cffi.requests import AsyncSession
 
@@ -9,83 +11,80 @@ WWW = "https://www.vinted.fr"
 API = "https://api.vinted.fr/svc-catalogue/items"
 
 
-def brief(data):
-    items = data.get("items") or []
-    out = []
-    for it in items[:6]:
-        price = it.get("price")
-        box = it.get("item_box") or {}
-        out.append((it.get("id"), price.get("amount") if isinstance(price, dict) else price,
-                    box.get("first_line"), box.get("second_line")))
-    return len(items), out
+def strip(item):
+    return {k: v for k, v in item.items() if k not in ("photos",)} | {
+        "photo": {k: v for k, v in (item.get("photo") or {}).items() if k not in ("thumbnails",)}}
 
 
 async def main():
     async with AsyncSession(impersonate="chrome", timeout=20, headers={"Accept-Language": "fr-FR,fr;q=0.9"}) as s:
-        for path in ("/", "/catalog"):
-            r = await s.get(WWW + path)
-            print("GET", path, r.status_code, "cookies:", sorted(s.cookies.keys()))
+        await s.get(WWW + "/catalog")
         token = s.cookies.get("access_token_web")
-        print("TOKEN?", bool(token), (token or "")[:12])
         auth = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-        base = {"search_text": "nike", "order": "newest_first", "per_page": "5", "page": "1"}
 
-        r = await s.get(API, params=base, headers={"Accept": "application/json"})
-        print("NO-AUTH", r.status_code, r.text[:200])
-        r = await s.get(API, params=base, headers=auth)
-        print("AUTH", r.status_code)
-        data = r.json() if r.status_code == 200 else {}
-        print("TOP KEYS", list(data.keys()))
-        if data.get("items"):
-            print("FIRST ITEM", json.dumps(data["items"][0], ensure_ascii=False)[:3500])
-        for k, v in data.items():
-            if k != "items":
-                print("META", k, json.dumps(v, ensure_ascii=False)[:600])
-        print("ORDER ids", [i.get("id") for i in data.get("items", [])])
+        async def get(params):
+            r = await s.get(API, params=params, headers=auth)
+            return r.status_code, (r.json() if r.status_code == 200 else r.text[:200])
 
-        variants = {
-            "price_to=10": {"price_to": "10"},
-            "price_to=10&currency": {"price_to": "10", "currency": "EUR"},
+        st, data = await get({"order": "newest_first", "per_page": "96", "page": "1"})
+        items = data["items"]
+        print("KEYS", sorted(items[0].keys()))
+        for it in items[:2]:
+            print("ITEM", json.dumps(strip(it), ensure_ascii=False)[:2500])
+        print("CONTENT_SOURCE", collections.Counter(i.get("content_source") for i in items))
+        odd = [i for i in items if i.get("content_source") != "search"][:3]
+        for it in odd:
+            print("ODD", json.dumps(strip(it), ensure_ascii=False)[:1500])
+        ids = [i["id"] for i in items]
+        print("IDS", ids[:30])
+
+        for label, p in {
             "brand_ids=53": {"brand_ids": "53"},
-            "brand_ids[]=53": {"brand_ids[]": "53"},
             "attribute_ids[brand]=53": {"attribute_ids[brand]": "53"},
-            "catalog_ids=1206": {"catalog_ids": "1206"},
-            "catalog[]=1206": {"catalog[]": "1206"},
-            "attribute_ids[catalog]=1206": {"attribute_ids[catalog]": "1206"},
-            "status_ids=6": {"status_ids": "6"},
-            "attribute_ids[status]=6": {"attribute_ids[status]": "6"},
-            "size_ids=207": {"size_ids": "207"},
-            "attribute_ids[size]=207": {"attribute_ids[size]": "207"},
-            "per_page=96": {"per_page": "96"},
-        }
-        for label, extra in variants.items():
-            p = {**base, **extra}
-            r = await s.get(API, params=p, headers=auth)
-            if r.status_code == 200:
-                print("VAR", label, 200, brief(r.json()))
+            "attribute_ids[brand]=53,14": {"attribute_ids[brand]": "53,14"},
+            "attribute_ids[size]=207,208": {"attribute_ids[size]": "207,208"},
+            "attribute_ids[color]=1": {"attribute_ids[color]": "1"},
+            "attribute_ids[material]=44": {"attribute_ids[material]": "44"},
+            "price_from=500": {"price_from": "500"},
+        }.items():
+            st, d = await get({"order": "newest_first", "per_page": "20", "page": "1", **p})
+            if st == 200:
+                rows = [((i.get("item_box") or {}).get("first_line"), (i.get("item_box") or {}).get("second_line"),
+                         (i.get("price") or {}).get("amount")) for i in d["items"][:8]]
+                print("VAR", label, collections.Counter(r[0] for r in rows).most_common(4), rows[:4])
             else:
-                print("VAR", label, r.status_code, r.text[:200])
+                print("VAR", label, st, d)
             await asyncio.sleep(0.5)
 
-        # Que demande le site lui-même ? Cherche svc-catalogue dans ses scripts.
-        r = await s.get(WWW + "/catalog?search_text=nike&brand_ids[]=53&order=newest_first")
-        html = r.text
-        print("CATALOG PAGE", r.status_code, r.url)
-        scripts = re.findall(r'<script[^>]+src="([^"]+)"', html)
-        hits = set()
-        for src in scripts[:80]:
-            url = src if src.startswith("http") else WWW + src
-            try:
-                js = (await s.get(url)).text
-            except Exception:
+        # Expérience : comment arrivent les nouvelles annonces ? (recherche large, 150 s)
+        seen, max_id, events = set(ids), max(ids), []
+        start_max, t0, polls, rtts = max_id, time.time(), 0, []
+        while time.time() - t0 < 150:
+            q0 = time.monotonic()
+            st, d = await get({"order": "newest_first", "per_page": "96", "page": "1"})
+            rtts.append(time.monotonic() - q0)
+            polls += 1
+            if st != 200:
+                print("POLL", st, d)
+                await asyncio.sleep(5)
                 continue
-            for m in re.finditer(r"svc-catalogue", js):
-                hits.add(js[max(0, m.start() - 200): m.end() + 300].replace("\n", " "))
-            for m in re.finditer(r"attribute_ids", js):
-                hits.add(js[max(0, m.start() - 150): m.end() + 150].replace("\n", " "))
-        for h in sorted(hits)[:25]:
-            print("JS>", h)
-        print("HTML svc-catalogue count", html.count("svc-catalogue"), "attribute_ids", html.count("attribute_ids"))
+            for pos, it in enumerate(d["items"]):
+                if it["id"] not in seen:
+                    seen.add(it["id"])
+                    events.append((it["id"] - max_id, pos, it.get("content_source")))
+            max_id = max(max_id, *(i["id"] for i in d["items"]))
+            await asyncio.sleep(2.5)
+        mins = (time.time() - t0) / 60
+        deltas = [e[0] for e in events]
+        print(f"POLLS {polls} rtt médian {statistics.median(rtts)*1000:.0f} ms | nouvelles {len(events)} en {mins:.1f} min"
+              f" | ids/min {(max_id - start_max)/mins:.0f}")
+        if deltas:
+            neg = [d for d in deltas if d < 0]
+            print("DELTA<0", len(neg), "sur", len(deltas), "| quantiles",
+                  [round(q) for q in statistics.quantiles(deltas, n=10)] if len(deltas) > 10 else sorted(deltas))
+            print("MIN DELTAS", sorted(deltas)[:15])
+            print("POS des nouvelles", collections.Counter(min(e[1] // 10, 9) for e in events))
+            print("SOURCES nouvelles", collections.Counter(e[2] for e in events))
 
 
 asyncio.run(main())
