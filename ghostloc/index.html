@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GhostLoc — Apparais où tu veux</title>
+<meta name="description" content="Choisis une ville, ton iPhone s'y téléporte. Retrouve ta nouvelle position sur ta carte d'amis, Plans ou Life360.">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--y:#fffc00;--bg:#0b0b0d;--card:#151518;--line:#ffffff1c;--txt:#f2f2f4;--mut:#9a9aa3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1100px;margin:auto;padding:0 16px}
+header{position:sticky;top:0;z-index:50;background:#0b0b0dd9;backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+header .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:900;font-size:20px}
+.logo b{color:var(--y)}
+.ghost{width:34px;height:34px;background:var(--y);border-radius:10px;display:grid;place-items:center;font-size:20px}
+nav a{color:var(--mut);margin-left:22px;font-weight:600;font-size:14px}nav a:hover{color:var(--y)}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--y);color:#000;font-weight:800;border:0;border-radius:999px;padding:14px 26px;cursor:pointer;font-size:16px;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}.btn.ghostb{background:none;color:var(--txt);border:1px solid var(--line)}
+.hero{padding:70px 0 40px;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.pill{display:inline-flex;gap:8px;border:1px solid #fffc0055;color:var(--y);border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;margin-bottom:20px}
+h1{font-size:clamp(40px,7vw,72px);line-height:1;font-weight:900;letter-spacing:-2px}
+h1 span{color:var(--y)}
+.lead{color:var(--mut);font-size:18px;margin:22px 0 30px;max-width:480px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}.chips span{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--mut)}
+.phone{width:270px;height:550px;margin:auto;border-radius:44px;background:#000;border:8px solid #222;position:relative;overflow:hidden;box-shadow:0 30px 90px #fffc0026}
+.phone #mini{position:absolute;inset:0}
+.phone .notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:90px;height:24px;background:#000;border-radius:20px;z-index:500}
+.bit{position:absolute;z-index:500;left:50%;top:50%;transform:translate(-50%,-100%);text-align:center;pointer-events:none}
+.bit .av{width:58px;height:58px;border-radius:50%;background:var(--y);border:3px solid #fff;display:grid;place-items:center;font-size:30px;margin:auto;animation:bob 2s ease-in-out infinite}
+.bit .tag{background:#fff;color:#000;font-weight:800;font-size:12px;padding:3px 10px;border-radius:999px;margin-top:6px;display:inline-block}
+@keyframes bob{50%{transform:translateY(-6px)}}
+section{padding:80px 0}
+h2{font-size:clamp(30px,5vw,46px);font-weight:900;letter-spacing:-1px;text-align:center}
+.sub{color:var(--mut);text-align:center;margin:10px auto 40px;max-width:520px}
+.picker{display:grid;grid-template-columns:1fr 340px;gap:20px}
+#map{height:460px;border-radius:24px;border:1px solid var(--line);background:#111}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.panel input{width:100%;background:#0b0b0d;border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--txt);font:inherit}
+.cities{display:flex;flex-wrap:wrap;gap:6px;max-height:210px;overflow:auto}
+.cities button{background:#0b0b0d;border:1px solid var(--line);color:var(--txt);border-radius:999px;padding:6px 12px;font:600 13px Inter;cursor:pointer}
+.cities button.on,.cities button:hover{border-color:var(--y);color:var(--y)}
+.sel{background:#0b0b0d;border-radius:14px;padding:14px;font-size:14px}.sel b{color:var(--y);font-size:18px;display:block}
+.sel small{color:var(--mut)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:28px}
+.card .n{width:44px;height:44px;border-radius:14px;background:var(--y);color:#000;font-weight:900;display:grid;place-items:center;font-size:20px;margin-bottom:16px}
+.card h3{font-size:20px;margin-bottom:6px}.card p{color:var(--mut);font-size:15px}
+.prices{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
+.price{display:flex;flex-direction:column;gap:12px}
+.price.hot{border-color:var(--y);box-shadow:0 0 0 1px var(--y),0 20px 60px #fffc0018;position:relative}
+.price.hot::before{content:"Le plus pris";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--y);color:#000;font-weight:800;font-size:12px;padding:3px 12px;border-radius:999px}
+.amt{font-size:44px;font-weight:900}.amt small{font-size:15px;color:var(--mut);font-weight:600}
+.price ul{list-style:none;color:var(--mut);font-size:15px;flex:1}.price li{padding:5px 0}.price li::before{content:"✓ ";color:var(--y);font-weight:900}
+.faq{max-width:720px;margin:auto}
+details{border-bottom:1px solid var(--line);padding:18px 0}summary{font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+summary::after{content:"+";color:var(--y);font-size:22px}details[open] summary::after{content:"−"}
+details p{color:var(--mut);margin-top:10px}
+footer{border-top:1px solid var(--line);padding:30px 0;color:var(--mut);font-size:13px;text-align:center}
+.toast{position:fixed;bottom:20px;left:50%;transform:translate(-50%,120px);background:var(--y);color:#000;font-weight:800;padding:14px 22px;border-radius:999px;transition:transform .3s;z-index:999;max-width:calc(100% - 32px);text-align:center}
+.toast.show{transform:translate(-50%,0)}
+.leaflet-container{background:#111}
+@media(max-width:860px){.hero,.picker{grid-template-columns:1fr}.steps,.prices{grid-template-columns:1fr}nav{display:none}.hero{padding-top:40px;text-align:center}.lead{margin-inline:auto}.chips{justify-content:center}#map{height:340px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="logo" href="#"><span class="ghost">👻</span>Ghost<b>Loc</b></a>
+  <nav><a href="#go">Destinations</a><a href="#how">Comment ça marche</a><a href="#plans">Tarifs</a><a href="#faq">FAQ</a></nav>
+  <a class="btn" href="#go" style="padding:10px 18px;font-size:14px">Téléporte-moi</a>
+</div></header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <div class="pill">📍 Localisation iPhone en direct</div>
+      <h1>Ce soir t'es à <span id="rot">Dubaï</span>.</h1>
+      <p class="lead">Choisis une ville, ton iPhone s'y pose en quelques secondes. Tes amis te voient là-bas sur la carte. Un geste pour revenir à ta vraie position.</p>
+      <a class="btn" href="#go">Changer ma localisation →</a>
+      <div class="chips"><span>👻 Carte d'amis</span><span>🗺️ Plans</span><span>👨‍👩‍👧 Life360</span><span>📱 Sans jailbreak</span><span>↩️ Retour en 1 tap</span></div>
+    </div>
+    <div class="phone"><div class="notch"></div><div id="mini"></div>
+      <div class="bit"><div class="av">😎</div><div class="tag" id="minitag">Dubaï</div></div></div>
+  </div>
+</main>
+
+<section id="go"><div class="wrap">
+  <h2>Où veux-tu apparaître ?</h2>
+  <p class="sub">Touche une ville, tape une adresse ou clique n'importe où sur la carte.</p>
+  <div class="picker">
+    <div id="map"></div>
+    <div class="panel">
+      <input id="q" placeholder="🔎 Rechercher une ville…">
+      <div class="cities" id="cities"></div>
+      <div class="sel"><small>Destination</small><b id="selName">—</b><small id="selCoord">Clique sur la carte</small></div>
+      <button class="btn" id="tp" style="justify-content:center">👻 Me téléporter</button>
+      <button class="btn ghostb" id="back" style="justify-content:center">↩️ Revenir à ma vraie position</button>
+    </div>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <h2>3 étapes. 30 secondes.</h2>
+  <p class="sub">Pas d'appli louche à installer sur ton iPhone.</p>
+  <div class="steps">
+    <div class="card"><div class="n">1</div><h3>Connecte ton iPhone</h3><p>Branche-le une fois à l'ordi via l'app GhostLoc Desktop, puis tout se fait en Wi-Fi.</p></div>
+    <div class="card"><div class="n">2</div><h3>Choisis ta ville</h3><p>Monaco, Tokyo, Miami ou le bar d'à côté : n'importe quel point du globe.</p></div>
+    <div class="card"><div class="n">3</div><h3>Apparais là-bas</h3><p>Ta position s'actualise dans tes apps. Un tap et tu reviens au réel.</p></div>
+  </div>
+</div></section>
+
+<section id="plans"><div class="wrap">
+  <h2>Tarifs</h2>
+  <p class="sub">Paiement unique ou abonnement, sans engagement.</p>
+  <div class="prices">
+    <div class="card price"><h3>Escapade</h3><div class="amt">2,99€ <small>/ 24 h</small></div><ul><li>Téléportations illimitées 24 h</li><li>Toutes les villes</li><li>Retour en 1 tap</li></ul><button class="btn ghostb buy">Choisir</button></div>
+    <div class="card price hot"><h3>Globe-trotter</h3><div class="amt">6,99€ <small>/ mois</small></div><ul><li>Illimité tout le mois</li><li>Itinéraires animés (avion ✈️, route 🚗)</li><li>Favoris & historique</li><li>Support prioritaire</li></ul><button class="btn buy">Choisir</button></div>
+    <div class="card price"><h3>À vie</h3><div class="amt">29€ <small>une fois</small></div><ul><li>Tout Globe-trotter</li><li>Jusqu'à 3 iPhone</li><li>Mises à jour à vie</li></ul><button class="btn ghostb buy">Choisir</button></div>
+  </div>
+</div></section>
+
+<section id="faq"><div class="wrap faq">
+  <h2 style="margin-bottom:30px">FAQ</h2>
+  <details><summary>Faut-il jailbreaker mon iPhone ?</summary><p>Non. GhostLoc utilise le mode développeur d'iOS pour simuler la position GPS, comme le font les outils de test des développeurs.</p></details>
+  <details><summary>Mes amis verront-ils que c'est faux ?</summary><p>Ta position est mise à jour comme une position normale. Évite quand même de passer de Paris à Tokyo en 2 minutes : utilise les itinéraires animés.</p></details>
+  <details><summary>Comment revenir à ma vraie position ?</summary><p>Bouton « Revenir » dans l'app, ou redémarre ton iPhone.</p></details>
+  <details><summary>Est-ce autorisé ?</summary><p>Modifier sa position peut enfreindre les conditions d'utilisation de certaines applis et entraîner un blocage de compte. Utilisation à tes risques, pour t'amuser et protéger ta vie privée uniquement.</p></details>
+</div></section>
+
+<footer>© 2026 GhostLoc · Service indépendant, non affilié à Snap Inc., Apple ou Life360.</footer>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const C=[["🇦🇪","Dubaï",25.197,55.274],["🇫🇷","Paris",48.858,2.294],["🇺🇸","Miami",25.790,-80.130],["🇲🇨","Monaco",43.738,7.424],["🇪🇸","Marbella",36.510,-4.883],["🇺🇸","New York",40.758,-73.985],["🇬🇷","Santorin",36.461,25.376],["🇯🇵","Tokyo",35.659,139.700],["🇪🇸","Ibiza",38.908,1.432],["🇬🇧","Londres",51.507,-0.127],["🇺🇸","Los Angeles",34.101,-118.340],["🇬🇷","Mykonos",37.446,25.328],["🇮🇩","Bali",-8.409,115.188],["🇺🇸","Las Vegas",36.114,-115.172],["🇮🇹","Rome",41.890,12.492],["🇲🇦","Marrakech",31.625,-7.989],["🇲🇻","Maldives",4.175,73.509],["🇪🇸","Barcelone",41.403,2.174],["🇫🇷","Nice",43.695,7.265],["🇧🇷","Rio",-22.971,-43.182],["🇮🇹","Milan",45.464,9.190],["🇳🇱","Amsterdam",52.373,4.893],["🇹🇷","Istanbul",41.008,28.978],["🇸🇬","Singapour",1.283,103.860],["🇹🇭","Bangkok",13.756,100.501],["🇲🇽","Tulum",20.211,-87.465],["🇵🇹","Lisbonne",38.722,-9.139],["🇰🇷","Séoul",37.566,126.978],["🇦🇺","Sydney",-33.857,151.215],["🇨🇦","Montréal",45.501,-73.567]];
+const tiles='https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',attr='© OpenStreetMap © CARTO';
+const mini=L.map('mini',{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,touchZoom:false}).setView([25.197,55.274],12);
+L.tileLayer(tiles).addTo(mini);
+const map=L.map('map',{worldCopyJump:true}).setView([30,10],2);
+L.tileLayer(tiles,{attribution:attr}).addTo(map);
+const icon=L.divIcon({html:'<div style="font-size:34px;filter:drop-shadow(0 2px 6px #000)">👻</div>',className:'',iconSize:[34,34],iconAnchor:[17,30]});
+let mk=null,cur=null;
+function pick(name,lat,lng,btn){cur={name,lat,lng};
+  if(mk)mk.setLatLng([lat,lng]);else mk=L.marker([lat,lng],{icon}).addTo(map);
+  map.flyTo([lat,lng],Math.max(map.getZoom(),11),{duration:1.2});
+  document.getElementById('selName').textContent=name;
+  document.getElementById('selCoord').textContent=lat.toFixed(4)+', '+lng.toFixed(4);
+  document.querySelectorAll('.cities button').forEach(b=>b.classList.toggle('on',b===btn));}
+const box=document.getElementById('cities');
+function render(f=''){box.innerHTML='';C.filter(c=>c[1].toLowerCase().includes(f.toLowerCase())).forEach(c=>{const b=document.createElement('button');b.textContent=c[0]+' '+c[1];b.onclick=()=>pick(c[1],c[2],c[3],b);box.appendChild(b)})}
+render();
+document.getElementById('q').oninput=e=>render(e.target.value);
+document.getElementById('q').onkeydown=async e=>{if(e.key!=='Enter')return;
+  try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(e.target.value));const j=await r.json();
+  if(j[0])pick(j[0].display_name.split(',')[0],+j[0].lat,+j[0].lon);else toast("Lieu introuvable")}catch{toast("Recherche indisponible")}};
+map.on('click',e=>pick('Point personnalisé',e.latlng.lat,e.latlng.lng));
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2600)}
+document.getElementById('tp').onclick=()=>{if(!cur)return toast("Choisis d'abord une destination 👆");
+  mini.flyTo([cur.lat,cur.lng],12,{duration:2});document.getElementById('minitag').textContent=cur.name;
+  document.querySelector('.phone').scrollIntoView({behavior:'smooth',block:'center'});toast("👻 Téléporté à "+cur.name+" !")};
+document.getElementById('back').onclick=()=>{toast("↩️ Position réelle restaurée")};
+document.querySelectorAll('.buy').forEach(b=>b.onclick=()=>toast("Paiement bientôt disponible 💳"));
+let i=0;const rot=['Dubaï','Monaco','Tokyo','Miami','Ibiza','Bali'];
+setInterval(()=>{i=(i+1)%rot.length;document.getElementById('rot').textContent=rot[i]},2200);
+</script>
+</body>
+</html>
