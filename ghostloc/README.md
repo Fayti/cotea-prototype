@@ -60,6 +60,7 @@ Le workflow `pages.yml` publie la racine du dépôt à chaque push sur `main` : 
 ```bash
 git tag ghostloc-v1.0.0 && git push origin ghostloc-v1.0.0
 ```
+Pour chaque nouvelle version : augmente `__version__` dans `desktop/ghostloc_desktop/__init__.py`, publie le tag, puis mets le même numéro dans `version.json` (sur `main`). Les apps déjà installées affichent alors « Nouvelle version » avec un lien vers la page d'installation.
 Le workflow `ghostloc.yml` teste tout, construit `GhostLoc-Windows.zip` et `GhostLoc-macOS.zip` (Apple Silicon), vérifie chaque exécutable (`--selftest`) et publie une release GitHub. Les liens de `config.json › downloads` pointent vers la dernière release.
 
 ### 5. Vérifier
@@ -80,7 +81,7 @@ Le workflow `ghostloc.yml` teste tout, construit `GhostLoc-Windows.zip` et `Ghos
 ```bash
 cd desktop
 pip install -r requirements.txt pytest httpx
-python -m pytest -q tests                 # 12 tests
+python -m pytest -q tests                 # 14 tests
 python -m ghostloc_desktop --demo         # iPhone simulé, interface sur http://127.0.0.1:8765
 python build.py                           # exécutable dans dist/
 
@@ -88,7 +89,7 @@ python build.py                           # exécutable dans dist/
 psql -f supabase/tests/auth_stub.sql -f supabase/migrations/20261010000000_ghostloc.sql -f supabase/tests/quota_test.sql
 ```
 
-Variables utiles : `GHOSTLOC_SUPABASE_URL`, `GHOSTLOC_SUPABASE_ANON_KEY` (remplacent `config.json`). Options : `--port`, `--local-only` (refuse le pilotage depuis le Wi-Fi), `--no-browser`, `--selftest`.
+Variables utiles : `GHOSTLOC_SUPABASE_URL`, `GHOSTLOC_SUPABASE_ANON_KEY`, `GHOSTLOC_SITE_URL` (remplacent `config.json`). Le bouton « Copier le diagnostic » de l'app donne au support les versions, l'état de l'iPhone et la fin du journal (`ghostloc.log` dans `%APPDATA%\GhostLoc`, `~/Library/Application Support/GhostLoc` ou `~/.config/ghostloc`). Options : `--port`, `--local-only` (refuse le pilotage depuis le Wi-Fi), `--no-browser`, `--selftest`.
 
 ## Limites connues
 

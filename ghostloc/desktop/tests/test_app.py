@@ -41,3 +41,10 @@ def test_cross_site_post_and_dns_rebinding_are_blocked():
         assert c.post("/api/home").status_code == 200
     with client(base="http://evil.example:8765") as c:
         assert c.get("/api/state").status_code == 403
+
+
+def test_diagnostic_has_versions_but_no_secrets():
+    with client() as c:
+        text = c.get("/api/diagnostic").json()["text"]
+        assert text.startswith("GhostLoc ") and "iPhone :" in text
+        assert "secret-key" not in text

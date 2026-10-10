@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+import platform
 import secrets
 import socket
 import sys
@@ -11,9 +12,11 @@ import webbrowser
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
+import requests
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
+from packaging.version import Version
 
 from ghostloc_desktop import __version__
 from ghostloc_desktop.account import Account
@@ -35,9 +38,28 @@ def lan_ip() -> str:
 
 
 def build_app(controller: Controller, cfg: dict, port: int, key: str) -> FastAPI:
+    update: dict = {}
+
+    async def check_update() -> None:
+        # Le site publie version.json : on prévient si une version plus récente existe.
+        site = cfg.get("siteUrl", "")
+        if not site:
+            return
+        try:
+            data = (await asyncio.to_thread(requests.get, f"{site}/version.json", timeout=10)).json()
+            if Version(str(data["version"])) > Version(__version__):
+                update.update(
+                    version=str(data["version"]),
+                    notes=str(data.get("notes", ""))[:200],
+                    url=f"{site}/installation.html",
+                )
+        except Exception as e:
+            log.info("vérification de mise à jour impossible : %s", e)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         watcher = asyncio.create_task(controller.watch_device())
+        asyncio.create_task(check_update())
         await controller.refresh_entitlement()
         yield
         watcher.cancel()
@@ -82,8 +104,28 @@ def build_app(controller: Controller, cfg: dict, port: int, key: str) -> FastAPI
         snap["app"] = {
             "version": __version__, "siteUrl": cfg.get("siteUrl", ""),
             "lanUrl": f"http://{lan_ip()}:{port}/?k={key}",
+            "update": update or None,
         }
         return snap
+
+    @app.get("/api/diagnostic")
+    async def diagnostic():
+        """Résumé à copier pour le support : versions, état, fin du journal (sans jeton ni mot de passe)."""
+        lines: list[str] = []
+        log_file = data_dir() / "ghostloc.log"
+        if log_file.exists():
+            lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()[-80:]
+        snap = controller.snapshot()
+        acc, dev = snap["account"], snap["device"]
+        text = "\n".join([
+            f"GhostLoc {__version__} · {platform.system()} {platform.release()} · Python {platform.python_version()}",
+            f"Compte : {acc['email'] or 'non connecté'} · formule : {(acc['entitlement'] or {}).get('plan')}",
+            f"iPhone : {dev['status']} · {dev['name']} · iOS {dev['ios']} · {dev['connection']}",
+            f"Message : {dev['message']}",
+            "---",
+            *lines,
+        ])
+        return JSONResponse({"text": text})
 
     async def run(make_action):
         try:

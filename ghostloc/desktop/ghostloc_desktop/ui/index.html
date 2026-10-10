@@ -72,6 +72,7 @@ a{color:var(--y)}
   </div>
 
   <div class="side">
+    <div class="card hidden" id="updCard" style="border-color:var(--y)"><h3>⬆️ Nouvelle version <span id="updVer"></span></h3><p class="mut" id="updNotes"></p><a class="btn small" id="updLink" target="_blank" href="#" style="align-self:flex-start">Télécharger</a></div>
     <div class="card hidden" id="cfgCard"><h3>⚠️ Application non configurée</h3><p class="mut">Le fichier config.json ne contient pas l'adresse du serveur GhostLoc.</p></div>
 
     <div class="card hidden" id="loginCard">
@@ -140,6 +141,7 @@ a{color:var(--y)}
         <span class="row"><button class="btn sec small" id="refreshBtn">↻</button><button class="btn sec small" id="logoutBtn">Déconnexion</button></span>
       </div>
       <a id="manageLink" target="_blank" href="#" class="mut">Gérer mon abonnement ›</a>
+      <button class="btn sec small" id="diagBtn" style="align-self:flex-start">📋 Copier le diagnostic pour le support</button>
     </div>
   </div>
 </div>
@@ -226,6 +228,13 @@ function drawRecents() {
 drawRecents();
 $("routeBtn").onclick = (e) => { if (!dest) return; remember(dest); act(e.target, "/api/route", {...dest, mode, speed: +$("speed").value}, "Trajet lancé " + MODE_LABEL[mode]); };
 $("stopRouteBtn").onclick = (e) => act(e.target, "/api/route/stop", {});
+$("diagBtn").onclick = async () => {
+  try {
+    const {text} = await api("/api/diagnostic");
+    await navigator.clipboard.writeText(text);
+    toast("Diagnostic copié : colle-le dans ton e-mail au support");
+  } catch (e) { toast("Copie impossible : " + e.message, true); }
+};
 $("homeBtn").onclick = (e) => act(e.target, "/api/home", {}, "↩️ Position réelle rétablie");
 
 function hours(sec) { const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60); return h + " h " + String(m).padStart(2, "0"); }
@@ -285,6 +294,10 @@ function render(s) {
 
   if (s.notice && s.notice !== render._lastNotice) toast(s.notice, true);
   render._lastNotice = s.notice;
+
+  const upd = s.app && s.app.update;
+  $("updCard").classList.toggle("hidden", !upd);
+  if (upd) { $("updVer").textContent = upd.version; $("updNotes").textContent = upd.notes; $("updLink").href = upd.url; }
 
   const local = ["127.0.0.1", "localhost"].includes(location.hostname);
   $("qrCard").classList.toggle("hidden", !local || !s.app);

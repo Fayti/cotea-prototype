@@ -37,5 +37,5 @@ def load_config() -> dict:
             break
     cfg["supabaseUrl"] = os.environ.get("GHOSTLOC_SUPABASE_URL", cfg.get("supabaseUrl", "")).rstrip("/")
     cfg["supabaseAnonKey"] = os.environ.get("GHOSTLOC_SUPABASE_ANON_KEY", cfg.get("supabaseAnonKey", ""))
-    cfg.setdefault("siteUrl", "")
+    cfg["siteUrl"] = os.environ.get("GHOSTLOC_SITE_URL", cfg.get("siteUrl", "")).rstrip("/")
     return cfg
