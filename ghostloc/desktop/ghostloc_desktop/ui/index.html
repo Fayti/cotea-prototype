@@ -102,6 +102,7 @@ a{color:var(--y)}
       <div class="hidden" id="recentBox"><span class="mut" style="font-size:12px">Récents</span><div class="cities" id="recent" style="margin-top:4px"></div></div>
       <div class="cities" id="cities"></div>
       <div class="dest"><span class="mut">Destination</span><b id="destName">Touche la carte</b><span class="mut" id="destCoord"></span></div>
+      <p class="mut hidden" id="subHint">Aucun abonnement actif sur ce compte. <a id="subLink" target="_blank" href="#">Choisir une formule ›</a> puis touche ↻.</p>
       <button class="btn" id="tpBtn" disabled>👻 Me téléporter ici</button>
       <details id="routeBox">
         <summary class="mut" style="cursor:pointer">🛫 Y aller en trajet <span class="badge">Illimité</span></summary>
@@ -259,6 +260,8 @@ function render(s) {
   $("deviceCard").classList.toggle("hidden", st === "ready" && !!s.location);
 
   const canUse = st === "ready" && !!acc.email && ent && ent.active;
+  $("subHint").classList.toggle("hidden", !acc.email || !ent || ent.active);
+  $("subLink").href = site + "/compte.html";
   $("tpBtn").disabled = !dest || !canUse;
   $("routeBtn").disabled = !dest || !canUse || !s.location || !ent.routes;
   $("routeBtn").textContent = !ent || !ent.routes ? "Réservé à l'Illimité" : s.location ? "Partir depuis ma position actuelle" : "Téléporte-toi d'abord au départ";
