@@ -405,3 +405,46 @@ def test_scheduler_pipelines_slow_responses(tmp_path):
 
     asyncio.run(scenario())
     assert len(started) >= 6  # sans pipelining : 2 au plus
+
+
+# --- interface : cohabitation avec d'autres applications locales -------------
+
+class OtherApp(BaseHTTPRequestHandler):
+    """Une autre application locale (ex. un bot Leboncoin) qui occupe le port préféré."""
+
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"<html>Bot Leboncoin</html>")
+
+
+def test_ui_skips_port_used_by_another_app_and_reuses_own_instance(tmp_path):
+    from vinted_bot import app
+
+    other = HTTPServer(("127.0.0.1", 0), OtherApp)
+    threading.Thread(target=other.serve_forever, daemon=True).start()
+    taken = other.server_address[1]
+
+    async def scenario():
+        engine = app.Engine(tmp_path / "a")
+        runner, url = await app.start_server(engine, taken)
+        try:
+            assert runner is not None and url != f"http://127.0.0.1:{taken}"
+            assert (await asyncio.to_thread(app.whoami_at, url))["app"] == "VintedBot"
+            # Deuxième lancement : il retrouve l'instance existante au lieu de l'autre application.
+            second = app.Engine(tmp_path / "b")
+            runner2, url2 = await app.start_server(second, taken)
+            assert runner2 is None and url2 == url
+            second.store.close()
+        finally:
+            await runner.cleanup()
+            engine.store.close()
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        other.shutdown()

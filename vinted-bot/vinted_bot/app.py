@@ -14,6 +14,7 @@ import os
 import secrets
 import tempfile
 import time
+import urllib.request
 import webbrowser
 from collections import deque
 from pathlib import Path
@@ -31,6 +32,7 @@ log = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_PORT = 8765
+PORT_ATTEMPTS = 20  # 8765 à 8784 : d'autres applications locales peuvent occuper le port
 DEFAULT_SETTINGS = {
     "running": True,
     "general": {"request_gap": 1.0, "proxies": [], "use_direct": True},
@@ -215,6 +217,12 @@ async def index(request):
     return web.FileResponse(WEB_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
 
+@routes.get("/api/whoami")
+async def whoami(request):
+    """Permet de reconnaître une instance de VintedBot parmi les autres applications locales."""
+    return web.json_response({"app": "VintedBot", "nonce": request.app["nonce"]})
+
+
 @routes.get("/api/state")
 async def state(request):
     e = engine_of(request)
@@ -387,6 +395,7 @@ async def guard(request, handler):
 async def serve(engine: Engine, port: int) -> tuple[web.AppRunner, str]:
     app = web.Application(middlewares=[guard])
     app["engine"] = engine
+    app["nonce"] = secrets.token_hex(8)
     app.add_routes(routes)
     runner = web.AppRunner(app, access_log=None)
     await runner.setup()
@@ -397,7 +406,42 @@ async def serve(engine: Engine, port: int) -> tuple[web.AppRunner, str]:
         await runner.cleanup()
         raise
     actual = site._server.sockets[0].getsockname()[1]
-    return runner, f"http://127.0.0.1:{actual}"
+    url = f"http://127.0.0.1:{actual}"
+    # Sur macOS, une autre application peut partager le port (SO_REUSEADDR) et répondre à
+    # notre place : on vérifie que c'est bien nous qui répondons à cette adresse.
+    info = await asyncio.to_thread(whoami_at, url)
+    if info.get("nonce") != app["nonce"]:
+        await runner.cleanup()
+        raise OSError(f"{url} répond, mais ce n'est pas cette instance de VintedBot")
+    return runner, url
+
+
+def whoami_at(url: str) -> dict:
+    """Ce qui répond à cette adresse locale : {"app": "VintedBot", ...} ou {}."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # jamais via un proxy
+    try:
+        with opener.open(url + "/api/whoami", timeout=2) as resp:
+            data = json.loads(resp.read())
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+async def start_server(engine: Engine, preferred: int) -> tuple[web.AppRunner | None, str]:
+    """Démarre l'interface sur le premier port libre à partir de `preferred`.
+
+    Renvoie (None, url) si VintedBot tourne déjà : il suffit alors de rouvrir son interface.
+    Un port occupé par une autre application (un autre bot local, par exemple) est sauté.
+    """
+    for port in range(preferred, preferred + PORT_ATTEMPTS):
+        url = f"http://127.0.0.1:{port}"
+        try:
+            return await serve(engine, port)
+        except OSError:
+            if (await asyncio.to_thread(whoami_at, url)).get("app") == "VintedBot":
+                return None, url
+            log.info("Port %s occupé par une autre application, essai du suivant", port)
+    return await serve(engine, 0)
 
 
 def default_data_dir() -> Path:
@@ -407,13 +451,13 @@ def default_data_dir() -> Path:
 async def run_ui(data_dir: Path, port: int = DEFAULT_PORT, open_browser: bool = True) -> None:
     logging.getLogger().addHandler(LOGS)
     engine = Engine(data_dir)
-    try:
-        runner, url = await serve(engine, port)
-    except OSError:
-        # Déjà lancé (double-clic une deuxième fois) : on rouvre simplement l'interface.
-        print(f"VintedBot tourne déjà : ouverture de http://127.0.0.1:{port}")
+    runner, url = await start_server(engine, port)
+    if runner is None:
+        # Déjà lancé (double-clic une deuxième fois) : on rouvre simplement son interface.
+        print(f"VintedBot tourne déjà : ouverture de {url}")
+        engine.store.close()
         if open_browser:
-            webbrowser.open(f"http://127.0.0.1:{port}")
+            webbrowser.open(url)
         return
     print("=" * 60)
     print(f"  VintedBot est lancé : {url}")
