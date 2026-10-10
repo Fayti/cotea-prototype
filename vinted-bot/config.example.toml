@@ -1,16 +1,20 @@
 # Copier en config.toml puis adapter. config.toml est ignoré par git.
 
 [general]
-interval = 5            # secondes entre deux requêtes d'une même recherche
-min_request_gap = 1.0   # écart minimal entre deux requêtes vers un même domaine (anti-ban)
-jitter = 1.0            # aléa ajouté à chaque attente, en secondes
+# Le bot envoie les requêtes au rythme maximal toléré, en tournant sur les recherches.
+# Temps entre deux passages sur une recherche ≈ request_gap × nb de recherches / nb d'IP.
+request_gap = 1.0       # plancher : secondes entre deux requêtes par IP. Ralentit seul si bloqué.
+max_inflight = 3        # requêtes simultanées max par IP (Vinted lent ≠ bot lent)
 per_page = 20           # annonces demandées par requête (petit = réponse plus rapide)
 warmup_per_page = 96    # au premier lancement : annonces de référence pour la médiane
 max_age_minutes = 60    # ignore les annonces plus vieilles (redémarrage après une longue pause)
 db_path = "vinted_bot.sqlite3"
 impersonate = "chrome"  # empreinte navigateur imitée par curl_cffi
 console = true
-# proxies = ["http://user:pass@host:port"]  # tournent à chaque blocage 403/429
+stats_every = 60        # résumé périodique dans les logs (débit, blocages, délais) ; 0 = off
+# Chaque proxy est une IP de plus : le débit total est multiplié d'autant.
+# proxies = ["http://user:pass@host:port"]
+use_direct = true       # utiliser aussi la connexion directe en plus des proxies
 
 [deals]
 window = 200       # nombre de prix récents utilisés pour la médiane de chaque recherche
@@ -34,10 +38,11 @@ name = "Air Max 90 — 42"
 url = "https://www.vinted.fr/catalog?search_text=air%20max%2090&brand_ids[]=53&price_to=60"
 exclude = ["lot", "enfant", "copie", "réplique", "abîmé"]   # mots interdits dans le titre
 max_price = 60
+weight = 2   # recherche prioritaire
 
 [[search]]
 name = "Carhartt Detroit — bonnes affaires seulement"
 search_text = "carhartt detroit jacket"
 include_any = ["detroit"]   # au moins un de ces mots dans le titre
 only_deals = true           # n'alerte que si le prix est sous la médiane de la recherche
-interval = 8                # surcharge de l'intervalle global
+weight = 1                  # 2 = interrogée deux fois plus souvent que les autres

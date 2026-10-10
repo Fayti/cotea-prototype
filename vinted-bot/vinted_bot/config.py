@@ -49,7 +49,7 @@ class Search:
     min_price: float | None = None
     exclude_sellers: list[str] = field(default_factory=list)
     only_deals: bool = False
-    interval: float | None = None
+    weight: int = 1
 
     def api_params(self, per_page: int) -> dict[str, str]:
         p = dict(self.params)
@@ -62,9 +62,10 @@ class Search:
 @dataclass
 class Config:
     searches: list[Search]
-    interval: float = 5.0
-    min_request_gap: float = 1.0
-    jitter: float = 1.0
+    request_gap: float = 1.0
+    max_inflight: int = 3
+    use_direct: bool = True
+    stats_every: float = 60.0
     max_age: float = 3600.0
     per_page: int = 20
     warmup_per_page: int = 96
@@ -105,7 +106,7 @@ def _build_search(raw: dict) -> Search:
         min_price=raw.get("min_price"),
         exclude_sellers=[s.lower() for s in raw.get("exclude_sellers", [])],
         only_deals=bool(raw.get("only_deals", False)),
-        interval=raw.get("interval"),
+        weight=max(1, int(raw.get("weight", 1))),
     )
 
 
@@ -124,9 +125,10 @@ def load_config(path: str) -> Config:
         raise ValueError("Les noms de recherche doivent être uniques")
     return Config(
         searches=searches,
-        interval=float(general.get("interval", 5.0)),
-        min_request_gap=float(general.get("min_request_gap", 1.0)),
-        jitter=float(general.get("jitter", 1.0)),
+        request_gap=float(general.get("request_gap", 1.0)),
+        max_inflight=int(general.get("max_inflight", 3)),
+        use_direct=bool(general.get("use_direct", True)),
+        stats_every=float(general.get("stats_every", 60)),
         max_age=float(general.get("max_age_minutes", 60)) * 60,
         per_page=int(general.get("per_page", 20)),
         warmup_per_page=int(general.get("warmup_per_page", 96)),

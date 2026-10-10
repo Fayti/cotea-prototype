@@ -68,23 +68,22 @@ class TelegramNotifier:
         self.http = AsyncSession(timeout=10)
 
     async def send(self, item: Item, deal: Deal, search: Search) -> None:
-        text = format_text(item, deal, search)
-        caption = html.escape(text.rsplit("\n", 1)[0])  # l'URL va dans le bouton
-        markup = {"inline_keyboard": [[{"text": "Ouvrir sur Vinted", "url": item.url}]]}
+        # sendMessage part immédiatement ; sendPhoto ferait d'abord télécharger l'image
+        # par Telegram. La photo arrive en aperçu de lien, au-dessus du texte.
+        text = html.escape(format_text(item, deal, search).rsplit("\n", 1)[0])
+        payload = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": {"inline_keyboard": [[{"text": "Ouvrir sur Vinted", "url": item.url}]]},
+        }
         if item.photo_url:
-            resp = await self.http.post(
-                f"{self.api}/sendPhoto",
-                json={"chat_id": self.chat_id, "photo": item.photo_url, "caption": caption[:1024],
-                      "parse_mode": "HTML", "reply_markup": markup},
-            )
-            if resp.status_code == 200:
-                return
-            log.debug("sendPhoto a échoué (%s), repli sur sendMessage", resp.status_code)
-        resp = await self.http.post(
-            f"{self.api}/sendMessage",
-            json={"chat_id": self.chat_id, "text": caption, "parse_mode": "HTML",
-                  "reply_markup": markup, "disable_web_page_preview": False},
-        )
+            payload["link_preview_options"] = {
+                "url": item.photo_url, "prefer_large_media": True, "show_above_text": True,
+            }
+        else:
+            payload["link_preview_options"] = {"is_disabled": True}
+        resp = await self.http.post(f"{self.api}/sendMessage", json=payload)
         if resp.status_code != 200:
             raise RuntimeError(f"Telegram HTTP {resp.status_code}: {resp.text[:200]}")
 

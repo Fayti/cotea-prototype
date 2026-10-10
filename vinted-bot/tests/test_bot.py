@@ -10,7 +10,7 @@ from vinted_bot import filters
 from vinted_bot.client import RateLimited, VintedClient
 from vinted_bot.config import Config, Search, load_config, parse_vinted_url
 from vinted_bot.models import Item
-from vinted_bot.monitor import Monitor
+from vinted_bot.monitor import Monitor, weighted_cycle
 from vinted_bot.store import Store
 
 
@@ -49,7 +49,8 @@ def test_load_example_config():
     assert s.domain == "vinted.fr" and s.params["brand_ids"] == "53"
     assert s.api_params(20)["order"] == "newest_first"
     assert cfg.searches[1].params == {"search_text": "carhartt detroit jacket"}
-    assert cfg.searches[1].interval == 8 and cfg.searches[1].only_deals
+    assert s.weight == 2 and cfg.searches[1].weight == 1 and cfg.searches[1].only_deals
+    assert cfg.request_gap == 1.0 and cfg.use_direct
     assert cfg.max_age == 3600
 
 
@@ -85,7 +86,7 @@ class FakeClient:
         self.pages = []
         self.calls = []
 
-    async def search(self, params):
+    async def search(self, params, lane=None):
         self.calls.append(params)
         return self.pages.pop(0)
 
@@ -206,12 +207,15 @@ def test_client_refreshes_on_401_and_raises_on_429(server, monkeypatch):
     monkeypatch.setenv("no_proxy", "127.0.0.1")
 
     async def scenario():
-        c = VintedClient("vinted.fr", base_url=server, min_request_gap=0)
+        c = VintedClient("vinted.fr", base_url=server, request_gap=0.01)
         FakeVinted.api_statuses = [401, 200]
         items = await c.search({"order": "newest_first"})
         FakeVinted.api_statuses = [429]
         with pytest.raises(RateLimited):
             await c.search({})
+        lane = c.lanes[0]
+        assert lane.gap == pytest.approx(0.015) and lane.session is None
+        assert lane.next_at - time.monotonic() > 25  # pause de 30 s
         await c.close()
         return items
 
@@ -220,16 +224,72 @@ def test_client_refreshes_on_401_and_raises_on_429(server, monkeypatch):
     assert all("access_token_web=tok" in (c or "") for c in FakeVinted.seen_cookies)
 
 
-def test_client_throttles(server, monkeypatch):
-    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
-    monkeypatch.setenv("no_proxy", "127.0.0.1")
+# --- vitesse : cadencement, voies, pipelining -------------------------------
 
+def test_acquire_respects_gap_per_lane():
     async def scenario():
-        c = VintedClient("vinted.fr", base_url=server, min_request_gap=0.3)
+        c = VintedClient("vinted.fr", request_gap=0.2)
         t0 = time.monotonic()
-        await asyncio.gather(c.search({}), c.search({}))
-        await c.close()
+        for _ in range(3):
+            await c.acquire()
         return time.monotonic() - t0
 
-    # accueil + 2 requêtes API = 3 requêtes espacées d'au moins 0,3 s
-    assert asyncio.run(scenario()) >= 0.6
+    assert asyncio.run(scenario()) >= 2 * 0.2 * 0.85
+
+
+def test_lanes_multiply_throughput_and_skip_blocked_ones():
+    async def scenario():
+        c = VintedClient("vinted.fr", proxies=["http://a:1", "http://b:2"], request_gap=0.3)
+        assert len(c.lanes) == 3 and c.requests_per_second == pytest.approx(10.0)
+        c.lanes[0].blocked()
+        t0 = time.monotonic()
+        used = [await c.acquire() for _ in range(2)]
+        assert time.monotonic() - t0 < 0.1  # deux voies libres : aucune attente
+        assert c.lanes[0] not in used
+        assert c.lanes[0].gap == pytest.approx(0.45)
+        c.lanes[0].blocked()  # 2e réponse 429 du même épisode : ignorée
+        assert c.lanes[0].gap == pytest.approx(0.45) and c.lanes[0].strikes == 1
+        for _ in range(200):
+            c.lanes[0].succeeded()
+        assert c.lanes[0].gap == pytest.approx(0.3)  # retour au plancher
+
+    asyncio.run(scenario())
+
+
+def test_proxies_only_when_direct_disabled():
+    c = VintedClient("vinted.fr", proxies=["http://a:1"], use_direct=False)
+    assert [l.proxy for l in c.lanes] == ["http://a:1"]
+    assert [l.proxy for l in VintedClient("vinted.fr", use_direct=False).lanes] == [None]
+
+
+def test_weighted_cycle():
+    a, b = Search(name="a", weight=3), Search(name="b")
+    gen = weighted_cycle([a, b])
+    seq = [next(gen).name for _ in range(8)]
+    assert seq.count("a") == 6 and seq.count("b") == 2
+    assert "aaaa" not in "".join(seq)  # réparti, pas en rafale
+
+
+def test_scheduler_pipelines_slow_responses(tmp_path):
+    """Vinted répond en 0,5 s mais le bot relance toutes les 0,1 s."""
+    search = Search(name="s")
+    cfg = Config(searches=[search], request_gap=0.1, max_inflight=10, stats_every=0)
+    client = VintedClient("vinted.fr", request_gap=0.1)
+    started = []
+
+    async def slow_search(params, lane=None):
+        started.append(time.monotonic())
+        await asyncio.sleep(0.5)
+        return [raw_item(len(started))]
+
+    client.search = slow_search
+    mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [], client_factory=lambda d: client)
+
+    async def scenario():
+        try:
+            await asyncio.wait_for(mon._drive("vinted.fr", [search]), timeout=0.75)
+        except asyncio.TimeoutError:
+            pass
+
+    asyncio.run(scenario())
+    assert len(started) >= 6  # sans pipelining : 2 au plus

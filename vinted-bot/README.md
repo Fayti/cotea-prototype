@@ -8,8 +8,14 @@ contre la médiane des prix récents de la même recherche.
 
 - **Source** : Vinted n'a ni API publique ni flux temps réel. Le bot interroge l'endpoint
   interne `/api/v2/catalog/items?order=newest_first`, celui qu'utilise le site.
-- **Latence** = intervalle de polling (5 s par défaut) + durée de la requête (≈ 0,3 à 1 s) +
-  envoi Telegram (≈ 0,3 s). On peut donc compter sur 2 à 7 s en moyenne.
+- **Délai d'alerte** = délai d'indexation chez Vinted (incompressible, inconnu, probablement
+  quelques secondes) + attente du prochain passage sur la recherche + requête (≈ 0,2 à 1 s) +
+  envoi Telegram (≈ 0,3 s).
+- **Ordonnanceur** : le bot envoie une requête dès que le rythme autorisé le permet, en
+  tournant sur les recherches, et sans attendre la réponse précédente : la lenteur de Vinted
+  ne ralentit pas la cadence. Temps entre deux passages sur une recherche ≈
+  `request_gap × nombre de recherches / nombre d'IP`. Avec 1 IP, `request_gap = 1` et 3
+  recherches : un passage toutes les 3 s, soit ≈ 1,5 s d'attente moyenne.
 - **Détection des nouveautés** : les ID d'annonce sont croissants. Le bot garde le plus grand
   ID vu (le « filigrane ») pour chaque recherche. Une annonce remontée ou sponsorisée garde son
   ancien ID et n'est donc pas signalée. Le filigrane est persisté en SQLite : un redémarrage ne
@@ -17,10 +23,14 @@ contre la médiane des prix récents de la même recherche.
 - **Premier lancement** : 96 annonces sont chargées comme référence pour la médiane, sans
   alerte.
 - **Bonne affaire** : `1 - prix / médiane(200 derniers prix de la recherche) ≥ 30 %`.
-- **Anti-blocage** : curl_cffi imite l'empreinte TLS de Chrome. Le cookie de session est
-  renouvelé automatiquement (401). Un écart minimal entre requêtes est appliqué par domaine.
-  En cas de 403/429, le bot recule de façon exponentielle (30 s → 10 min) et passe au proxy
-  suivant.
+- **Anti-blocage, auto-réglé** : curl_cffi imite l'empreinte TLS de Chrome, et le cookie de
+  session est renouvelé automatiquement (401). Chaque IP (connexion directe ou proxy) a son
+  propre rythme. Après un 403/429, la voie se met en pause (30 s, puis 60 s, … jusqu'à
+  10 min), change de cookies et ralentit (écart × 1,5). À chaque succès, elle se rapproche
+  ensuite de `request_gap`. Le bot converge ainsi vers le rythme le plus rapide que Vinted
+  tolère, et les autres IP continuent pendant la pause.
+- **Telegram** : `sendMessage` avec la photo en aperçu. Ce message part plus vite qu'un
+  `sendPhoto`, qui oblige Telegram à télécharger l'image d'abord.
 
 ## Installation
 
@@ -54,7 +64,7 @@ l'URL sont appliqués côté serveur. Les filtres locaux viennent en plus :
 | `max_price` / `min_price` | bornes de prix (`max_price` est aussi envoyé à l'API) |
 | `exclude_sellers` | logins ignorés |
 | `only_deals` | n'alerte que les annonces sous le seuil de médiane |
-| `interval` | intervalle propre à cette recherche |
+| `weight` | fréquence relative de passage (2 = deux fois plus souvent) |
 
 ## Utilisation
 
@@ -70,17 +80,30 @@ service systemd ou `tmux`.
 
 ## Réglage de la vitesse
 
-- **Débit total** ≈ `nombre de recherches / interval` requêtes par seconde, borné par
-  `min_request_gap`. Avec 5 recherches, `interval = 5` et `min_request_gap = 1`, on envoie
-  1 requête par seconde, ce qui est déjà soutenu pour une seule IP.
-- Si des **403/429** apparaissent dans les logs, augmentez `interval` ou `min_request_gap`,
-  ou ajoutez des `proxies` résidentiels. Les IP de datacenter (VPS) sont bloquées bien plus
-  vite qu'une connexion domestique.
-- Préférez des **recherches précises** (catégorie + taille + prix max) à une recherche large.
-  Une recherche large reçoit plus de `per_page` nouveautés entre deux requêtes et en rate
-  (le bot l'indique dans les logs).
-- Ce qui compte vraiment pour la rapidité, c'est d'acheter ou de faire une offre en un clic
-  depuis l'application dès l'alerte Telegram reçue.
+Toutes les 60 s, le bot écrit une ligne de stats dans les logs :
+
+```
+Stats : 0.98 req/s · réponse Vinted médiane 310 ms · passage toutes les : Air Max 2.0 s, Carhartt 4.1 s · 1 alerte(s), âge photo médian 47 s
+```
+
+- **Le seul vrai levier est le nombre d'IP.** Le débit par IP est plafonné par l'anti-bot de
+  Vinted. Chaque proxy de `proxies` ajoute une voie complète : 3 IP = 3× plus de passages. Les
+  proxies résidentiels ou mobiles tiennent beaucoup mieux que les IP de datacenter.
+- **Moins de recherches = plus rapide.** Le débit est partagé entre toutes les recherches.
+  Fusionnez ou supprimez les recherches secondaires, et mettez `weight = 3` sur celles qui
+  comptent vraiment.
+- **`request_gap`** est le plancher. En dessous de ~0,5 s par IP, attendez-vous à des
+  blocages fréquents : chaque pause coûte au moins 30 s sur cette voie. Si la ligne de stats
+  montre des blocages réguliers, remontez `request_gap` jusqu'à ce qu'ils disparaissent.
+  Une voie qui ne se bloque jamais va plus vite qu'une voie qui oscille.
+- **Recherches précises** (catégorie + taille + prix max) : si plus de `per_page` nouveautés
+  arrivent entre deux passages, certaines sont ratées (le bot l'indique dans les logs).
+- **« âge photo »** mesure le temps depuis l'envoi de la photo principale. Le vendeur ajoute
+  souvent ses photos une à plusieurs minutes avant de publier : cette valeur majore donc le
+  vrai délai de détection. Elle sert à comparer des réglages entre eux, pas à mesurer le
+  délai absolu.
+- Une fois l'alerte reçue, ce qui fait la différence, c'est d'acheter ou de faire une offre
+  en un clic depuis l'application Vinted.
 
 ## Limites
 
