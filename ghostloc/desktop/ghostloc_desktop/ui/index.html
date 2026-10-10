@@ -99,6 +99,7 @@ a{color:var(--y)}
     </div>
 
     <div class="card" id="destCard">
+      <div class="hidden" id="recentBox"><span class="mut" style="font-size:12px">Récents</span><div class="cities" id="recent" style="margin-top:4px"></div></div>
       <div class="cities" id="cities"></div>
       <div class="dest"><span class="mut">Destination</span><b id="destName">Touche la carte</b><span class="mut" id="destCoord"></span></div>
       <button class="btn" id="tpBtn" disabled>👻 Me téléporter ici</button>
@@ -208,8 +209,21 @@ $("logoutBtn").onclick = (e) => act(e.target, "/api/logout", {});
 $("refreshBtn").onclick = (e) => act(e.target, "/api/refresh", {}, "Compte à jour");
 $("retryBtn").onclick = (e) => act(e.target, "/api/connect", {});
 $("devmodeBtn").onclick = (e) => act(e.target, "/api/devmode", {}, "Option affichée dans Réglages › Confidentialité et sécurité");
-$("tpBtn").onclick = (e) => dest && act(e.target, "/api/teleport", dest, "👻 Tu es à " + dest.name);
-$("routeBtn").onclick = (e) => dest && act(e.target, "/api/route", {...dest, mode, speed: +$("speed").value}, "Trajet lancé " + MODE_LABEL[mode]);
+$("tpBtn").onclick = (e) => { if (!dest) return; remember(dest); act(e.target, "/api/teleport", dest, "👻 Tu es à " + dest.name); };
+
+// Derniers lieux utilisés, gardés dans ce navigateur.
+function recents() { try { return JSON.parse(localStorage.getItem("gl_recent") || "[]"); } catch { return []; } }
+function remember(d) {
+  const list = [d, ...recents().filter((r) => r.name !== d.name || Math.abs(r.lat - d.lat) > 1e-4)].slice(0, 8);
+  try { localStorage.setItem("gl_recent", JSON.stringify(list)); } catch {}
+  drawRecents();
+}
+function drawRecents() {
+  const list = recents(); $("recentBox").classList.toggle("hidden", !list.length); $("recent").innerHTML = "";
+  list.forEach((r) => { const b = document.createElement("button"); b.textContent = "🕘 " + r.name; b.onclick = () => setDest(r.name, r.lat, r.lng, true); $("recent").appendChild(b); });
+}
+drawRecents();
+$("routeBtn").onclick = (e) => { if (!dest) return; remember(dest); act(e.target, "/api/route", {...dest, mode, speed: +$("speed").value}, "Trajet lancé " + MODE_LABEL[mode]); };
 $("stopRouteBtn").onclick = (e) => act(e.target, "/api/route/stop", {});
 $("homeBtn").onclick = (e) => act(e.target, "/api/home", {}, "↩️ Position réelle rétablie");
 
