@@ -30,9 +30,25 @@ jobs:
         continue-on-error: true
         run: python scripts/probe_vinted.py 90
 
-  windows-exe:
+  build:
     needs: test
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: VintedBot.exe
+            built: dist/VintedBot.exe
+            sep: ";"
+          - os: macos-latest
+            asset: VintedBot-mac-arm64
+            built: dist/VintedBot
+            sep: ":"
+          - os: macos-15-intel
+            asset: VintedBot-mac-x86_64
+            built: dist/VintedBot
+            sep: ":"
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: vinted-bot
@@ -43,26 +59,58 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt pyinstaller
-      - name: Construire VintedBot.exe
+      - name: Construire l'exécutable
         run: >
           pyinstaller --noconfirm --onefile --name VintedBot --console
-          --collect-all curl_cffi --add-data "vinted_bot/web;vinted_bot/web" launcher.py
+          --collect-all curl_cffi --add-data "vinted_bot/web${{ matrix.sep }}vinted_bot/web" launcher.py
       - name: Autotest de l'exécutable
-        run: ./dist/VintedBot.exe selftest
-      - name: Test de bout en bout depuis Windows (informatif)
+        run: ./${{ matrix.built }} selftest
+      - name: Test de bout en bout (informatif)
         continue-on-error: true
-        run: python scripts/probe_vinted.py 90
+        run: python scripts/probe_vinted.py 60
+      - run: mkdir -p out && cp ${{ matrix.built }} out/${{ matrix.asset }}
       - uses: actions/upload-artifact@v4
         with:
-          name: VintedBot-windows
-          path: vinted-bot/dist/VintedBot.exe
+          name: ${{ matrix.asset }}
+          path: vinted-bot/out/${{ matrix.asset }}
+
+  release:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
       - name: Publier en téléchargement direct
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cp vinted-bot/install-mac.sh assets/
+          ls -la assets
           gh release delete vinted-bot-latest --cleanup-tag --yes || true
-          gh release create vinted-bot-latest dist/VintedBot.exe \
+          gh release create vinted-bot-latest assets/* \
             --target "$GITHUB_SHA" --prerelease \
-            --title "VintedBot (Windows)" \
-            --notes "Télécharge VintedBot.exe puis double-clique dessus. Construit depuis ${GITHUB_SHA::7}."
+            --title "VintedBot (Windows et Mac)" \
+            --notes "Windows : télécharge VintedBot.exe puis double-clique dessus.
+          Mac : ouvre le Terminal et colle
+          curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/vinted-bot-latest/install-mac.sh | bash
+          Construit depuis ${GITHUB_SHA::7}."
+
+  mac-install:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Installation exactement comme l'utilisateur, puis autotest
+        run: |
+          mkdir -p "$HOME/Desktop"
+          curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/download/vinted-bot-latest/install-mac.sh" \
+            | VINTEDBOT_NO_LAUNCH=1 bash
+          test -x "$HOME/Desktop/VintedBot.command"
+          "$HOME/VintedBot/VintedBot" selftest

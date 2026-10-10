@@ -43,7 +43,31 @@ contre la médiane des prix récents de la même recherche.
 - **Telegram** : `sendMessage` avec la photo en aperçu. Ce message part plus vite qu'un
   `sendPhoto`, qui oblige Telegram à télécharger l'image d'abord.
 
-## Installation (Windows, sans rien installer)
+## Installation sur Mac
+
+1. Ouvre le **Terminal** : appuie sur Cmd + Espace, tape « Terminal », puis Entrée.
+2. Colle cette ligne puis appuie sur Entrée :
+
+   ```bash
+   curl -fsSL https://github.com/Fayti/cotea-prototype/releases/download/vinted-bot-latest/install-mac.sh | bash
+   ```
+
+3. Le script détecte ton type de Mac (puce Apple ou Intel), télécharge le bot dans le dossier
+   `VintedBot` de ton dossier utilisateur, pose un raccourci **VintedBot** sur le Bureau,
+   puis lance le bot. L'interface s'ouvre dans ton navigateur (http://127.0.0.1:8765).
+4. Laisse la fenêtre du Terminal ouverte : la fermer arrête le bot. Pour le relancer plus
+   tard, double-clique sur **VintedBot** sur le Bureau.
+
+Le bot empêche la mise en veille automatique tant qu'il tourne (`caffeinate`). En revanche,
+un MacBook dont on ferme le capot s'endort quand même, sauf s'il est branché sur secteur et
+relié à un écran externe.
+
+Pourquoi le Terminal plutôt qu'un téléchargement dans le navigateur ? macOS bloque les
+programmes non signés téléchargés par un navigateur (Gatekeeper), et depuis macOS 15 le
+contournement passe par plusieurs écrans des Réglages. Un fichier téléchargé par `curl`
+n'est pas marqué ainsi. La signature Apple coûte 99 $ par an.
+
+## Installation sur Windows (sans rien installer)
 
 1. Télécharge **VintedBot.exe** :
    https://github.com/Fayti/cotea-prototype/releases/download/vinted-bot-latest/VintedBot.exe
