@@ -1,0 +1,43 @@
+# Copier en config.toml puis adapter. config.toml est ignoré par git.
+
+[general]
+interval = 5            # secondes entre deux requêtes d'une même recherche
+min_request_gap = 1.0   # écart minimal entre deux requêtes vers un même domaine (anti-ban)
+jitter = 1.0            # aléa ajouté à chaque attente, en secondes
+per_page = 20           # annonces demandées par requête (petit = réponse plus rapide)
+warmup_per_page = 96    # au premier lancement : annonces de référence pour la médiane
+max_age_minutes = 60    # ignore les annonces plus vieilles (redémarrage après une longue pause)
+db_path = "vinted_bot.sqlite3"
+impersonate = "chrome"  # empreinte navigateur imitée par curl_cffi
+console = true
+# proxies = ["http://user:pass@host:port"]  # tournent à chaque blocage 403/429
+
+[deals]
+window = 200       # nombre de prix récents utilisés pour la médiane de chaque recherche
+min_samples = 15   # en dessous, pas de calcul de bonne affaire
+threshold = 0.30   # « bonne affaire » = au moins 30 % sous la médiane
+
+[telegram]
+# Ou variables d'environnement TELEGRAM_TOKEN / TELEGRAM_CHAT_ID
+token = ""
+chat_id = ""
+
+[discord]
+# Ou variable d'environnement DISCORD_WEBHOOK
+webhook_url = ""
+
+# Une section [[search]] par recherche. Le plus simple : faire la recherche sur
+# vinted.fr avec tous les filtres voulus, puis coller l'URL de la page dans `url`.
+
+[[search]]
+name = "Air Max 90 — 42"
+url = "https://www.vinted.fr/catalog?search_text=air%20max%2090&brand_ids[]=53&price_to=60"
+exclude = ["lot", "enfant", "copie", "réplique", "abîmé"]   # mots interdits dans le titre
+max_price = 60
+
+[[search]]
+name = "Carhartt Detroit — bonnes affaires seulement"
+search_text = "carhartt detroit jacket"
+include_any = ["detroit"]   # au moins un de ces mots dans le titre
+only_deals = true           # n'alerte que si le prix est sous la médiane de la recherche
+interval = 8                # surcharge de l'intervalle global

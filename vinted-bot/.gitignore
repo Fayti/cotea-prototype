@@ -1,0 +1,4 @@
+config.toml
+*.sqlite3*
+__pycache__/
+.venv/

@@ -1,0 +1,143 @@
+"""Chargement de la configuration (TOML, bibliothèque standard)."""
+from __future__ import annotations
+
+import os
+import tomllib
+from dataclasses import dataclass, field
+from urllib.parse import parse_qsl, urlparse
+
+# Paramètres d'URL du site web -> paramètres de l'API catalogue.
+_URL_PARAM_MAP = {
+    "catalog": "catalog_ids",
+    "catalog_ids": "catalog_ids",
+    "brand_ids": "brand_ids",
+    "size_ids": "size_ids",
+    "status_ids": "status_ids",
+    "color_ids": "color_ids",
+    "material_ids": "material_ids",
+    "video_game_platform_ids": "video_game_platform_ids",
+    "search_text": "search_text",
+    "price_from": "price_from",
+    "price_to": "price_to",
+    "currency": "currency",
+}
+
+
+def parse_vinted_url(url: str) -> tuple[str, dict[str, str]]:
+    """Transforme une URL de recherche Vinted copiée du navigateur en (domaine, params API)."""
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().removeprefix("www.")
+    if not host.startswith("vinted."):
+        raise ValueError(f"URL non Vinted : {url}")
+    grouped: dict[str, list[str]] = {}
+    for key, value in parse_qsl(parsed.query, keep_blank_values=False):
+        key = key.removesuffix("[]")
+        api_key = _URL_PARAM_MAP.get(key)
+        if api_key:
+            grouped.setdefault(api_key, []).append(value)
+    return host, {k: ",".join(v) for k, v in grouped.items()}
+
+
+@dataclass
+class Search:
+    name: str
+    domain: str = "vinted.fr"
+    params: dict[str, str] = field(default_factory=dict)
+    exclude: list[str] = field(default_factory=list)
+    include_any: list[str] = field(default_factory=list)
+    max_price: float | None = None
+    min_price: float | None = None
+    exclude_sellers: list[str] = field(default_factory=list)
+    only_deals: bool = False
+    interval: float | None = None
+
+    def api_params(self, per_page: int) -> dict[str, str]:
+        p = dict(self.params)
+        p["order"] = "newest_first"
+        p["per_page"] = str(per_page)
+        p["page"] = "1"
+        return p
+
+
+@dataclass
+class Config:
+    searches: list[Search]
+    interval: float = 5.0
+    min_request_gap: float = 1.0
+    jitter: float = 1.0
+    max_age: float = 3600.0
+    per_page: int = 20
+    warmup_per_page: int = 96
+    db_path: str = "vinted_bot.sqlite3"
+    proxies: list[str] = field(default_factory=list)
+    impersonate: str = "chrome"
+    deal_window: int = 200
+    deal_min_samples: int = 15
+    deal_threshold: float = 0.30
+    telegram_token: str = ""
+    telegram_chat_id: str = ""
+    discord_webhook: str = ""
+    console: bool = True
+
+
+def _build_search(raw: dict) -> Search:
+    if "name" not in raw:
+        raise ValueError("Chaque [[search]] doit avoir un champ 'name'")
+    domain = raw.get("domain", "vinted.fr")
+    params: dict[str, str] = {}
+    if raw.get("url"):
+        domain, params = parse_vinted_url(raw["url"])
+    if raw.get("search_text"):
+        params["search_text"] = raw["search_text"]
+    for k, v in (raw.get("params") or {}).items():
+        params[k] = ",".join(map(str, v)) if isinstance(v, list) else str(v)
+    max_price = raw.get("max_price")
+    if max_price is not None and "price_to" not in params:
+        # Filtrer côté serveur réduit la réponse et évite de gaspiller les places de la page.
+        params["price_to"] = str(max_price)
+    return Search(
+        name=raw["name"],
+        domain=domain,
+        params=params,
+        exclude=[w.lower() for w in raw.get("exclude", [])],
+        include_any=[w.lower() for w in raw.get("include_any", [])],
+        max_price=max_price,
+        min_price=raw.get("min_price"),
+        exclude_sellers=[s.lower() for s in raw.get("exclude_sellers", [])],
+        only_deals=bool(raw.get("only_deals", False)),
+        interval=raw.get("interval"),
+    )
+
+
+def load_config(path: str) -> Config:
+    with open(path, "rb") as f:
+        raw = tomllib.load(f)
+    general = raw.get("general", {})
+    deals = raw.get("deals", {})
+    telegram = raw.get("telegram", {})
+    discord = raw.get("discord", {})
+    searches = [_build_search(s) for s in raw.get("search", [])]
+    if not searches:
+        raise ValueError("Aucune recherche [[search]] définie dans la configuration")
+    names = [s.name for s in searches]
+    if len(names) != len(set(names)):
+        raise ValueError("Les noms de recherche doivent être uniques")
+    return Config(
+        searches=searches,
+        interval=float(general.get("interval", 5.0)),
+        min_request_gap=float(general.get("min_request_gap", 1.0)),
+        jitter=float(general.get("jitter", 1.0)),
+        max_age=float(general.get("max_age_minutes", 60)) * 60,
+        per_page=int(general.get("per_page", 20)),
+        warmup_per_page=int(general.get("warmup_per_page", 96)),
+        db_path=general.get("db_path", "vinted_bot.sqlite3"),
+        proxies=list(general.get("proxies", [])),
+        impersonate=general.get("impersonate", "chrome"),
+        deal_window=int(deals.get("window", 200)),
+        deal_min_samples=int(deals.get("min_samples", 15)),
+        deal_threshold=float(deals.get("threshold", 0.30)),
+        telegram_token=os.environ.get("TELEGRAM_TOKEN") or telegram.get("token", ""),
+        telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID") or str(telegram.get("chat_id", "")),
+        discord_webhook=os.environ.get("DISCORD_WEBHOOK") or discord.get("webhook_url", ""),
+        console=bool(general.get("console", True)),
+    )
