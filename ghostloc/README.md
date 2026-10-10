@@ -34,7 +34,7 @@ Le temps est décompté côté serveur : `gl_session_start` à la première tél
 2. SQL Editor : exécute `supabase/migrations/20261010000000_ghostloc.sql`.
 3. Authentication › URL Configuration :
    - Site URL : `https://fayti.github.io/cotea-prototype/ghostloc`
-   - Redirect URLs : `https://fayti.github.io/cotea-prototype/ghostloc/compte.html`
+   - Redirect URLs : `https://fayti.github.io/cotea-prototype/ghostloc/**` (couvre la confirmation d'e-mail, avec ou sans `?plan=…`, et la réinitialisation du mot de passe)
 4. Authentication › Emails : laisse la confirmation d'e-mail activée ; pour la production, branche un SMTP (Resend, Brevo…) car l'envoi intégré est limité à quelques e-mails par heure.
 5. Project Settings › API : copie l'URL du projet et la clé `anon` dans `config.json`, avec ton e-mail de support.
 
