@@ -21,9 +21,11 @@ from pathlib import Path
 
 from aiohttp import web
 
+from .analysis import analyze
 from .buyer import VintedWindow
 from .client import VintedClient
 from .config import config_from_dict, parse_vinted_url
+from .filters import margin
 from .models import Item
 from .monitor import Monitor
 from .notifier import TelegramNotifier, build_notifiers, sample_alert, telegram_detect
@@ -65,6 +67,7 @@ def alert_payload(item: Item, deal, search) -> dict:
         "url": item.url, "photo": item.photo_url, "seller": item.seller,
         "created_ts": item.created_ts, "age_estimated": item.age_estimated, "detected_ts": time.time(),
         "deal": deal.is_deal, "discount": deal.discount, "median": deal.median,
+        "resale": search.resale_price, "margin": margin(item, search),
         # Photos : la recherche n'en donne qu'une ; les suivantes arrivent par mise à jour.
         "photos": item.photo_urls[:3] or ([item.photo_url] if item.photo_url else []),
         # Favoris et vues : valeur à l'alerte, puis mises à jour en direct.
@@ -125,6 +128,8 @@ def normalize_search(body: dict, existing: dict | None = None) -> dict:
         "max_price": _float_or_none(body.get("max_price")),
         "only_deals": bool(body.get("only_deals")),
         "auto_reserve_max": _float_or_none(body.get("auto_reserve_max")),
+        "resale_price": _float_or_none(body.get("resale_price")),
+        "min_margin": _float_or_none(body.get("min_margin")),
         "weight": min(3, max(1, int(body.get("weight") or 1))),
         "enabled": bool(body.get("enabled", True)),
     }
@@ -427,6 +432,13 @@ async def tg_test(request):
     finally:
         await notifier.close()
     return web.json_response({"ok": True})
+
+
+@routes.get("/api/analysis")
+async def get_analysis(request):
+    e = engine_of(request)
+    alerts = e.store.alerts_since(time.time() - 14 * 86400)
+    return web.json_response(analyze(alerts, e.settings["search"]))
 
 
 @routes.post("/api/vinted-window")

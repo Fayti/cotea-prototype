@@ -95,6 +95,13 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .resv { font-size: 13px; font-weight: 600; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); }
 .resv.ok { background: #d3f9d8; color: #1b5e20; }
 .resv.err { background: #ffe3e3; color: #a51111; }
+.margin { font-weight: 700; font-size: 14px; }
+.margin.pos { color: #2b8a3e; } .margin.neg { color: #c92a2a; }
+.margin small { font-weight: 400; color: var(--muted); }
+.ana { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ana th, .ana td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ana th { color: var(--muted); font-weight: 600; }
+.ana-wrap { overflow-x: auto; }
 .likes { font-size: 13px; color: var(--muted); }
 .likes.up b { color: #e03131; }
 .btn.buy { font-weight: 700; font-size: 15px; }
@@ -254,6 +261,12 @@ details summary { cursor: pointer; font-weight: 600; }
           <label class="field full"><span>⚡ Réserver tout seul si le prix est de … € ou moins</span>
             <input type="number" name="auto_reserve_max" min="0" step="0.5" placeholder="vide = jamais (tu cliques « Réserver » toi-même)">
             <small>Le bot réserve l'annonce dans la fenêtre Vinted dès qu'il la voit (au plus 10 par heure). Rien n'est payé : la page de paiement s'ouvre, et sans validation de ta part la réservation expire.</small></label>
+          <label class="field"><span>💰 Prix de revente visé (€)</span>
+            <input type="number" name="resale_price" min="0" step="1" placeholder="ex. 130">
+            <small>Ce que tu penses en tirer (ex. sur Vestiaire Collective). Chaque annonce affiche alors sa marge estimée, frais de revente (20 %) et envoi (6 €) déduits.</small></label>
+          <label class="field"><span>Marge minimale (€)</span>
+            <input type="number" name="min_margin" step="1" placeholder="vide = toutes les annonces">
+            <small>Avec un prix de revente : ne m'alerter que si la marge estimée atteint ce montant.</small></label>
           <label class="check full"><input type="checkbox" name="only_deals"> M'alerter seulement pour les bonnes affaires 🔥 (prix bien en dessous des autres annonces de cette recherche)</label>
         </div>
         <div class="row">
@@ -263,6 +276,19 @@ details summary { cursor: pointer; font-weight: 600; }
       </form>
 
       <div id="searchList" class="stack"></div>
+
+      <div class="card stack" id="ideaCard">
+        <h2>💡 Piste : doudounes Herno, achetées sur Vinted, revendues sur Vestiaire</h2>
+        <p class="sub">Herno est une marque italienne de doudounes de luxe (500 à 1000 € neuves), peu connue du grand public et très peu contrefaite, contrairement à Moncler ou CP Company. Sur Vinted, des modèles d'occasion se vendent 45 à 70 €, quand le même type de pièce est proposé 150 à 200 € sur Vestiaire Collective, où les acheteurs connaissent la marque. Ajoute la recherche, laisse tourner quelques jours, puis lis l'analyse ci-dessous.</p>
+        <div class="row"><button id="addIdea" class="btn primary">Ajouter la recherche Herno (≤ 90 €, revente 130 €)</button></div>
+      </div>
+
+      <div class="card stack">
+        <div class="toolbar" style="margin:0"><div class="grow"><h2>📊 Ce que disent tes données</h2>
+          <p class="sub">Une annonce vendue en moins d'une heure était sous-évaluée. Plus cette part est élevée, plus la recherche laisse passer des affaires. Mesure fiable sur les recherches précises (peu d'annonces par heure). Aucune requête en plus vers Vinted.</p></div>
+          <button id="anaBtn" class="btn small">Actualiser</button></div>
+        <div id="anaBox" class="ana-wrap"><p class="sub">Chargement…</p></div>
+      </div>
     </div>
   </section>
 
@@ -380,7 +406,27 @@ function ago(ts) {
 }
 
 // ---------- onglets ----------
+async function loadAnalysis() {
+  const rows = await api("GET", "/api/analysis");
+  const pct = (v) => v == null ? "—" : `${Math.round(v * 100)} %`;
+  $("#anaBox").innerHTML = rows.length ? `<table class="ana"><thead><tr>
+      <th>Recherche</th><th>Annonces / jour</th><th>Prix médian</th><th>Vendues en &lt; 1 h</th>
+      <th>Prix des ventes rapides</th><th>Délai de vente médian</th><th>Marge médiane</th><th>Verdict</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr><td><strong>${esc(r.name)}</strong><br><small>${r.alerts} annonce(s)</small></td>
+      <td>${r.per_day ?? "—"}</td><td>${r.median_price != null ? money(r.median_price) : "—"}</td>
+      <td><strong>${pct(r.quick_rate)}</strong></td><td>${r.quick_price != null ? money(r.quick_price) : "—"}</td>
+      <td>${r.median_sale_s != null ? duration(r.median_sale_s) : "—"}</td>
+      <td>${r.median_margin != null ? money(r.median_margin) : "—"}</td><td>${esc(r.verdict)}</td></tr>`).join("")}
+    </tbody></table>` : `<p class="sub">Ajoute une recherche pour commencer.</p>`;
+}
+$("#anaBtn").addEventListener("click", (e) => guarded(e.target, loadAnalysis));
+$("#addIdea").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("POST", "/api/searches", { url: "https://www.vinted.fr/catalog?brand_ids[]=159254", name: "Herno (revente Vestiaire)",
+    max_price: 90, resale_price: 130, weight: 2 });
+  await refresh(); toast("Recherche Herno ajoutée : le bot la surveille");
+}));
 function showTab(name) {
+  if (name === "searches") loadAnalysis().catch(() => {});
   $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
   if (name === "feed") { unseen = 0; renderUnseen(); }
@@ -490,11 +536,12 @@ function cardHTML(a) {
       ${meta ? `<div class="meta">${meta}</div>` : ""}
       ${a.median ? `<div class="meta">Médiane de la recherche : ${money(a.median, a.currency)}</div>` : ""}
       ${a.created_ts ? `<div class="meta">⚡ Repérée ${a.age_estimated ? "~" : ""}${Math.max(0, Math.round(a.detected_ts - a.created_ts))} s après sa mise en ligne</div>` : ""}
+      ${a.margin != null ? `<div class="margin ${a.margin > 0 ? "pos" : "neg"}">💰 Marge estimée ${a.margin > 0 ? "+" : ""}${money(a.margin, a.currency)} <small>si revendue ${money(a.resale, a.currency)}</small></div>` : ""}
       ${likesHTML(a)}
       <div><span class="chip">${esc(a.search)}</span></div>
       ${reserveHTML(a)}
       <div class="row2">
-        <button class="btn primary buy" data-act="reserve"${a.reserve === "pending" ? " disabled" : ""}>⚡ Réserver</button>
+        ${isAvailable(a) ? `<button class="btn primary buy" data-act="reserve"${a.reserve === "pending" ? " disabled" : ""}>⚡ Réserver</button>` : `<span class="btn buy" style="opacity:.5">Partie</span>`}
         <a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener">Voir</a>
       </div>
     </div></div>`;
@@ -612,6 +659,7 @@ function connectEvents() {
 // ---------- recherches ----------
 const weightLabel = { 1: "", 2: "Priorité haute", 3: "Priorité maximale" };
 function renderSearches() {
+  $("#ideaCard").hidden = (S.settings?.search || []).some((s) => (s.url || "").includes("159254"));
   const list = S.settings?.search || [];
   const live = S.status?.monitor?.searches || {};
   $("#searchList").innerHTML = list.length ? list.map((s) => {
@@ -629,6 +677,8 @@ function renderSearches() {
       weightLabel[s.weight] || "",
       s.only_deals ? "🔥 seulement" : "",
       s.auto_reserve_max != null ? `⚡ réserve tout seul ≤ ${money(s.auto_reserve_max)}` : "",
+      s.resale_price != null ? `💰 revente ${money(s.resale_price)}` : "",
+      s.min_margin != null ? `marge ≥ ${money(s.min_margin)}` : "",
     ].filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join("");
     return `<div class="card search" data-id="${esc(s.id)}">
       <div class="info"><div class="name">${esc(s.name)}</div>
@@ -667,6 +717,7 @@ function openForm(s = null) {
     f.url.value = s.url; f.name.value = s.name; f.max_price.value = s.max_price ?? "";
     f.exclude.value = (s.exclude || []).join(", "); f.weight.value = s.weight || 1; f.only_deals.checked = !!s.only_deals;
     f.auto_reserve_max.value = s.auto_reserve_max ?? "";
+    f.resale_price.value = s.resale_price ?? ""; f.min_margin.value = s.min_margin ?? "";
   }
   f.hidden = false; f.url.focus(); f.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -694,6 +745,7 @@ $("#searchForm").addEventListener("submit", (e) => {
     url: f.url.value.trim(), name: f.name.value.trim(), max_price: f.max_price.value,
     exclude: f.exclude.value, weight: +f.weight.value, only_deals: f.only_deals.checked,
     auto_reserve_max: f.auto_reserve_max.value,
+    resale_price: f.resale_price.value, min_margin: f.min_margin.value,
   };
   guarded(f.querySelector("[type=submit]"), async () => {
     await api(editingId ? "PUT" : "POST", editingId ? "/api/searches/" + editingId : "/api/searches", body);

@@ -12,6 +12,7 @@ from vinted_bot.client import RateLimited, VintedClient
 from vinted_bot.config import Config, Search, load_config, parse_vinted_url
 from vinted_bot.models import Item
 from vinted_bot.monitor import IdClock, Monitor, weighted_cycle
+from vinted_bot.notifier import format_text
 from vinted_bot.store import Store
 
 
@@ -854,3 +855,37 @@ def test_auto_reserve_triggers_under_price_before_photos(tmp_path):
 
     asyncio.run(scenario())
     assert asked == [B + 50]
+
+
+def test_margin_and_min_margin_filter():
+    search = Search(name="h", resale_price=130.0, min_margin=20.0)
+    cheap = Item.from_api(svc_item(B, price="60.00"), "vinted.fr")   # 60,90 € avec protection
+    dear = Item.from_api(svc_item(B + 1, price="90.00"), "vinted.fr")
+    assert filters.margin(cheap, search) == round(130 * 0.8 - 60.9 - 6, 2)   # 37,10 €
+    assert filters.accept(cheap, search)[0]
+    ok, why = filters.accept(dear, search)                                   # 104 − 90,90 − 6 = 7,10 €
+    assert not ok and "marge" in why
+    assert filters.margin(cheap, Search(name="x")) is None
+    assert "💰 Marge estimée +37 € si revendue 130 €" in format_text(cheap, filters.evaluate_deal(60, None, 0.3), search)
+
+
+def test_analysis_finds_searches_where_items_sell_fast():
+    from vinted_bot.analysis import analyze
+    now = 1_000_000.0
+
+    def alert(key, i, price, sold_after=None):
+        return {"search_key": key, "detected_ts": now - 2 * 86400 + i * 600, "price": price, "margin": 130 * 0.8 - price - 6,
+                "availability": "sold" if sold_after else "available", "availability_after_s": sold_after}
+
+    alerts = [alert("fast", i, 50 + i, 900 if i % 2 else None) for i in range(10)]
+    alerts += [alert("slow", i, 80, 3 * 86400 if i == 0 else None) for i in range(10)]
+    alerts += [alert("new", 0, 40)]
+    rows = analyze(alerts, [{"id": "slow", "name": "Lente"}, {"id": "fast", "name": "Rapide"},
+                            {"id": "new", "name": "Nouvelle"}, {"id": "none", "name": "Vide"}], now)
+    assert [r["id"] for r in rows][:2] == ["fast", "slow"]
+    fast = rows[0]
+    assert fast["quick_rate"] == 0.5 and fast["sold"] == 5 and fast["median_sale_s"] == 900
+    assert fast["quick_price"] == 55 and fast["verdict"].startswith("🔥")
+    assert rows[1]["quick_rate"] == 0 and rows[1]["verdict"].startswith("🐢")
+    assert next(r for r in rows if r["id"] == "new")["verdict"].startswith("Trop tôt")
+    assert next(r for r in rows if r["id"] == "none")["alerts"] == 0

@@ -121,6 +121,10 @@ class Store:
         rows = self.db.execute("SELECT payload FROM alerts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [json.loads(r[0]) for r in rows]
 
+    def alerts_since(self, since: float) -> list[dict]:
+        rows = self.db.execute("SELECT payload FROM alerts WHERE ts >= ? ORDER BY id", (since,)).fetchall()
+        return [json.loads(r[0]) for r in rows]
+
     def clear_alerts(self) -> None:
         self.db.execute("DELETE FROM alerts")
         self.db.commit()
@@ -130,7 +134,9 @@ class Store:
         self.db.execute("DELETE FROM seen WHERE ts < ?", (cutoff,))
         self._seen.clear()
         self.db.execute("DELETE FROM prices WHERE ts < ?", (cutoff,))
-        self.db.execute("DELETE FROM alerts WHERE id NOT IN (SELECT id FROM alerts ORDER BY id DESC LIMIT 500)")
+        # Gardées 14 jours (5000 au plus) : elles servent aussi à l'analyse des recherches.
+        self.db.execute("DELETE FROM alerts WHERE ts < ? OR id NOT IN "
+                        "(SELECT id FROM alerts ORDER BY id DESC LIMIT 5000)", (cutoff,))
         self.db.execute("DELETE FROM tracked WHERE alerted_ts < ?", (cutoff,))
         self.db.commit()
 

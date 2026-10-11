@@ -62,6 +62,13 @@ contre la médiane des prix récents de la même recherche.
   les boutons « ⚡ Réserver » et « Voir sur Vinted ». Il est modifié quand l'annonce est vendue.
   Utilise un bot Telegram dédié à VintedBot : deux programmes ne peuvent pas lire les boutons
   d'un même bot.
+- **Marge estimée** : pour chaque recherche, un « prix de revente visé » (ex. sur Vestiaire
+  Collective). Chaque annonce affiche alors `revente × 0,8 − (prix + protection acheteurs) − 6 €
+  d'envoi`, et une « marge minimale » filtre les alertes.
+- **Analyse des recherches** (onglet Recherches) : annonces par jour, prix médian, part vendue en
+  moins d'une heure, prix de ces ventes rapides, délai de vente. Une annonce vendue en moins d'une
+  heure était sous-évaluée : cette part mesure où le marché laisse passer des affaires. Calculé
+  sur les alertes déjà enregistrées, sans requête en plus.
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
   résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
   disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris

@@ -54,6 +54,8 @@ class Search:
     exclude_sellers: list[str] = field(default_factory=list)
     only_deals: bool = False
     auto_reserve_max: float | None = None  # réserver tout seul les annonces à ce prix ou moins
+    resale_price: float | None = None      # prix de revente visé (ex. sur Vestiaire) : calcul de marge
+    min_margin: float | None = None        # ne signaler que si la marge estimée atteint ce montant
     weight: int = 1
     key: str = ""  # identifiant stable pour la base (filigrane, prix) ; le nom par défaut
 
@@ -120,6 +122,8 @@ def _build_search(raw: dict) -> Search:
         exclude_sellers=[s.lower() for s in raw.get("exclude_sellers", [])],
         only_deals=bool(raw.get("only_deals", False)),
         auto_reserve_max=raw.get("auto_reserve_max"),
+        resale_price=raw.get("resale_price"),
+        min_margin=raw.get("min_margin"),
         weight=max(1, int(raw.get("weight", 1))),
         key=str(raw.get("id") or ""),
     )

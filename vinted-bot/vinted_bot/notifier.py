@@ -13,6 +13,7 @@ from curl_cffi import CurlMime
 from curl_cffi.requests import AsyncSession
 
 from .config import Search
+from .filters import margin
 from .models import Deal, Item
 from .tracking import AVAILABLE, DELETED, GONE, RESERVED, SOLD, STATUS_LABELS
 
@@ -67,6 +68,9 @@ def format_text(item: Item, deal: Deal, search: Search) -> str:
     if deal.median is not None:
         price += f" · médiane {_money(deal.median, item.currency)}"
     lines.append(f"💶 {price}")
+    gain = margin(item, search)
+    if gain is not None:
+        lines.append(f"💰 Marge estimée {gain:+.0f} € si revendue {search.resale_price:.0f} €")
     details = " · ".join(x for x in (item.brand, item.size, item.status) if x)
     if details:
         lines.append(f"🏷 {details}")
