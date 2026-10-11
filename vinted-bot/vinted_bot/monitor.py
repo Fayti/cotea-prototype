@@ -17,6 +17,7 @@ from .client import RateLimited, VintedClient
 from .config import Config, Search
 from .models import Item
 from .store import Store
+from .tracking import AVAILABLE, DELETED, GONE, SOLD, TRACK_FOR, Tracker, extract_photos, page_status
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ def weighted_cycle(searches: list[Search]):
 
 
 CLOCK_EVERY = 30.0  # secondes entre deux relevés du numéro d'annonce le plus récent
+PHOTOS_TTL = 180.0  # au-delà, les photos supplémentaires d'une alerte n'ont plus d'intérêt
+PAGE_PAUSE = 900.0  # pause des lectures de pages d'annonce après un blocage
+STATUS_WAIT = 120.0  # au-delà, une confirmation de vente passe avant les photos
 
 
 class IdClock:
@@ -128,6 +132,13 @@ class Monitor:
         self._alerted: OrderedDict[int, None] = OrderedDict()  # une annonce = une seule alerte
         self.clock = IdClock()
         self.stats = Stats()
+        self.tracker = Tracker()
+        self._seq: dict[str, int] = defaultdict(int)
+        # Lectures de pages d'annonce en attente : item_id -> {domain, url, reasons, since, tries}
+        self._page_queue: dict[int, dict] = {}
+        self._page_busy = False
+        self._next_page_at = 0.0
+        self._page_pause_until = 0.0
         # État par recherche, lu par l'interface.
         self.state: dict[str, dict] = {
             s.key: {"last_ok": None, "last_error": None, "polls": 0, "ready": False}
@@ -139,8 +150,16 @@ class Monitor:
             self.clients[domain] = self._client_factory(domain)
         return self.clients[domain]
 
+    def _load_tracked(self) -> None:
+        for row in self.store.load_tracked(time.time() - TRACK_FOR):
+            if row["status"] in (SOLD, DELETED):
+                continue
+            t = self.tracker.add(row["item_id"], row["search"], row["url"], row["alerted_ts"], row["status"])
+            t.status_ts, t.handles = row["status_ts"], row["handles"]
+
     async def run(self) -> None:
         self.store.prune()
+        self._load_tracked()
         by_domain: dict[str, list[Search]] = defaultdict(list)
         for s in self.cfg.searches:
             by_domain[s.domain].append(s)
@@ -167,6 +186,8 @@ class Monitor:
             if time.monotonic() >= next_clock:
                 next_clock = time.monotonic() + CLOCK_EVERY
                 coro = self._tick_clock(domain, lane, inflight)
+            elif page := self._pop_page(domain):
+                coro = self._fetch_page(domain, lane, inflight, *page)
             else:
                 coro = self._poll_safe(next(cycle), lane, inflight)
             task = asyncio.create_task(coro)
@@ -210,13 +231,15 @@ class Monitor:
         """Une interrogation. Renvoie les annonces notifiées."""
         warmup = self.store.watermark(search.key) is None
         per_page = self.cfg.warmup_per_page if warmup else self.cfg.per_page
+        self._seq[search.key] += 1
+        seq = self._seq[search.key]
         t0 = time.monotonic()
         raw = await self.client(search.domain).search(search.api_params(per_page), lane)
         self.stats.request_times.append(time.monotonic())
         self.stats.rtts.append(time.monotonic() - t0)
-        return self.process(search, raw, warmup)
+        return self.process(search, raw, warmup, seq)
 
-    def process(self, search: Search, raw_items: list[dict], warmup: bool) -> list[Item]:
+    def process(self, search: Search, raw_items: list[dict], warmup: bool, seq: int | None = None) -> list[Item]:
         items = []
         for raw in raw_items:
             try:
@@ -269,9 +292,22 @@ class Monitor:
             self.stats.alerts += 1
             if age is not None:
                 self.stats.ages.append(age)
+            if self.cfg.track_status or self.cfg.extra_photos:
+                self.tracker.add(item.id, search.key, item.url)
+                self.store.save_tracked(self.tracker.items[item.id])
+                if self.cfg.extra_photos and len(item.photo_urls) < self.cfg.photos_per_alert:
+                    self._enqueue_page(item.id, item.url, search.domain, "photos")
             self._dispatch(item, deal, search)
             log.info("[%s] %s — %s%s", search.name, item.title, item.url,
                      f" (publiée il y a ~{age:.0f} s)" if age is not None else "")
+        if not warmup and seq is not None and self.cfg.track_status:
+            self.tracker.expire()
+            visible = [i.id for i in items if not i.promoted]
+            promoted = {i.id for i in items if i.promoted}
+            for t in self.tracker.observe_page(search.key, seq, visible, promoted):
+                self._status_changed(t)
+                if t.status == GONE:
+                    self._enqueue_page(t.item_id, t.url, search.domain, "status")
         if warmup:
             log.info("[%s] initialisé (%d annonces de référence, aucune alerte)", search.name, len(items))
         elif new_count >= self.cfg.per_page * 0.8:
@@ -279,19 +315,114 @@ class Monitor:
                         "(augmenter la priorité ou affiner la recherche)", search.name)
         return notified
 
+    def _spawn(self, coro, what: str) -> None:
+        async def guarded():
+            try:
+                await coro
+            except Exception as e:  # une notification ratée ne doit pas tuer le bot
+                log.error("Échec de notification (%s) : %s", what, e)
+        task = asyncio.get_running_loop().create_task(guarded())
+        self._pending.add(task)
+        task.add_done_callback(self._pending.discard)
+
     def _dispatch(self, item, deal, search) -> None:
         # Les envois ne bloquent jamais le polling.
         for notifier in self.notifiers:
-            task = asyncio.get_running_loop().create_task(self._send(notifier, item, deal, search))
-            self._pending.add(task)
-            task.add_done_callback(self._pending.discard)
+            self._spawn(self._send(notifier, item, deal, search), type(notifier).__name__)
 
-    @staticmethod
-    async def _send(notifier, item, deal, search) -> None:
+    async def _send(self, notifier, item, deal, search) -> None:
+        handle = await notifier.send(item, deal, search)
+        t = self.tracker.items.get(item.id)
+        if handle is not None and t is not None:
+            # Référence du message (ex. Telegram) pour l'enrichir ou le modifier plus tard.
+            t.handles[type(notifier).__name__] = handle
+            self.store.save_tracked(t)
+
+    def _status_changed(self, t) -> None:
+        self.store.save_tracked(t)
+        log.info("Annonce %s : %s", t.item_id, t.status)
+        for notifier in self.notifiers:
+            if hasattr(notifier, "status"):
+                name = type(notifier).__name__
+                self._spawn(notifier.status(t, t.handles.get(name)), f"{name}.status")
+
+    # --- pages d'annonce : photos supplémentaires et confirmation du motif ---------------
+
+    def _enqueue_page(self, item_id: int, url: str, domain: str, reason: str) -> None:
+        entry = self._page_queue.setdefault(
+            item_id, {"domain": domain, "url": url, "reasons": set(), "since": time.monotonic(), "tries": 0})
+        entry["reasons"].add(reason)
+
+    def _pop_page(self, domain: str):
+        """Prochaine page à lire sur ce domaine, ou None. Une seule à la fois, espacées."""
+        now = time.monotonic()
+        if self._page_busy or now < self._next_page_at or now < self._page_pause_until:
+            return None
+        for iid in list(self._page_queue):
+            entry = self._page_queue[iid]
+            if "photos" in entry["reasons"] and now - entry["since"] > PHOTOS_TTL:
+                entry["reasons"].discard("photos")
+                log.info("Photos de l'annonce %s abandonnées (file d'attente trop longue)", iid)
+            if not entry["reasons"]:
+                del self._page_queue[iid]
+        # Photos d'abord, de la plus récente alerte à la plus ancienne : c'est sur la dernière
+        # annonce arrivée qu'il faut décider vite. Confirmations de vente ensuite, dans l'ordre,
+        # sauf celles qui attendent depuis plus de STATUS_WAIT : elles passent devant.
+        def rank(e):
+            waited = now - e["since"]
+            if "status" in e["reasons"] and waited > STATUS_WAIT:
+                return (0, e["since"])
+            if "photos" in e["reasons"]:
+                return (1, -e["since"])
+            return (2, e["since"])
+        candidates = [(*rank(e), iid) for iid, e in self._page_queue.items() if e["domain"] == domain]
+        if not candidates:
+            return None
+        _, _, iid = min(candidates)
+        entry = self._page_queue.pop(iid)
+        self._page_busy = True
+        self._next_page_at = now + self.cfg.page_gap
+        return iid, entry
+
+    async def _fetch_page(self, domain: str, lane, inflight: asyncio.Semaphore, item_id: int, entry: dict) -> None:
         try:
-            await notifier.send(item, deal, search)
-        except Exception as e:  # une alerte ratée ne doit pas tuer le bot
-            log.error("Échec de notification %s : %s", type(notifier).__name__, e)
+            code, final_url, page = await self.client(domain).get_page(entry["url"], lane)
+            self.stats.request_times.append(time.monotonic())
+            t = self.tracker.items.get(item_id)
+            if "photos" in entry["reasons"]:
+                photos = extract_photos(page, self.cfg.photos_per_alert)
+                if len(photos) >= 2:
+                    for notifier in self.notifiers:
+                        if hasattr(notifier, "photos"):
+                            name = type(notifier).__name__
+                            handle = t.handles.get(name) if t else None
+                            self._spawn(notifier.photos(item_id, photos, handle), f"{name}.photos")
+            status = page_status(code, final_url, page) if self.cfg.track_status else None
+            if t is not None and status == AVAILABLE and "status" not in entry["reasons"]:
+                status = None  # lecture pour les photos, peut-être antérieure à la disparition
+            if t is not None and status is not None and status != t.status:
+                if status == AVAILABLE:
+                    # Encore en vente mais sortie de la recherche (prix modifié…) : on cesse de
+                    # la juger sur sa présence jusqu'à ce qu'elle réapparaisse.
+                    t.anchors, t.missing = (), 0
+                t.status, t.status_ts = status, time.time()
+                self._status_changed(t)
+            elif t is not None and status is None and "status" in entry["reasons"]:
+                log.info("Annonce %s : page illisible, motif non confirmé (reste « plus disponible »)", item_id)
+        except RateLimited as e:
+            self._page_pause_until = time.monotonic() + PAGE_PAUSE
+            self.stats.block_times.append(time.monotonic())
+            log.warning("Lecture des pages d'annonce suspendue %d min : %s", PAGE_PAUSE // 60, e)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            entry["tries"] += 1
+            if entry["tries"] < 2:
+                self._page_queue.setdefault(item_id, entry)
+            log.debug("Page de l'annonce %s illisible : %s", item_id, e)
+        finally:
+            self._page_busy = False
+            inflight.release()
 
     def cycle_seconds(self, search: Search) -> float:
         """Temps moyen entre deux passages sur une recherche, au rythme actuel."""

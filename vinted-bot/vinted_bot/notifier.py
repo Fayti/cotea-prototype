@@ -9,6 +9,7 @@ from curl_cffi.requests import AsyncSession
 
 from .config import Search
 from .models import Deal, Item
+from .tracking import AVAILABLE, DELETED, GONE, RESERVED, SOLD, STATUS_LABELS
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,25 @@ def _age(item: Item) -> str:
     seconds = max(0, int(time.time() - item.created_ts))
     approx = "~" if item.age_estimated else ""
     return f"{approx}{seconds} s" if seconds < 120 else f"{approx}{seconds // 60} min"
+
+
+def _duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    if seconds < 3600:
+        return f"{max(1, seconds // 60)} min"
+    return f"{seconds // 3600} h {seconds % 3600 // 60:02d}"
+
+
+def status_banner(t) -> str:
+    """Bandeau d'état d'une annonce suivie, en texte simple."""
+    after = f" {_duration((t.status_ts or time.time()) - t.alerted_ts)} après l'alerte" if t.status_ts else ""
+    return {
+        SOLD: f"❌ VENDUE{after}",
+        GONE: f"⚠️ PLUS DISPONIBLE{after} (sans doute vendue)",
+        RESERVED: f"⏸ RÉSERVÉE{after}",
+        DELETED: f"🗑 SUPPRIMÉE{after}",
+        AVAILABLE: "✅ De nouveau disponible",
+    }.get(t.status, STATUS_LABELS.get(t.status, t.status))
 
 
 def headline(item: Item, deal: Deal) -> str:
@@ -58,6 +78,9 @@ class ConsoleNotifier:
     async def send(self, item: Item, deal: Deal, search: Search) -> None:
         print("\n" + format_text(item, deal, search), flush=True)
 
+    async def status(self, t, handle) -> None:
+        print(f"{status_banner(t)} : {t.url}", flush=True)
+
     async def close(self) -> None:
         pass
 
@@ -68,25 +91,47 @@ class TelegramNotifier:
         self.chat_id = chat_id
         self.http = AsyncSession(timeout=10)
 
-    async def send(self, item: Item, deal: Deal, search: Search) -> None:
+    @staticmethod
+    def _message(text: str, url: str, photo: str) -> dict:
+        payload = {
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": {"inline_keyboard": [[{"text": "Ouvrir sur Vinted", "url": url}]]},
+        }
+        if photo:
+            payload["link_preview_options"] = {"url": photo, "prefer_large_media": True, "show_above_text": True}
+        else:
+            payload["link_preview_options"] = {"is_disabled": True}
+        return payload
+
+    async def _call(self, method: str, payload: dict) -> dict:
+        resp = await self.http.post(f"{self.api}/{method}", json={"chat_id": self.chat_id, **payload})
+        if resp.status_code != 200:
+            raise RuntimeError(f"Telegram {method} HTTP {resp.status_code}: {resp.text[:200]}")
+        return resp.json().get("result") or {}
+
+    async def send(self, item: Item, deal: Deal, search: Search) -> dict:
         # sendMessage part immédiatement ; sendPhoto ferait d'abord télécharger l'image
         # par Telegram. La photo arrive en aperçu de lien, au-dessus du texte.
         text = html.escape(format_text(item, deal, search).rsplit("\n", 1)[0])
-        payload = {
-            "chat_id": self.chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "reply_markup": {"inline_keyboard": [[{"text": "Ouvrir sur Vinted", "url": item.url}]]},
-        }
-        if item.photo_url:
-            payload["link_preview_options"] = {
-                "url": item.photo_url, "prefer_large_media": True, "show_above_text": True,
-            }
-        else:
-            payload["link_preview_options"] = {"is_disabled": True}
-        resp = await self.http.post(f"{self.api}/sendMessage", json=payload)
-        if resp.status_code != 200:
-            raise RuntimeError(f"Telegram HTTP {resp.status_code}: {resp.text[:200]}")
+        result = await self._call("sendMessage", self._message(text, item.url, item.photo_url))
+        # Référence gardée pour ajouter les photos et signaler la vente sur ce même message.
+        return {"message_id": result.get("message_id"), "text": text, "url": item.url, "photo": item.photo_url}
+
+    async def photos(self, item_id: int, urls: list[str], handle: dict | None) -> None:
+        """Album des photos, en réponse silencieuse à l'alerte : le téléphone ne sonne qu'une fois."""
+        payload = {"media": [{"type": "photo", "media": u} for u in urls[:10]], "disable_notification": True}
+        if handle and handle.get("message_id"):
+            payload["reply_parameters"] = {"message_id": handle["message_id"], "allow_sending_without_reply": True}
+        await self._call("sendMediaGroup", payload)
+
+    async def status(self, t, handle: dict | None) -> None:
+        """Bandeau d'état ajouté en tête du message d'alerte d'origine (sans nouvelle sonnerie)."""
+        if not handle or not handle.get("message_id"):
+            return
+        text = f"<b>{html.escape(status_banner(t))}</b>\n{handle['text']}"
+        await self._call("editMessageText", {"message_id": handle["message_id"],
+                                             **self._message(text, handle["url"], handle.get("photo", ""))})
 
     async def close(self) -> None:
         await self.http.close()

@@ -46,6 +46,7 @@ class Lane:
         self.cooldown_until = 0.0
         self.strikes = 0
         self.session: AsyncSession | None = None
+        self.token: str | None = None
         self.lock = asyncio.Lock()
 
     @property
@@ -127,10 +128,8 @@ class VintedClient:
             if resp.status_code >= 400:
                 await session.close()
                 raise VintedError(f"page catalogue {self.domain} via {lane.label} : HTTP {resp.status_code}")
-            token = session.cookies.get("access_token_web")
-            if token:
-                session.headers["Authorization"] = f"Bearer {token}"
-            else:
+            lane.token = session.cookies.get("access_token_web")
+            if not lane.token:
                 log.warning("Jeton access_token_web absent après chargement de %s/catalog", self.base)
             log.info("Session Vinted ouverte sur %s via %s", self.domain, lane.label)
             lane.session = session
@@ -147,12 +146,11 @@ class VintedClient:
         try:
             for attempt in range(2):
                 session = await self._session(lane)
-                resp = await session.get(
-                    self.api_url,
-                    params=params,
-                    headers={"Accept": "application/json, text/plain, */*", "Origin": self.base,
-                             "Referer": self.base + "/catalog"},
-                )
+                headers = {"Accept": "application/json, text/plain, */*", "Origin": self.base,
+                           "Referer": self.base + "/catalog"}
+                if lane.token:
+                    headers["Authorization"] = f"Bearer {lane.token}"
+                resp = await session.get(self.api_url, params=params, headers=headers)
                 if resp.status_code in (401, 403) and attempt == 0:
                     log.info("Jeton refusé sur %s (%s), renouvellement", self.domain, lane.label)
                     await self._reset(lane)
@@ -181,6 +179,25 @@ class VintedClient:
         except Exception:
             lane.delay(5.0)  # erreur réseau : on laisse respirer cette voie
             raise
+
+    async def get_page(self, url: str, lane: Lane) -> tuple[int, str, str]:
+        """Page web d'une annonce : (code HTTP, URL finale après redirections, HTML).
+
+        403/429 : l'anti-robot freine. La voie se met en pause comme pour une recherche,
+        car ce blocage vise l'adresse IP entière (observé : l'API de recherche aussi).
+        """
+        session = await self._session(lane)
+        try:
+            resp = await session.get(url, headers={"Referer": self.base + "/catalog"})
+        except Exception:
+            lane.delay(5.0)
+            raise
+        if resp.status_code in (403, 429):
+            cooldown = lane.blocked()
+            await self._reset(lane)
+            raise RateLimited(f"page d'annonce via {lane.label} : HTTP {resp.status_code} — voie en pause "
+                              f"{cooldown:.0f} s")
+        return resp.status_code, str(resp.url), resp.text
 
     async def close(self) -> None:
         for lane in self.lanes:

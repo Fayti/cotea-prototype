@@ -42,6 +42,13 @@ contre la médiane des prix récents de la même recherche.
   tolère, et les autres IP continuent pendant la pause.
 - **Telegram** : `sendMessage` avec la photo en aperçu. Ce message part plus vite qu'un
   `sendPhoto`, qui oblige Telegram à télécharger l'image d'abord.
+- **3 photos par annonce** : Vinted n'en donne qu'une dans la recherche. Le bot lit ensuite la
+  page de l'annonce (une page toutes les 30 s au plus, pour ne pas se faire bloquer) et ajoute
+  2 photos : vignettes dans l'interface, album en réponse silencieuse sur Telegram.
+- **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
+  résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
+  disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris
+  avec « ❌ Vendue en X min », et le message Telegram est modifié en conséquence.
 
 ## Installation sur Mac
 

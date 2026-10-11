@@ -448,3 +448,264 @@ def test_ui_skips_port_used_by_another_app_and_reuses_own_instance(tmp_path):
         asyncio.run(scenario())
     finally:
         other.shutdown()
+
+
+# --- suivi : photos et disponibilité ----------------------------------------------------
+
+from vinted_bot import tracking  # noqa: E402
+
+# Extraits de vraies pages relevés le 11/10/2026 (données Next.js, guillemets échappés).
+SOLD_PAGE = (
+    '<html><head><meta property="og:title"></head><body>'
+    '<img data-testid="item-photo-1--img" src="https://images1.vinted.net/t/01_A/f800/a.webp?s=1">'
+    '<img data-testid="item-photo-2--img" src="https://images1.vinted.net/t/01_B/f800/b.webp?s=2">'
+    '<script>self.__next_f.push([1,"\\"flash_messages.no_longer_available_sold.title\\":\\"Vendu\\""])</script>'
+    '<script>self.__next_f.push([1,"33:[\\"$\\",\\"$Le1\\",null,{\\"plugins\\":[{\\"data\\":{\\"item_id\\":\\"10328210472\\",'
+    '\\"seller_id\\":\\"3173658697\\",\\"theme\\":\\"SUCCESS\\",\\"title\\":\\"Vendu\\"},\\"exposures\\":[],'
+    '\\"name\\":\\"buyer_item_status\\",\\"section\\":\\"sidebar\\",\\"type\\":\\"buyer_item_status\\"}]}]"])</script>'
+    '<script>self.__next_f.push([1,"{\\"can_buy\\":false,\\"instant_buy\\":false,\\"is_reserved\\":false}"])</script>'
+    '</body></html>'
+)
+LIVE_PAGE = (
+    '<html><head><script type="application/ld+json">{"@type":"Product","offers":{"availability":"InStock"}}</script>'
+    '</head><body>'
+    '<img data-testid="item-photo-3--img" src="https://images1.vinted.net/t/01_C/f800/c.webp?s=3">'
+    '<img data-testid="item-photo-1--img" src="https://images1.vinted.net/t/01_A/f800/a.webp?s=1">'
+    '<img data-testid="item-photo-2--img" src="https://images1.vinted.net/t/01_B/f800/b.webp?s=2">'
+    '<img data-testid="item-photo-4--img" src="https://images1.vinted.net/t/01_D/f800/d.webp?s=4">'
+    '<script>self.__next_f.push([1,"\\"flash_messages.no_longer_available_sold.title\\":\\"Vendu\\""])</script>'
+    '<script>self.__next_f.push([1,"{\\"data\\":{\\"closet_countdown_end_date\\":null,\\"is_sticky\\":true,'
+    '\\"item_id\\":\\"10331217994\\"},\\"exposures\\":[],\\"name\\":\\"buy\\",\\"section\\":\\"sticky\\",\\"type\\":\\"buy\\"}"])</script>'
+    '</body></html>'
+)
+ITEM_URL = "https://www.vinted.fr/items/10328210472-charmmy-kitty"
+
+
+def test_page_status_on_real_markup():
+    assert tracking.page_status(200, ITEM_URL, SOLD_PAGE) == tracking.SOLD
+    assert tracking.page_status(200, ITEM_URL, LIVE_PAGE) == tracking.AVAILABLE  # « Vendu » des traductions ignoré
+    assert tracking.page_status(404, ITEM_URL, "") == tracking.DELETED
+    assert tracking.page_status(200, ITEM_URL, 'x data-dgst="NEXT_HTTP_ERROR_FALLBACK;404" y') == tracking.DELETED
+    # Mur de connexion ou de vérification : aucune conclusion (fausses ventes en série chez d'autres)
+    assert tracking.page_status(200, "https://www.vinted.fr/member/general/login", SOLD_PAGE) is None
+    assert tracking.page_status(200, "https://www.vinted.fr/session-refresh?ref=x", "<html></html>") is None
+    assert tracking.page_status(403, ITEM_URL, "") is None
+    assert tracking.page_status(200, ITEM_URL, "<html>page inconnue</html>") is None
+    reserved = '<x>{\\"can_buy\\":false,\\"is_reserved\\":true,\\"item_id\\":\\"1\\"}</x>'
+    assert tracking.page_status(200, ITEM_URL, reserved) == tracking.RESERVED
+
+
+def test_extract_photos_gallery_order_and_fallback():
+    assert [u.split("/t/")[1][:4] for u in tracking.extract_photos(LIVE_PAGE)] == ["01_A", "01_B", "01_C"]
+    assert len(tracking.extract_photos(LIVE_PAGE, 10)) == 4
+    rsc = ('{\\"url\\":\\"https://images1.vinted.net/t/X1/f800/x.webp?s=9\\"}'
+           ' https://images1.vinted.net/t/X1/310x430/x.webp'
+           ' {\\"url\\":\\"https://images1.vinted.net/t/X2/f800/y.webp?s=8\\"}')
+    assert tracking.extract_photos(rsc) == ["https://images1.vinted.net/t/X1/f800/x.webp?s=9",
+                                            "https://images1.vinted.net/t/X2/f800/y.webp?s=8"]
+
+
+def test_tracker_detects_disappearance_and_ignores_scroll_out():
+    tr = tracking.Tracker()
+    tr.add(5, "s", "u5")
+    assert tr.observe_page("s", 1, [7, 6, 5, 4, 3, 2]) == []        # vue, repères 4, 3, 2
+    assert tr.observe_page("s", 2, [8, 7, 6, 4, 3, 2]) == []        # absente une fois : pas encore
+    gone = tr.observe_page("s", 3, [8, 7, 6, 4, 3, 2])              # deux fois : partie
+    assert [t.item_id for t in gone] == [5] and gone[0].status == tracking.GONE
+    back = tr.observe_page("s", 4, [9, 8, 7, 6, 5, 4])              # réapparue (réservation annulée…)
+    assert [t.item_id for t in back] == [5] and back[0].status == tracking.AVAILABLE
+    # Poussée hors de la fenêtre par des nouveautés : repères absents aussi, aucune conclusion
+    tr2 = tracking.Tracker()
+    tr2.add(5, "s", "u5")
+    tr2.observe_page("s", 1, [6, 5, 4, 3])
+    assert tr2.observe_page("s", 2, [12, 11, 10, 9]) == [] and tr2.observe_page("s", 3, [13, 12, 11, 10]) == []
+    assert tr2.items[5].status == tracking.AVAILABLE
+    # Réponse plus ancienne arrivée après une plus récente : ignorée
+    assert tr.observe_page("s", 2, [1]) == []
+
+
+class PageClient(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self.pages_html = {}
+        self.page_calls = []
+
+    async def get_page(self, url, lane):
+        self.page_calls.append(url)
+        return self.pages_html.get(url, (200, url, LIVE_PAGE))
+
+
+class TrackRecorder(Recorder):
+    def __init__(self):
+        super().__init__()
+        self.photo_events, self.status_events = [], []
+
+    async def send(self, item, deal, search):
+        await super().send(item, deal, search)
+        return {"message_id": item.id}
+
+    async def photos(self, item_id, urls, handle):
+        self.photo_events.append((item_id, urls, handle))
+
+    async def status(self, t, handle):
+        self.status_events.append((t.item_id, t.status, handle))
+
+
+def test_alert_gets_photos_then_sale_is_detected_and_confirmed(tmp_path):
+    search = Search(name="s")
+    cfg = Config(searches=[search], deal_min_samples=3, page_gap=0)
+    fake, rec = PageClient(), TrackRecorder()
+    store = Store(str(tmp_path / "db.sqlite3"))
+    mon = Monitor(cfg, store, [rec], client_factory=lambda d: fake)
+    sold_url = f"https://www.vinted.fr/items/{B + 50}-nike-air-max-90"
+    older = [svc_item(B + i) for i in (40, 30, 20, 10)]
+
+    async def fetch_next_page():
+        entry = mon._pop_page("vinted.fr")
+        assert entry is not None
+        sem = asyncio.Semaphore(0)
+        await mon._fetch_page("vinted.fr", None, sem, *entry)
+        await asyncio.sleep(0)
+
+    async def scenario():
+        fake.pages = [older, [svc_item(B + 50), *older]]
+        await mon.poll(search)                       # amorçage
+        alerted = await mon.poll(search)             # alerte sur B+50
+        assert [i.id for i in alerted] == [B + 50]
+        await asyncio.sleep(0)
+        await fetch_next_page()                      # page lue pour les photos (annonce encore en vente)
+        assert rec.photo_events and rec.photo_events[0][0] == B + 50 and len(rec.photo_events[0][1]) == 3
+        assert rec.photo_events[0][2] == {"message_id": B + 50}  # en réponse au message d'alerte
+        assert rec.status_events == []               # page « en vente » : rien à signaler
+        # Vendue : elle disparaît alors que les annonces plus anciennes sont toujours là
+        fake.pages_html[sold_url] = (200, sold_url, SOLD_PAGE)
+        fake.pages = [older, older]
+        await mon.poll(search)
+        await mon.poll(search)
+        await asyncio.sleep(0)
+        assert rec.status_events[-1][:2] == (B + 50, tracking.GONE)
+        await fetch_next_page()                      # confirmation par la page
+        assert rec.status_events[-1][:2] == (B + 50, tracking.SOLD)
+        assert mon._pop_page("vinted.fr") is None
+
+    asyncio.run(scenario())
+    saved = {r["item_id"]: r for r in store.load_tracked(0)}
+    assert saved[B + 50]["status"] == tracking.SOLD
+    assert saved[B + 50]["handles"]["TrackRecorder"] == {"message_id": B + 50}
+
+
+def test_page_block_pauses_page_reads_only_for_a_while(tmp_path):
+    search = Search(name="s")
+    cfg = Config(searches=[search], page_gap=0)
+    fake = PageClient()
+
+    async def blocked(url, lane):
+        raise RateLimited("HTTP 403")
+
+    fake.get_page = blocked
+    mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [], client_factory=lambda d: fake)
+    mon._enqueue_page(1, "https://www.vinted.fr/items/1", "vinted.fr", "photos")
+    mon._enqueue_page(2, "https://www.vinted.fr/items/2", "vinted.fr", "photos")
+
+    async def scenario():
+        entry = mon._pop_page("vinted.fr")
+        await mon._fetch_page("vinted.fr", None, asyncio.Semaphore(0), *entry)
+        assert mon._pop_page("vinted.fr") is None          # en pause malgré une page en attente
+        mon._page_pause_until = 0
+        assert mon._pop_page("vinted.fr") is not None
+
+    asyncio.run(scenario())
+
+
+def test_photos_requests_expire(tmp_path):
+    mon, fake, rec = make_monitor(tmp_path, Search(name="s"))
+    mon._enqueue_page(1, "u", "vinted.fr", "photos")
+    mon._page_queue[1]["since"] -= 1000
+    assert mon._pop_page("vinted.fr") is None and not mon._page_queue
+
+
+def test_store_migrates_old_alerts_and_updates(tmp_path):
+    import sqlite3
+    path = str(tmp_path / "old.sqlite3")
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, payload TEXT NOT NULL)")
+    db.execute("INSERT INTO alerts(ts, payload) VALUES(1, ?)", (json.dumps({"id": 42, "title": "x"}),))
+    db.commit()
+    db.close()
+    store = Store(path)
+    assert store.update_alert(42, {"availability": "sold"})["availability"] == "sold"
+    assert store.recent_alerts()[0] == {"id": 42, "title": "x", "availability": "sold"}
+    assert store.update_alert(7, {"a": 1}) is None
+
+
+def test_telegram_album_and_sold_edit(monkeypatch):
+    from vinted_bot import notifier as nt
+    calls = []
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return {"ok": True, "result": {"message_id": 99}}
+
+    tg = nt.TelegramNotifier("T", "C")
+
+    async def post(url, json=None):
+        calls.append((url.rsplit("/", 1)[1], json))
+        return Resp(json)
+
+    tg.http.post = post
+
+    async def scenario():
+        item = Item.from_api(svc_item(B), "vinted.fr")
+        handle = await tg.send(item, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
+        await tg.photos(item.id, ["p1", "p2", "p3"], handle)
+        t = tracking.Tracked(item.id, "s", item.url, time.time() - 420, status=tracking.SOLD, status_ts=time.time())
+        await tg.status(t, handle)
+        await tg.close()
+        return handle
+
+    handle = asyncio.run(scenario())
+    assert handle["message_id"] == 99
+    assert [c[0] for c in calls] == ["sendMessage", "sendMediaGroup", "editMessageText"]
+    album = calls[1][1]
+    assert [m["media"] for m in album["media"]] == ["p1", "p2", "p3"] and album["disable_notification"]
+    assert album["reply_parameters"]["message_id"] == 99
+    edit = calls[2][1]
+    assert edit["message_id"] == 99 and edit["text"].startswith("<b>❌ VENDUE 7 min après l&#x27;alerte</b>")
+
+
+def test_still_on_sale_stops_flip_flop_and_promoted_is_not_missing(tmp_path):
+    tr = tracking.Tracker()
+    tr.add(5, "s", "u5")
+    tr.observe_page("s", 1, [7, 6, 5, 4, 3, 2])
+    # Sponsorisée : absente de la liste normale, mais pas partie
+    assert tr.observe_page("s", 2, [7, 6, 4, 3, 2], {5}) == []
+    assert tr.observe_page("s", 3, [7, 6, 4, 3, 2], {5}) == [] and tr.items[5].missing == 0
+
+    # Page « encore en vente » après une disparition (prix changé…) : plus de va-et-vient
+    search = Search(name="s")
+    fake = PageClient()
+    mon = Monitor(Config(searches=[search], page_gap=0), Store(str(tmp_path / "b.sqlite3")), [],
+                  client_factory=lambda d: fake)
+    t = mon.tracker.add(5, "s", "https://www.vinted.fr/items/5")
+    mon.tracker.observe_page("s", 1, [7, 6, 5, 4, 3, 2])
+    mon.tracker.observe_page("s", 2, [7, 6, 4, 3, 2])
+    mon.tracker.observe_page("s", 3, [7, 6, 4, 3, 2])
+    assert t.status == tracking.GONE
+    mon._enqueue_page(5, t.url, "vinted.fr", "status")
+    asyncio.run(mon._fetch_page("vinted.fr", None, asyncio.Semaphore(0), *mon._pop_page("vinted.fr")))
+    assert t.status == tracking.AVAILABLE
+    assert mon.tracker.observe_page("s", 4, [8, 7, 6, 4, 3]) == []
+    assert mon.tracker.observe_page("s", 5, [8, 7, 6, 4, 3]) == [] and t.status == tracking.AVAILABLE
+
+
+def test_old_sale_check_goes_before_new_photos(tmp_path):
+    mon, fake, rec = make_monitor(tmp_path, Search(name="s"))
+    mon._enqueue_page(1, "u1", "vinted.fr", "status")
+    mon._page_queue[1]["since"] -= 200
+    mon._enqueue_page(2, "u2", "vinted.fr", "photos")
+    assert mon._pop_page("vinted.fr")[0] == 1

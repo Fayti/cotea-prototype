@@ -26,8 +26,19 @@ class Store:
             CREATE INDEX IF NOT EXISTS prices_search ON prices(search, id);
             CREATE TABLE IF NOT EXISTS alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS tracked (
+                item_id INTEGER PRIMARY KEY, search TEXT NOT NULL, url TEXT NOT NULL,
+                alerted_ts REAL NOT NULL, status TEXT NOT NULL, status_ts REAL,
+                handles TEXT NOT NULL DEFAULT '{}');
             """
         )
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(alerts)")}
+        if "item_id" not in columns:  # base créée par une version précédente
+            self.db.execute("ALTER TABLE alerts ADD COLUMN item_id INTEGER")
+            for rid, payload in self.db.execute("SELECT id, payload FROM alerts").fetchall():
+                self.db.execute("UPDATE alerts SET item_id=? WHERE id=?", (json.loads(payload).get("id"), rid))
+            self.db.commit()
+        self.db.execute("CREATE INDEX IF NOT EXISTS alerts_item ON alerts(item_id)")
 
     def watermark(self, search: str) -> int | None:
         row = self.db.execute("SELECT max_id FROM watermark WHERE search=?", (search,)).fetchone()
@@ -76,8 +87,35 @@ class Store:
         return statistics.median(prices)
 
     def add_alert(self, payload: dict) -> None:
-        self.db.execute("INSERT INTO alerts(ts, payload) VALUES(?, ?)", (time.time(), json.dumps(payload)))
+        self.db.execute("INSERT INTO alerts(ts, payload, item_id) VALUES(?, ?, ?)",
+                        (time.time(), json.dumps(payload), payload.get("id")))
         self.db.commit()
+
+    def update_alert(self, item_id: int, patch: dict) -> dict | None:
+        row = self.db.execute("SELECT id, payload FROM alerts WHERE item_id=? ORDER BY id DESC LIMIT 1",
+                              (item_id,)).fetchone()
+        if not row:
+            return None
+        payload = {**json.loads(row[1]), **patch}
+        self.db.execute("UPDATE alerts SET payload=? WHERE id=?", (json.dumps(payload), row[0]))
+        self.db.commit()
+        return payload
+
+    def save_tracked(self, t) -> None:
+        self.db.execute(
+            "INSERT INTO tracked(item_id, search, url, alerted_ts, status, status_ts, handles) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(item_id) DO UPDATE SET status=excluded.status, "
+            "status_ts=excluded.status_ts, handles=excluded.handles",
+            (t.item_id, t.search_key, t.url, t.alerted_ts, t.status, t.status_ts, json.dumps(t.handles)),
+        )
+        self.db.commit()
+
+    def load_tracked(self, since: float) -> list[dict]:
+        rows = self.db.execute(
+            "SELECT item_id, search, url, alerted_ts, status, status_ts, handles FROM tracked WHERE alerted_ts >= ?",
+            (since,)).fetchall()
+        keys = ("item_id", "search", "url", "alerted_ts", "status", "status_ts", "handles")
+        return [{**dict(zip(keys, r)), "handles": json.loads(r[6] or "{}")} for r in rows]
 
     def recent_alerts(self, limit: int = 150) -> list[dict]:
         rows = self.db.execute("SELECT payload FROM alerts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
@@ -93,6 +131,7 @@ class Store:
         self._seen.clear()
         self.db.execute("DELETE FROM prices WHERE ts < ?", (cutoff,))
         self.db.execute("DELETE FROM alerts WHERE id NOT IN (SELECT id FROM alerts ORDER BY id DESC LIMIT 500)")
+        self.db.execute("DELETE FROM tracked WHERE alerted_ts < ?", (cutoff,))
         self.db.commit()
 
     def close(self) -> None:

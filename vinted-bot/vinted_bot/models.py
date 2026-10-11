@@ -1,7 +1,7 @@
 """Normalisation des annonces renvoyées par l'API catalogue."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 def _amount(value) -> tuple[float | None, str]:
@@ -36,6 +36,7 @@ class Item:
     favourites: int
     promoted: bool = False
     age_estimated: bool = False
+    photo_urls: list[str] = field(default_factory=list)  # photo principale d'abord
 
     @classmethod
     def from_api(cls, raw: dict, domain: str) -> "Item":
@@ -61,6 +62,11 @@ class Item:
             if parts:
                 status = status or parts[-1]
                 size = size or " · ".join(parts[:-1])
+        photo_urls = []
+        for p in [photo, *(raw.get("photos") or [])]:
+            u = (p or {}).get("url") or (p or {}).get("full_size_url")
+            if u and u not in photo_urls:
+                photo_urls.append(u)
         return cls(
             id=int(raw["id"]),
             title=title,
@@ -76,6 +82,7 @@ class Item:
             created_ts=hires.get("timestamp"),  # absent depuis septembre 2026 : estimé par IdClock
             favourites=int(raw.get("favourite_count") or 0),
             promoted=bool(raw.get("promoted")) or raw.get("content_source") == "catalog_promoted_items",
+            photo_urls=photo_urls,
         )
 
 

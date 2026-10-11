@@ -68,7 +68,8 @@ class Tracker:
         for iid in [i for i, t in self.items.items() if now - t.alerted_ts > TRACK_FOR]:
             del self.items[iid]
 
-    def observe_page(self, search_key: str, seq: int, ids: list[int]) -> list[Tracked]:
+    def observe_page(self, search_key: str, seq: int, ids: list[int],
+                     promoted: set[int] = frozenset()) -> list[Tracked]:
         """`ids` : annonces non sponsorisées dans l'ordre renvoyé (plus récentes d'abord).
 
         Renvoie les annonces dont l'état vient de changer (GONE, ou retour à AVAILABLE).
@@ -80,7 +81,7 @@ class Tracker:
         pos = {iid: i for i, iid in enumerate(ids)}
         changed = []
         for t in self.items.values():
-            if t.search_key != search_key or t.status in (SOLD, DELETED):
+            if t.search_key != search_key or t.status in (SOLD, DELETED) or t.item_id in promoted:
                 continue
             if t.item_id in pos:
                 i = pos[t.item_id]
@@ -115,36 +116,33 @@ def _unescape(s: str) -> str:
 
 
 def extract_photos(page: str, limit: int = 3) -> list[str]:
-    """Photos de l'annonce, dans l'ordre de la galerie.
+    """Photos de l'annonce, dans l'ordre de la galerie, sans doublon (même photo, autre taille).
 
     1. Balises de la galerie rendue côté serveur : `<img data-testid="item-photo-N--img">`.
-    2. À défaut, tableau `photos` de l'enregistrement de l'annonce dans les données Next.js
-       (le premier tableau `photos` qui suit un `title` : la page contient aussi les photos
-       d'autres annonces, qu'il ne faut pas mélanger).
+    2. À défaut, les photos grand format (f800) de la page dans leur ordre d'apparition.
+       Relevé sur de vraies pages (11/10/2026) : leur nombre correspond à la galerie de
+       l'annonce (1 à 7), les autres annonces de la page n'utilisant pas ce format.
     """
-    found: dict[int, str] = {}
+    photos, seen = [], set()
+
+    def add(url: str) -> None:
+        url = _unescape(url)
+        m = re.search(r"/t/([^/]+)/", url)
+        key = m.group(1) if m else url
+        if key not in seen:
+            seen.add(key)
+            photos.append(url)
+
+    tagged = []
     for m in _PHOTO_TAG.finditer(page):
         src = _SRC.search(m.group(0))
-        if src and int(m.group(1)) not in found:
-            found[int(m.group(1))] = _unescape(src.group(1))
-    photos = [found[k] for k in sorted(found)]
+        if src:
+            tagged.append((int(m.group(1)), src.group(1)))
+    for _, url in sorted(tagged):
+        add(url)
     if not photos:
-        title = page.find('\\"title\\":')
-        start = page.find('\\"photos\\":[', title if title >= 0 else 0)
-        if start >= 0:
-            depth, end = 0, start
-            for end in range(start + len('\\"photos\\":'), min(len(page), start + 200_000)):
-                c = page[end]
-                if c == "[":
-                    depth += 1
-                elif c == "]":
-                    depth -= 1
-                    if depth == 0:
-                        break
-            for u in _F800.findall(page[start:end]):
-                u = _unescape(u)
-                if u not in photos:
-                    photos.append(u)
+        for url in _F800.findall(page):
+            add(url)
     return photos[:limit]
 
 

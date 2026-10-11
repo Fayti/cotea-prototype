@@ -35,7 +35,7 @@ DEFAULT_PORT = 8765
 PORT_ATTEMPTS = 20  # 8765 à 8784 : d'autres applications locales peuvent occuper le port
 DEFAULT_SETTINGS = {
     "running": True,
-    "general": {"request_gap": 1.0, "proxies": [], "use_direct": True},
+    "general": {"request_gap": 1.0, "proxies": [], "use_direct": True, "extra_photos": True, "track_status": True},
     "deals": {"threshold": 0.30},
     "telegram": {"token": "", "chat_id": ""},
     "search": [],
@@ -64,6 +64,10 @@ def alert_payload(item: Item, deal, search) -> dict:
         "url": item.url, "photo": item.photo_url, "seller": item.seller,
         "created_ts": item.created_ts, "age_estimated": item.age_estimated, "detected_ts": time.time(),
         "deal": deal.is_deal, "discount": deal.discount, "median": deal.median,
+        # Photos : la recherche n'en donne qu'une ; les suivantes arrivent par mise à jour.
+        "photos": item.photo_urls[:3] or ([item.photo_url] if item.photo_url else []),
+        # Disponibilité (« status » désigne déjà l'état de l'article : très bon état…).
+        "availability": "available", "availability_ts": None, "availability_after_s": None,
     }
 
 
@@ -73,6 +77,15 @@ class UiNotifier:
 
     async def send(self, item, deal, search) -> None:
         self.engine.push_alert(alert_payload(item, deal, search))
+
+    async def photos(self, item_id: int, urls: list[str], handle) -> None:
+        self.engine.update_alert(item_id, {"photos": urls})
+
+    async def status(self, t, handle) -> None:
+        self.engine.update_alert(t.item_id, {
+            "availability": t.status, "availability_ts": t.status_ts,
+            "availability_after_s": round(t.status_ts - t.alerted_ts) if t.status_ts else None,
+        })
 
     async def close(self) -> None:
         pass
@@ -186,11 +199,22 @@ class Engine:
         if self.settings.get("running"):
             await self.start()
 
+    def _broadcast(self, message: dict) -> None:
+        for q in list(self.listeners):
+            q.put_nowait(message)
+
     def push_alert(self, payload: dict) -> None:
         self.store.add_alert(payload)
         self.alerts.append(payload)
-        for q in list(self.listeners):
-            q.put_nowait(payload)
+        self._broadcast({"type": "alert", "alert": payload})
+
+    def update_alert(self, item_id: int, patch: dict) -> None:
+        """Complète une alerte déjà affichée : photos supplémentaires, vendue…"""
+        for alert in self.alerts:
+            if alert.get("id") == item_id:
+                alert.update(patch)
+        self.store.update_alert(item_id, patch)
+        self._broadcast({"type": "update", "id": item_id, "patch": patch})
 
     def status(self) -> dict:
         active = self.task is not None and not self.task.done()
@@ -245,8 +269,9 @@ async def put_settings(request):
         if "proxies" in g:
             e.settings["general"]["proxies"] = _word_list(
                 g["proxies"].replace("\n", ",") if isinstance(g["proxies"], str) else g["proxies"])
-        if "use_direct" in g:
-            e.settings["general"]["use_direct"] = bool(g["use_direct"])
+        for flag in ("use_direct", "extra_photos", "track_status"):
+            if flag in g:
+                e.settings["general"][flag] = bool(g[flag])
     if "deals" in body:
         threshold = float(body["deals"].get("threshold", 0.3))
         e.settings["deals"]["threshold"] = min(0.9, max(0.05, threshold))

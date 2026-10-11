@@ -48,7 +48,7 @@ nav button { border: 0; background: none; padding: 10px 14px; cursor: pointer; c
 nav button.active { color: var(--text); border-bottom-color: var(--accent); }
 .badge { background: var(--hot); color: #fff; border-radius: 99px; font-size: 11px; padding: 1px 6px; margin-left: 4px; }
 
-.btn { border: 1px solid var(--border); background: var(--surface); padding: 8px 14px; border-radius: 9px;
+.btn { text-decoration: none; display: inline-block; border: 1px solid var(--border); background: var(--surface); padding: 8px 14px; border-radius: 9px;
   cursor: pointer; font-weight: 600; white-space: nowrap; }
 .btn:hover { background: var(--surface-2); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -77,12 +77,32 @@ textarea { width: 100%; min-height: 70px; }
 label.check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; font-size: 14px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
 .item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
-  box-shadow: var(--shadow); text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: transform .12s; }
+  box-shadow: var(--shadow); color: inherit; display: flex; flex-direction: column; transition: transform .12s; }
 .item:hover { transform: translateY(-2px); }
 .item.fresh { animation: pop .5s ease-out; outline: 2px solid var(--accent); }
 @keyframes pop { from { transform: scale(.94); opacity: 0; } }
-.ph { position: relative; aspect-ratio: 3/4; background: var(--surface-2); }
-.ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph { position: relative; aspect-ratio: 3/4; background: var(--surface-2); cursor: zoom-in; }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter .2s; }
+.thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px 3px 0; }
+.thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; border-radius: 6px; cursor: pointer;
+  opacity: .75; border: 2px solid transparent; background: var(--surface-2); }
+.thumbs img.on { opacity: 1; border-color: var(--accent); }
+.avail { position: absolute; left: 0; right: 0; bottom: 0; padding: 7px 10px; font-weight: 700; font-size: 13px;
+  color: #fff; background: rgba(201,42,42,.92); text-align: center; }
+.avail.gone { background: rgba(194,124,14,.92); }
+.avail.back { background: rgba(43,138,62,.92); }
+.item.off .ph img { filter: grayscale(.85); opacity: .7; }
+.item.off .price { text-decoration: line-through; color: var(--muted); }
+.title a { color: inherit; text-decoration: none; }
+.title a:hover { text-decoration: underline; }
+.open { margin-top: 6px; text-align: center; text-decoration: none; }
+#lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.88); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: 16px; }
+#lightbox .pics { display: flex; gap: 10px; max-width: 100%; overflow-x: auto; scroll-snap-type: x mandatory; }
+#lightbox .pics img { height: min(78vh, 720px); width: auto; max-width: 88vw; object-fit: contain; border-radius: 10px;
+  scroll-snap-align: center; background: #111; flex: none; }
+#lightbox .bar { display: flex; gap: 10px; align-items: center; color: #fff; flex-wrap: wrap; justify-content: center; }
+#lightbox .btn:not(.primary) { color: var(--text); }
 .tag { position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 7px; font-size: 12px; font-weight: 700;
   background: var(--surface); color: var(--text); }
 .tag.hot { background: var(--hot); color: #fff; }
@@ -177,6 +197,7 @@ details summary { cursor: pointer; font-weight: 600; }
     <div class="toolbar">
       <select id="filterSearch"><option value="">Toutes les recherches</option></select>
       <label class="check"><input type="checkbox" id="onlyHot"> Seulement les 🔥 bonnes affaires</label>
+      <label class="check"><input type="checkbox" id="hideGone"> Masquer les annonces parties</label>
       <span class="grow"></span>
       <button id="soundBtn" class="btn small">🔔 Son activé</button>
       <button id="notifBtn" class="btn small" hidden>Notifications de l'ordinateur</button>
@@ -267,6 +288,13 @@ details summary { cursor: pointer; font-weight: 600; }
       </div>
 
       <div class="card stack">
+        <div><h2>📸 Photos et ventes</h2><p class="sub">Le bot ouvre la page de chaque annonce signalée, au plus une fois toutes les 30 secondes, pour récupérer ses 3 premières photos et savoir si elle part. Il repère aussi les annonces vendues quand elles disparaissent de tes recherches, sans aucune requête en plus.</p></div>
+        <label class="check"><input type="checkbox" id="extraPhotos"> Afficher 3 photos par annonce</label>
+        <label class="check"><input type="checkbox" id="trackStatus"> Indiquer quand une annonce est vendue, réservée ou supprimée</label>
+        <div><button id="saveTrack" class="btn primary">Enregistrer</button></div>
+      </div>
+
+      <div class="card stack">
         <div><h2>🔥 Bonne affaire</h2><p class="sub">Une annonce est marquée 🔥 quand elle est nettement moins chère que la médiane des prix récents de sa recherche (calculée après une quinzaine d'annonces).</p></div>
         <label class="field"><span>Au moins <b id="thrVal"></b> % moins chère</span>
           <input id="thr" type="range" min="10" max="60" step="5"></label>
@@ -282,6 +310,7 @@ details summary { cursor: pointer; font-weight: 600; }
   </section>
 </main>
 <div id="toast"></div>
+<div id="lightbox" hidden></div>
 
 <script>
 "use strict";
@@ -391,26 +420,68 @@ $("#toggleRun").addEventListener("click", (e) => guarded(e.target, async () => {
 
 // ---------- annonces ----------
 function visibleAlerts() {
-  const f = $("#filterSearch").value, hot = $("#onlyHot").checked;
-  return S.alerts.filter((a) => (!f || a.search_key === f) && (!hot || a.deal));
+  const f = $("#filterSearch").value, hot = $("#onlyHot").checked, hide = $("#hideGone").checked;
+  return S.alerts.filter((a) => (!f || a.search_key === f) && (!hot || a.deal) && (!hide || isAvailable(a)));
 }
+const AVAIL = {
+  sold: ["❌ Vendue", ""], gone: ["⚠️ Plus disponible", "gone"], reserved: ["⏸ Réservée", "gone"],
+  deleted: ["🗑 Supprimée", "gone"],
+};
+function isAvailable(a) { return !a.availability || a.availability === "available"; }
+function duration(sec) {
+  if (sec == null) return "";
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 3600) return `${Math.max(1, Math.round(sec / 60))} min`;
+  return `${Math.floor(sec / 3600)} h ${String(Math.round(sec % 3600 / 60)).padStart(2, "0")}`;
+}
+function photosOf(a) { return (a.photos && a.photos.length ? a.photos : (a.photo ? [a.photo] : [])).slice(0, 3); }
 function cardHTML(a) {
   const tag = a.deal && a.discount != null
     ? `<span class="tag hot">🔥 -${Math.round(a.discount * 100)} %</span>`
     : `<span class="tag">Nouveau</span>`;
   const meta = [a.brand, a.size, a.status].filter(Boolean).map(esc).join(" · ");
-  return `<a class="item${freshIds.has(a.id) ? " fresh" : ""}" href="${esc(a.url)}" target="_blank" rel="noopener" data-id="${a.id}">
-    <div class="ph">${a.photo ? `<img loading="lazy" src="${esc(a.photo)}" alt="">` : ""}${tag}
-      <span class="age" data-ts="${a.detected_ts}">${ago(a.detected_ts)}</span></div>
+  const pics = photosOf(a);
+  const av = AVAIL[a.availability];
+  const banner = av ? `<div class="avail ${av[1]}">${av[0]}${a.availability_after_s != null ? ` en ${duration(a.availability_after_s)}` : ""}</div>` : "";
+  return `<div class="item${freshIds.has(a.id) ? " fresh" : ""}${isAvailable(a) ? "" : " off"}" data-id="${a.id}">
+    <div class="ph" data-act="zoom">${pics[0] ? `<img loading="lazy" src="${esc(pics[0])}" alt="">` : ""}${tag}
+      <span class="age" data-ts="${a.detected_ts}">${ago(a.detected_ts)}</span>${banner}</div>
+    ${pics.length > 1 ? `<div class="thumbs">${pics.map((u, i) =>
+      `<img loading="lazy" src="${esc(u)}" alt="Photo ${i + 1}" data-act="thumb" data-i="${i}"${i === 0 ? ' class="on"' : ""}>`).join("")}</div>` : ""}
     <div class="body">
       <div class="price">${money(a.price, a.currency)} ${a.total_price ? `<small>${money(a.total_price, a.currency)} avec frais</small>` : ""}</div>
-      <div class="title">${esc(a.title)}</div>
+      <div class="title"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a></div>
       ${meta ? `<div class="meta">${meta}</div>` : ""}
       ${a.median ? `<div class="meta">Médiane de la recherche : ${money(a.median, a.currency)}</div>` : ""}
       ${a.created_ts ? `<div class="meta">⚡ Repérée ${a.age_estimated ? "~" : ""}${Math.max(0, Math.round(a.detected_ts - a.created_ts))} s après sa mise en ligne</div>` : ""}
       <div><span class="chip">${esc(a.search)}</span></div>
-    </div></a>`;
+      <a class="btn small primary open" href="${esc(a.url)}" target="_blank" rel="noopener">Voir sur Vinted</a>
+    </div></div>`;
 }
+function openLightbox(a) {
+  const lb = $("#lightbox");
+  lb.innerHTML = `<div class="pics">${photosOf(a).map((u) => `<img src="${esc(u)}" alt="">`).join("")}</div>
+    <div class="bar"><strong>${money(a.price, a.currency)}</strong> · ${esc(a.title)}
+      <a class="btn small primary" href="${esc(a.url)}" target="_blank" rel="noopener">Voir sur Vinted</a>
+      <button class="btn small" data-act="close">Fermer</button></div>`;
+  lb.hidden = false;
+}
+$("#lightbox").addEventListener("click", (e) => {
+  if (e.target.closest("a")) return;
+  if (e.target.dataset.act === "close" || e.target.id === "lightbox" || e.target.classList.contains("pics")) $("#lightbox").hidden = true;
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#lightbox").hidden = true; });
+$("#grid").addEventListener("click", (e) => {
+  const card = e.target.closest(".item"); if (!card) return;
+  const a = S.alerts.find((x) => String(x.id) === card.dataset.id); if (!a) return;
+  const thumb = e.target.closest('[data-act="thumb"]');
+  if (thumb) {
+    card.querySelector(".ph img").src = thumb.src;
+    card.querySelectorAll(".thumbs img").forEach((t) => t.classList.toggle("on", t === thumb));
+  } else if (e.target.closest('[data-act="zoom"]')) {
+    openLightbox(a);
+  }
+});
 function renderFeed() {
   const list = visibleAlerts();
   $("#grid").innerHTML = list.map(cardHTML).join("");
@@ -426,6 +497,8 @@ function renderFeed() {
 }
 $("#filterSearch").addEventListener("change", renderFeed);
 $("#onlyHot").checked = pref.get("onlyHot", false);
+$("#hideGone").checked = pref.get("hideGone", false);
+$("#hideGone").addEventListener("change", (e) => { pref.set("hideGone", e.target.checked); renderFeed(); });
 $("#onlyHot").addEventListener("change", (e) => { pref.set("onlyHot", e.target.checked); renderFeed(); });
 $("#clearBtn").addEventListener("click", (e) => guarded(e.target, async () => {
   if (!confirm("Effacer toutes les annonces affichées ?")) return;
@@ -454,6 +527,12 @@ function renderNotifBtn() {
 }
 $("#notifBtn").addEventListener("click", async () => { await Notification.requestPermission(); renderNotifBtn(); });
 
+function onUpdate(id, patch) {
+  const a = S.alerts.find((x) => x.id === id);
+  if (!a) return;
+  Object.assign(a, patch);
+  renderFeed();
+}
 function onAlert(a) {
   S.alerts.unshift(a); S.alerts = S.alerts.slice(0, 150);
   freshIds.add(a.id); setTimeout(() => freshIds.delete(a.id), 4000);
@@ -471,7 +550,11 @@ document.addEventListener("visibilitychange", () => {
 });
 function connectEvents() {
   const es = new EventSource("/api/events");
-  es.onmessage = (e) => onAlert(JSON.parse(e.data));
+  es.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "update") onUpdate(msg.id, msg.patch);
+    else onAlert(msg.alert || msg);
+  };
   es.onerror = () => { es.close(); setTimeout(connectEvents, 3000); };
 }
 
@@ -579,6 +662,8 @@ function renderSettings() {
   if (document.activeElement !== $("#proxies")) $("#proxies").value = (st.general.proxies || []).join("\n");
   $("#useDirect").checked = st.general.use_direct !== false;
   $("#thr").value = Math.round((st.deals.threshold ?? 0.3) * 100);
+  $("#extraPhotos").checked = st.general.extra_photos !== false;
+  $("#trackStatus").checked = st.general.track_status !== false;
   updateSliders();
 }
 function updateSliders() {
@@ -595,6 +680,10 @@ function updateSliders() {
 $("#saveSpeed").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { general: { request_gap: +$("#gap").value, proxies: $("#proxies").value, use_direct: $("#useDirect").checked } });
   await refresh(); toast("Vitesse enregistrée");
+}));
+$("#saveTrack").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("PUT", "/api/settings", { general: { extra_photos: $("#extraPhotos").checked, track_status: $("#trackStatus").checked } });
+  await refresh(); toast("Réglages enregistrés");
 }));
 $("#saveDeal").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { deals: { threshold: +$("#thr").value / 100 } });

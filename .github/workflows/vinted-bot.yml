@@ -3,7 +3,6 @@ name: VintedBot
 on:
   push:
     branches: [claude/busy-archimedes-xdeifv, main]
-    paths: ["vinted-bot/**", "!vinted-bot/scripts/discover_item.py", ".github/workflows/vinted-bot.yml"]
   workflow_dispatch:
 
 permissions:
