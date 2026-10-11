@@ -1,4 +1,10 @@
 # Seules les fonctions GhostLoc sont décrites ici.
-# Déploiement : supabase functions deploy gl-checkout gl-portal gl-stripe-webhook
+# Chaque fonction vérifie elle-même le jeton de l'utilisateur (compatible avec les nouvelles clés Supabase).
+[functions.gl-checkout]
+verify_jwt = false
+
+[functions.gl-portal]
+verify_jwt = false
+
 [functions.gl-stripe-webhook]
 verify_jwt = false

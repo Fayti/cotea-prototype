@@ -1,5 +1,5 @@
 import Stripe from "npm:stripe@17.7.0";
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.49.4";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.117.2";
 
 export const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   apiVersion: "2025-02-24.acacia",
@@ -8,10 +8,21 @@ export const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
 
 export const SITE_URL = (Deno.env.get("SITE_URL") ?? "").replace(/\/$/, "");
 
+// Clé serveur : nouveaux projets (SUPABASE_SECRET_KEYS, sb_secret_…) ou anciens (service_role).
+function serverKey(): string {
+  try {
+    const keys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
+    if (keys.default) return keys.default;
+  } catch {
+    // variable absente ou illisible : on retombe sur l'ancienne clé
+  }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+}
+
 export const admin: SupabaseClient = createClient(
   Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  { auth: { persistSession: false } },
+  serverKey(),
+  { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
 );
 
 // Catalogue. Les prix sont créés dans Stripe au premier appel (lookup_key),
