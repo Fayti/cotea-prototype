@@ -1,0 +1,82 @@
+name: GhostLoc — déploiement Supabase
+
+# Lancement manuel : onglet Actions › « GhostLoc — déploiement Supabase » › Run workflow.
+# Secrets à créer dans Settings › Secrets and variables › Actions (voir ghostloc/MISE-EN-LIGNE.md) :
+#   SUPABASE_ACCESS_TOKEN  jeton personnel Supabase (sbp_…)
+#   SUPABASE_PROJECT_REF   identifiant du projet (20 lettres)
+#   SUPABASE_DB_URL        chaîne de connexion « Session pooler » avec le mot de passe
+#   STRIPE_SECRET_KEY      sk_test_… puis sk_live_… (facultatif au premier lancement)
+#   STRIPE_WEBHOOK_SECRET  whsec_… (facultatif au premier lancement)
+# Variable facultative : GHOSTLOC_SITE_URL (sinon l'adresse GitHub Pages par défaut).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghostloc-supabase
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ghostloc
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      SITE_URL: ${{ vars.GHOSTLOC_SITE_URL || 'https://fayti.github.io/cotea-prototype/ghostloc' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifie les secrets obligatoires
+        run: |
+          missing=""
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -n "$PROJECT_REF" ] || missing="$missing SUPABASE_PROJECT_REF"
+          [ -n "$DB_URL" ] || missing="$missing SUPABASE_DB_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Secrets manquants :$missing (voir ghostloc/MISE-EN-LIGNE.md)"
+            exit 1
+          fi
+          case "$DB_URL" in
+            *"[YOUR-PASSWORD]"*) echo "::error::Remplace [YOUR-PASSWORD] par ton mot de passe de base dans SUPABASE_DB_URL"; exit 1 ;;
+          esac
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.118.0
+
+      - name: Base de données (migrations)
+        run: supabase db push --db-url "$DB_URL" --yes
+
+      - name: Secrets des fonctions
+        run: |
+          umask 077
+          echo "SITE_URL=$SITE_URL" > "$RUNNER_TEMP/gl.env"
+          if [ -n "$STRIPE_SECRET_KEY" ]; then echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY" >> "$RUNNER_TEMP/gl.env"; fi
+          if [ -n "$STRIPE_WEBHOOK_SECRET" ]; then echo "STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET" >> "$RUNNER_TEMP/gl.env"; fi
+          supabase secrets set --env-file "$RUNNER_TEMP/gl.env" --project-ref "$PROJECT_REF"
+          rm -f "$RUNNER_TEMP/gl.env"
+
+      - name: Fonctions de paiement
+        run: supabase functions deploy gl-checkout gl-portal gl-stripe-webhook --project-ref "$PROJECT_REF" --use-api --no-verify-jwt
+
+      - name: Récapitulatif
+        if: always()
+        run: |
+          {
+            echo "## GhostLoc sur Supabase"
+            echo ""
+            echo "- URL du projet : https://$PROJECT_REF.supabase.co"
+            echo "- Adresse du webhook Stripe : https://$PROJECT_REF.supabase.co/functions/v1/gl-stripe-webhook"
+            echo "- Site : $SITE_URL"
+            echo "- Clé Stripe : $([ -n "$STRIPE_SECRET_KEY" ] && echo 'enregistrée' || echo 'MANQUANTE (paiements impossibles)')"
+            echo "- Secret du webhook : $([ -n "$STRIPE_WEBHOOK_SECRET" ] && echo 'enregistré' || echo 'MANQUANT (les paiements ne seront pas activés)')"
+          } >> "$GITHUB_STEP_SUMMARY"
