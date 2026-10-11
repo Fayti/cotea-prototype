@@ -140,6 +140,7 @@ class Monitor:
         self._page_busy = False
         self._next_page_at = 0.0
         self._page_pause_until = 0.0
+        self.on_auto_reserve = None  # rappel (annonce, recherche) pour la réservation automatique
         # État par recherche, lu par l'interface.
         self.state: dict[str, dict] = {
             s.key: {"last_ok": None, "last_error": None, "polls": 0, "ready": False}
@@ -293,6 +294,9 @@ class Monitor:
             self.stats.alerts += 1
             if age is not None:
                 self.stats.ages.append(age)
+            if (self.on_auto_reserve and search.auto_reserve_max is not None and item.price is not None
+                    and item.price <= search.auto_reserve_max):
+                self.on_auto_reserve(item, search)  # avant tout le reste : chaque seconde compte
             t = self.tracker.add(item.id, search.key, item.url)
             t.likes, t.views = item.favourites, item.views
             self.store.save_tracked(t)

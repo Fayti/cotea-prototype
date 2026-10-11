@@ -89,9 +89,15 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .thumbs img.on { opacity: 1; border-color: var(--accent); }
 .avail { position: absolute; left: 0; right: 0; bottom: 0; padding: 7px 10px; font-weight: 700; font-size: 13px;
   color: #fff; background: rgba(201,42,42,.92); text-align: center; }
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+@media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+.row2 .btn { text-align: center; min-width: 0; padding-left: 10px; padding-right: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.resv { font-size: 13px; font-weight: 600; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); }
+.resv.ok { background: #d3f9d8; color: #1b5e20; }
+.resv.err { background: #ffe3e3; color: #a51111; }
 .likes { font-size: 13px; color: var(--muted); }
 .likes.up b { color: #e03131; }
-.btn.buy { display: block; text-align: center; width: 100%; box-sizing: border-box; font-weight: 700; }
+.btn.buy { font-weight: 700; font-size: 15px; }
 .avail.gone { background: rgba(194,124,14,.92); }
 .avail.back { background: rgba(43,138,62,.92); }
 .item.off .ph img { filter: grayscale(.85); opacity: .7; }
@@ -197,6 +203,10 @@ details summary { cursor: pointer; font-weight: 600; }
       <div>📱 Pour recevoir les alertes sur ton téléphone, même loin de l'ordinateur, connecte Telegram (2 minutes).</div>
       <button class="btn" data-goto="settings">Connecter Telegram</button>
     </div>
+    <div id="vwBar" class="banner">
+      <div id="vwText"></div>
+      <button id="vwBtn" class="btn primary">Ouvrir la fenêtre Vinted</button>
+    </div>
     <div class="toolbar">
       <select id="filterSearch"><option value="">Toutes les recherches</option></select>
       <label class="check"><input type="checkbox" id="onlyHot"> Seulement les 🔥 bonnes affaires</label>
@@ -241,6 +251,9 @@ details summary { cursor: pointer; font-weight: 600; }
           <label class="field"><span>Priorité</span>
             <select name="weight"><option value="1">Normale</option><option value="2">Haute (2× plus souvent)</option><option value="3">Maximale (3× plus souvent)</option></select>
             <small>Une recherche prioritaire passe plus souvent, au détriment des autres.</small></label>
+          <label class="field full"><span>⚡ Réserver tout seul si le prix est de … € ou moins</span>
+            <input type="number" name="auto_reserve_max" min="0" step="0.5" placeholder="vide = jamais (tu cliques « Réserver » toi-même)">
+            <small>Le bot réserve l'annonce dans la fenêtre Vinted dès qu'il la voit (au plus 10 par heure). Rien n'est payé : la page de paiement s'ouvre, et sans validation de ta part la réservation expire.</small></label>
           <label class="check full"><input type="checkbox" name="only_deals"> M'alerter seulement pour les bonnes affaires 🔥 (prix bien en dessous des autres annonces de cette recherche)</label>
         </div>
         <div class="row">
@@ -438,6 +451,17 @@ function duration(sec) {
   return `${Math.floor(sec / 3600)} h ${String(Math.round(sec % 3600 / 60)).padStart(2, "0")}`;
 }
 function photosOf(a) { return (a.photos && a.photos.length ? a.photos : (a.photo ? [a.photo] : [])).slice(0, 3); }
+const RESERVE = {
+  pending: ["⏳ Réservation en cours…", ""],
+  ok: ["✅ Réservée pour toi : paie dans la fenêtre Vinted", "ok"],
+  fail: ["❌ Pas réservée", "err"],
+};
+function reserveHTML(a) {
+  const r = RESERVE[a.reserve];
+  if (!r) return "";
+  const auto = a.reserve_auto && a.reserve !== "fail" ? " (automatique)" : "";
+  return `<div class="resv ${r[1]}">${r[0]}${auto}${a.reserve_msg ? ` : ${esc(a.reserve_msg)}` : ""}</div>`;
+}
 function likesHTML(a) {
   if (a.likes == null) return "";
   const gained = a.likes - (a.likes_start || 0);
@@ -468,7 +492,11 @@ function cardHTML(a) {
       ${a.created_ts ? `<div class="meta">⚡ Repérée ${a.age_estimated ? "~" : ""}${Math.max(0, Math.round(a.detected_ts - a.created_ts))} s après sa mise en ligne</div>` : ""}
       ${likesHTML(a)}
       <div><span class="chip">${esc(a.search)}</span></div>
-      <a class="btn primary open buy" href="${esc(a.url)}" target="_blank" rel="noopener">🛒 Acheter sur Vinted</a>
+      ${reserveHTML(a)}
+      <div class="row2">
+        <button class="btn primary buy" data-act="reserve"${a.reserve === "pending" ? " disabled" : ""}>⚡ Réserver</button>
+        <a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener">Voir</a>
+      </div>
     </div></div>`;
 }
 function openLightbox(a) {
@@ -487,6 +515,12 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#lightb
 $("#grid").addEventListener("click", (e) => {
   const card = e.target.closest(".item"); if (!card) return;
   const a = S.alerts.find((x) => String(x.id) === card.dataset.id); if (!a) return;
+  const resv = e.target.closest('[data-act="reserve"]');
+  if (resv) {
+    if (!S.window?.open) toast("Ouverture de la fenêtre Vinted… Si tu n'es pas connecté, connecte-toi dedans puis reclique.");
+    guarded(resv, () => api("POST", "/api/reserve/" + a.id));
+    return;
+  }
   const thumb = e.target.closest('[data-act="thumb"]');
   if (thumb) {
     chosen.set(a.id, +thumb.dataset.i);
@@ -569,6 +603,7 @@ function connectEvents() {
   es.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === "update") onUpdate(msg.id, msg.patch);
+    else if (msg.type === "window") { S.window = msg.window; renderWindow(); }
     else onAlert(msg.alert || msg);
   };
   es.onerror = () => { es.close(); setTimeout(connectEvents, 3000); };
@@ -593,6 +628,7 @@ function renderSearches() {
       s.exclude?.length ? `sans : ${s.exclude.join(", ")}` : "",
       weightLabel[s.weight] || "",
       s.only_deals ? "🔥 seulement" : "",
+      s.auto_reserve_max != null ? `⚡ réserve tout seul ≤ ${money(s.auto_reserve_max)}` : "",
     ].filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join("");
     return `<div class="card search" data-id="${esc(s.id)}">
       <div class="info"><div class="name">${esc(s.name)}</div>
@@ -630,6 +666,7 @@ function openForm(s = null) {
   if (s) {
     f.url.value = s.url; f.name.value = s.name; f.max_price.value = s.max_price ?? "";
     f.exclude.value = (s.exclude || []).join(", "); f.weight.value = s.weight || 1; f.only_deals.checked = !!s.only_deals;
+    f.auto_reserve_max.value = s.auto_reserve_max ?? "";
   }
   f.hidden = false; f.url.focus(); f.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -656,6 +693,7 @@ $("#searchForm").addEventListener("submit", (e) => {
   const body = {
     url: f.url.value.trim(), name: f.name.value.trim(), max_price: f.max_price.value,
     exclude: f.exclude.value, weight: +f.weight.value, only_deals: f.only_deals.checked,
+    auto_reserve_max: f.auto_reserve_max.value,
   };
   guarded(f.querySelector("[type=submit]"), async () => {
     await api(editingId ? "PUT" : "POST", editingId ? "/api/searches/" + editingId : "/api/searches", body);
@@ -746,10 +784,21 @@ function renderLogs() {
 }
 
 // ---------- boucle ----------
+function renderWindow() {
+  const w = S.window || {};
+  $("#vwBar").classList.toggle("hot", !w.open);
+  $("#vwText").innerHTML = !w.open
+    ? "🔐 <strong>Réserver en 1 clic</strong> : ouvre la fenêtre Vinted et connecte-toi à ton compte dedans (une seule fois, la connexion est gardée). Ensuite, « ⚡ Réserver » bloque l'article pour toi et ouvre directement le paiement."
+    : w.user
+      ? `✅ Fenêtre Vinted prête, compte <strong>${esc(w.user)}</strong>. « ⚡ Réserver » bloque l'article pour toi, puis tu paies dans cette fenêtre.`
+      : "🔐 Fenêtre Vinted ouverte : si ce n'est pas déjà fait, connecte-toi à ton compte dedans. Laisse-la ouverte (tu peux la réduire).";
+  $("#vwBtn").textContent = w.open ? "Afficher la fenêtre Vinted" : "Ouvrir la fenêtre Vinted";
+}
+$("#vwBtn").addEventListener("click", (e) => guarded(e.target, async () => { S.window = await api("POST", "/api/vinted-window"); renderWindow(); }));
 async function refresh() {
   const r = await api("GET", "/api/state");
-  S.settings = r.settings; S.status = r.status; S.alerts = r.alerts;
-  renderHeader(); renderFeed(); renderSearches(); renderSettings(); renderLogs();
+  S.settings = r.settings; S.status = r.status; S.alerts = r.alerts; S.window = r.status.window;
+  renderHeader(); renderWindow(); renderFeed(); renderSearches(); renderSettings(); renderLogs();
 }
 async function pollStatus() {
   try { S.status = await api("GET", "/api/status"); renderHeader(); renderSearches(); renderLogs(); }

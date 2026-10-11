@@ -21,6 +21,7 @@ from pathlib import Path
 
 from aiohttp import web
 
+from .buyer import VintedWindow
 from .client import VintedClient
 from .config import config_from_dict, parse_vinted_url
 from .models import Item
@@ -123,6 +124,7 @@ def normalize_search(body: dict, existing: dict | None = None) -> dict:
         "exclude": _word_list(body.get("exclude")),
         "max_price": _float_or_none(body.get("max_price")),
         "only_deals": bool(body.get("only_deals")),
+        "auto_reserve_max": _float_or_none(body.get("auto_reserve_max")),
         "weight": min(3, max(1, int(body.get("weight") or 1))),
         "enabled": bool(body.get("enabled", True)),
     }
@@ -142,6 +144,9 @@ class Engine:
         self.task: asyncio.Task | None = None
         self.notifiers: list = []
         self.crash: str | None = None
+        self.window = VintedWindow(data_dir, on_change=self._window_changed)
+        self.side_tasks: list[asyncio.Task] = []
+        self.reservations: dict[int, dict] = {}  # annonce -> état de réservation (affiché sur la carte)
 
     def _load(self) -> dict:
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
@@ -175,7 +180,12 @@ class Engine:
             return
         self.notifiers = build_notifiers(cfg)
         self.monitor = Monitor(cfg, self.store, [UiNotifier(self), *self.notifiers])
+        self.monitor.on_auto_reserve = lambda item, search: asyncio.create_task(
+            self.reserve(item.id, item.url, auto=True))
         self.task = asyncio.create_task(self._run(self.monitor))
+        for n in self.notifiers:
+            if hasattr(n, "listen"):  # boutons « ⚡ Réserver » de Telegram
+                self.side_tasks.append(asyncio.create_task(n.listen(self._reserve_from_phone)))
 
     async def _run(self, monitor: Monitor) -> None:
         try:
@@ -187,6 +197,9 @@ class Engine:
             self.crash = f"{type(e).__name__}: {e}"
 
     async def stop(self, persist: bool = False) -> None:
+        for t in self.side_tasks:
+            t.cancel()
+        self.side_tasks = []
         if self.task:
             self.task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -208,7 +221,47 @@ class Engine:
         for q in list(self.listeners):
             q.put_nowait(message)
 
+    def _window_changed(self) -> None:
+        self._broadcast({"type": "window", "window": self.window.state()})
+
+    def _alert_url(self, item_id: int) -> str | None:
+        alert = next((a for a in self.alerts if a.get("id") == item_id), None)
+        tracked = self.monitor.tracker.items.get(item_id) if self.monitor else None
+        return (alert or {}).get("url") or (tracked.url if tracked else None)
+
+    async def _reserve_from_phone(self, item_id: int) -> None:
+        url = self._alert_url(item_id) or f"https://www.vinted.fr/items/{item_id}"
+        await self.reserve(item_id, url, notify=True)
+
+    async def reserve(self, item_id: int, url: str, auto: bool = False, notify: bool = False) -> dict:
+        self._set_reservation(item_id, {"reserve": "pending", "reserve_auto": auto, "reserve_msg": None})
+        result = await self.window.reserve(item_id, url, auto=auto)
+        if notify or auto:
+            # Réservé depuis le téléphone, ou tout seul : le résultat part aussi sur Telegram.
+            tracked = self.monitor.tracker.items.get(item_id) if self.monitor else None
+            for n in self.notifiers:
+                if hasattr(n, "reserved") and (notify or result.get("ok")):
+                    handle = tracked.handles.get(type(n).__name__) if tracked else None
+                    try:
+                        await n.reserved(item_id, result, handle, auto)
+                    except Exception as e:
+                        log.error("Telegram : résultat de réservation non envoyé (%s)", e)
+        if result.get("ok"):
+            log.info("Annonce %s réservée en %s s : paie dans la fenêtre Vinted", item_id, result.get("seconds"))
+            self._set_reservation(item_id, {"reserve": "ok", "reserve_msg": None})
+        else:
+            log.warning("Réservation de l'annonce %s impossible : %s", item_id, result.get("reason"))
+            self._set_reservation(item_id, {"reserve": "fail", "reserve_msg": result.get("reason")})
+        return result
+
+    def _set_reservation(self, item_id: int, patch: dict) -> None:
+        self.reservations.setdefault(item_id, {}).update(patch)
+        if any(a.get("id") == item_id for a in self.alerts):
+            self.update_alert(item_id, patch)
+        # Sinon l'alerte n'est pas encore affichée (photos en cours) : push_alert reprendra l'état.
+
     def push_alert(self, payload: dict) -> None:
+        payload.update(self.reservations.get(payload.get("id"), {}))
         self.store.add_alert(payload)
         self.alerts.append(payload)
         self._broadcast({"type": "alert", "alert": payload})
@@ -228,6 +281,7 @@ class Engine:
             "active": active,
             "crash": self.crash,
             "monitor": self.monitor.status() if self.monitor and active else None,
+            "window": self.window.state(),
             "logs": list(LOGS.records)[-80:],
         }
 
@@ -375,6 +429,23 @@ async def tg_test(request):
     return web.json_response({"ok": True})
 
 
+@routes.post("/api/vinted-window")
+async def open_window(request):
+    e = engine_of(request)
+    await e.window.open()
+    return web.json_response(e.window.state())
+
+
+@routes.post("/api/reserve/{id}")
+async def reserve_item(request):
+    e = engine_of(request)
+    item_id = int(request.match_info["id"])
+    alert = next((a for a in e.alerts if a.get("id") == item_id), None)
+    if alert is None:
+        raise web.HTTPNotFound()
+    return web.json_response(await e.reserve(item_id, alert["url"]))
+
+
 @routes.delete("/api/alerts")
 async def clear_alerts(request):
     e = engine_of(request)
@@ -501,6 +572,7 @@ async def run_ui(data_dir: Path, port: int = DEFAULT_PORT, open_browser: bool = 
     try:
         await asyncio.Event().wait()
     finally:
+        engine.window.close()
         await engine.stop()
         await runner.cleanup()
 

@@ -1,10 +1,15 @@
 """Canaux d'alerte : console, Telegram (le plus rapide sur mobile), Discord."""
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import html
+import io
+import json
 import logging
 import time
 
+from curl_cffi import CurlMime
 from curl_cffi.requests import AsyncSession
 
 from .config import Search
@@ -85,59 +90,176 @@ class ConsoleNotifier:
         pass
 
 
+def _cover(img, w: int, h: int):
+    from PIL import ImageOps
+    return ImageOps.fit(img, (w, h), method=3, centering=(0.5, 0.4))
+
+
+def collage(images: list) -> bytes:
+    """Les photos réunies en une seule image : la principale à gauche, les autres à droite."""
+    from PIL import Image
+
+    W, H, GAP = 1200, 800, 6
+    canvas = Image.new("RGB", (W, H), (255, 255, 255))
+    if len(images) == 2:
+        half = (W - GAP) // 2
+        canvas.paste(_cover(images[0], half, H), (0, 0))
+        canvas.paste(_cover(images[1], half, H), (half + GAP, 0))
+    else:
+        left, right, cell = 796, W - 796 - GAP, (H - GAP) // 2
+        canvas.paste(_cover(images[0], left, H), (0, 0))
+        canvas.paste(_cover(images[1], right, cell), (left + GAP, 0))
+        canvas.paste(_cover(images[2], right, cell), (left + GAP, cell + GAP))
+    out = io.BytesIO()
+    canvas.save(out, "JPEG", quality=85)
+    return out.getvalue()
+
+
 class TelegramNotifier:
     def __init__(self, token: str, chat_id: str):
         self.api = f"https://api.telegram.org/bot{token}"
-        self.chat_id = chat_id
+        self.chat_id = str(chat_id)
         self.http = AsyncSession(timeout=10)
 
     @staticmethod
-    def _message(text: str, url: str, photo: str) -> dict:
-        payload = {
-            "text": text,
-            "parse_mode": "HTML",
-            "reply_markup": {"inline_keyboard": [[{"text": "🛒 Acheter sur Vinted", "url": url}]]},
-        }
+    def _keyboard(item_id: int | None, url: str, reserve: bool = True) -> dict:
+        row = [{"text": "Voir sur Vinted", "url": url}]
+        if reserve and item_id:
+            # Le bouton réserve l'annonce sur l'ordinateur, dans la fenêtre Vinted connectée.
+            row.insert(0, {"text": "⚡ Réserver", "callback_data": f"r:{item_id}"})
+        return {"inline_keyboard": [row]}
+
+    @classmethod
+    def _message(cls, text: str, url: str, photo: str, item_id: int | None = None, reserve: bool = True) -> dict:
+        payload = {"text": text, "parse_mode": "HTML", "reply_markup": cls._keyboard(item_id, url, reserve)}
         if photo:
             payload["link_preview_options"] = {"url": photo, "prefer_large_media": True, "show_above_text": True}
         else:
             payload["link_preview_options"] = {"is_disabled": True}
         return payload
 
-    async def _call(self, method: str, payload: dict):
-        resp = await self.http.post(f"{self.api}/{method}", json={"chat_id": self.chat_id, **payload})
+    async def _call(self, method: str, payload: dict, timeout: float | None = None):
+        body = payload if "chat_id" in payload or method in ("getUpdates", "answerCallbackQuery") \
+            else {"chat_id": self.chat_id, **payload}
+        resp = await self.http.post(f"{self.api}/{method}", json=body, timeout=timeout or 10)
         if resp.status_code != 200:
             raise RuntimeError(f"Telegram {method} HTTP {resp.status_code}: {resp.text[:200]}")
         return resp.json().get("result") or {}
 
+    async def _collage(self, urls: list[str]) -> bytes | None:
+        from PIL import Image
+
+        async def fetch(u):
+            r = await self.http.get(u)
+            return r.content if r.status_code == 200 else None
+
+        images = []
+        for raw in await asyncio.gather(*(fetch(u) for u in urls[:3]), return_exceptions=True):
+            if isinstance(raw, bytes):
+                with contextlib.suppress(Exception):
+                    images.append(Image.open(io.BytesIO(raw)).convert("RGB"))
+        return await asyncio.to_thread(collage, images) if len(images) >= 2 else None
+
     async def send(self, item: Item, deal: Deal, search: Search) -> dict:
         text = html.escape(format_text(item, deal, search).rsplit("\n", 1)[0])
+        handle = {"text": text, "url": item.url, "item_id": item.id}
+        image = None
         if len(item.photo_urls) >= 2:
-            # Un seul message : les photos en album, le texte et le lien d'achat en légende.
-            # (Telegram n'accepte pas de bouton sous un album : le lien est dans le texte.)
-            caption = f'{text}\n\n<a href="{html.escape(item.url)}">🛒 Acheter sur Vinted</a>'
-            media = [{"type": "photo", "media": u} for u in item.photo_urls[:10]]
-            media[0].update(caption=caption, parse_mode="HTML")
-            result = await self._call("sendMediaGroup", {"media": media})
-            first = result[0] if isinstance(result, list) and result else {}
-            return {"message_id": first.get("message_id"), "text": caption, "album": True}
-        # Une seule photo : sendMessage part immédiatement (sendPhoto ferait d'abord télécharger
-        # l'image par Telegram) ; la photo arrive en aperçu de lien, au-dessus du texte.
-        result = await self._call("sendMessage", self._message(text, item.url, item.photo_url))
-        # Référence gardée pour signaler la vente sur ce même message.
-        return {"message_id": result.get("message_id"), "text": text, "url": item.url, "photo": item.photo_url}
+            try:
+                image = await self._collage(item.photo_urls)
+            except Exception as e:
+                log.debug("Assemblage des photos impossible : %s", e)
+        if image:
+            # Un seul message : les 3 photos réunies en une image, le texte et les boutons dessous.
+            form = CurlMime()
+            form.addpart(name="photo", content_type="image/jpeg", filename="photos.jpg", data=image)
+            resp = await self.http.post(f"{self.api}/sendPhoto", multipart=form, timeout=20, data={
+                "chat_id": self.chat_id, "caption": text, "parse_mode": "HTML",
+                "reply_markup": json.dumps(self._keyboard(item.id, item.url))})
+            if resp.status_code == 200:
+                result = resp.json().get("result") or {}
+                return {**handle, "message_id": result.get("message_id"), "caption": True}
+            log.warning("Telegram sendPhoto HTTP %s : %s", resp.status_code, resp.text[:200])
+        # Une seule photo : sendMessage part immédiatement, la photo arrive en aperçu de lien.
+        result = await self._call("sendMessage", self._message(text, item.url, item.photo_url, item.id))
+        return {**handle, "message_id": result.get("message_id"), "photo": item.photo_url}
 
     async def status(self, t, handle: dict | None) -> None:
         """Bandeau d'état ajouté en tête du message d'alerte d'origine (sans nouvelle sonnerie)."""
         if not handle or not handle.get("message_id"):
             return
         text = f"<b>{html.escape(status_banner(t))}</b>\n{handle['text']}"
-        if handle.get("album"):
+        still_on_sale = t.status == AVAILABLE
+        if handle.get("album"):  # alertes envoyées par une version précédente
             await self._call("editMessageCaption", {"message_id": handle["message_id"], "caption": text,
                                                     "parse_mode": "HTML"})
-            return
-        await self._call("editMessageText", {"message_id": handle["message_id"],
-                                             **self._message(text, handle["url"], handle.get("photo", ""))})
+        elif handle.get("caption"):
+            await self._call("editMessageCaption", {
+                "message_id": handle["message_id"], "caption": text, "parse_mode": "HTML",
+                "reply_markup": self._keyboard(handle.get("item_id"), handle["url"], still_on_sale)})
+        else:
+            await self._call("editMessageText", {"message_id": handle["message_id"], **self._message(
+                text, handle["url"], handle.get("photo", ""), handle.get("item_id"), still_on_sale)})
+
+    async def reserved(self, item_id: int, result: dict, handle: dict | None, auto: bool) -> None:
+        """Résultat d'une réservation, en réponse au message d'alerte. Sonne : il faut payer vite."""
+        if result.get("ok"):
+            took = f" en {result['seconds']} s" if result.get("seconds") else ""
+            text = (f"✅ <b>Réservée pour toi{' automatiquement' if auto else ''}</b>{took}.\n"
+                    "Paie vite : sans validation, la réservation expire. Le paiement est aussi ouvert "
+                    "sur ton ordinateur, dans la fenêtre Vinted.")
+            markup = {"inline_keyboard": [[{"text": "💳 Payer maintenant", "url": result["checkout_url"]}]]} \
+                if result.get("checkout_url") else None
+        else:
+            text = f"❌ <b>Pas réservée</b> : {html.escape(result.get('reason') or 'erreur inconnue')}"
+            markup = None
+        payload = {"text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
+        if markup:
+            payload["reply_markup"] = markup
+        if handle and handle.get("message_id"):
+            payload["reply_parameters"] = {"message_id": handle["message_id"], "allow_sending_without_reply": True}
+        await self._call("sendMessage", payload)
+
+    async def listen(self, on_reserve) -> None:
+        """Boutons « ⚡ Réserver » : réception des appuis (long polling) depuis le téléphone.
+
+        Les appuis faits pendant que le bot était arrêté sont ignorés : réserver une annonce
+        vieille de plusieurs heures n'a plus de sens.
+        """
+        offset, warned = None, False
+        with contextlib.suppress(Exception):
+            last = await self._call("getUpdates", {"offset": -1, "timeout": 0})
+            if last:
+                offset = last[-1]["update_id"] + 1
+        while True:
+            try:
+                resp = await self.http.post(f"{self.api}/getUpdates", timeout=40, json={
+                    "offset": offset, "timeout": 25, "allowed_updates": ["callback_query"]})
+                if resp.status_code == 409:
+                    if not warned:
+                        log.warning("Boutons Telegram inactifs : un autre programme lit déjà les messages de ce "
+                                    "bot Telegram (utilise un bot Telegram dédié à VintedBot)")
+                        warned = True
+                    await asyncio.sleep(60)
+                    continue
+                for update in resp.json().get("result") or []:
+                    offset = update["update_id"] + 1
+                    query = update.get("callback_query") or {}
+                    message = query.get("message") or {}
+                    data = query.get("data") or ""
+                    if not data.startswith("r:"):
+                        continue
+                    if str((message.get("chat") or {}).get("id")) != self.chat_id:
+                        continue  # seul ton propre compte Telegram peut réserver
+                    with contextlib.suppress(Exception):
+                        await self._call("answerCallbackQuery", {
+                            "callback_query_id": query["id"], "text": "⏳ Réservation sur ton ordinateur…"})
+                    asyncio.get_running_loop().create_task(on_reserve(int(data[2:])))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.debug("Lecture des boutons Telegram : %s", e)
+                await asyncio.sleep(5)
 
     async def close(self) -> None:
         await self.http.close()

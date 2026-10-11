@@ -40,19 +40,28 @@ contre la médiane des prix récents de la même recherche.
   10 min), change de cookies et ralentit (écart × 1,5). À chaque succès, elle se rapproche
   ensuite de `request_gap`. Le bot converge ainsi vers le rythme le plus rapide que Vinted
   tolère, et les autres IP continuent pendant la pause.
-- **Telegram** : `sendMessage` avec la photo en aperçu. Ce message part plus vite qu'un
-  `sendPhoto`, qui oblige Telegram à télécharger l'image d'abord.
 - **3 photos dans l'alerte** : Vinted n'en donne qu'une dans la recherche. Avant d'envoyer
   l'alerte, le bot lit la page de l'annonce (~1 s, 5 s au maximum) et joint les 2 photos
-  suivantes : un seul message, album photo sur Telegram. Pour ne pas se faire bloquer, il lit au
+  suivantes dans le même message. Pour ne pas se faire bloquer, il lit au
   plus une page toutes les 10 s. Une alerte arrivée entre-temps part avec 1 photo, et
   l'interface ajoute les autres dès que possible.
 - **Likes et vues en direct** : relevés à chaque passage de la recherche (aucune requête en
   plus), tant que l'annonce reste dans les 20 premiers résultats. « +3 depuis l'alerte » montre
   si d'autres acheteurs sont sur le coup.
-- **Bouton « Acheter sur Vinted »** : ouvre l'annonce, où il reste à toucher « Acheter ». Vinted
-  ne propose plus de lien d'achat direct : la commande est créée par son API avec le compte
-  connecté.
+- **Réserver en 1 clic (« ⚡ Réserver »)** : le bot ouvre une fenêtre Vinted où tu te connectes
+  une fois à ton compte. Le bouton y ouvre l'annonce et touche « Acheter » à ta place : c'est le
+  site de Vinted qui crée la commande, avec ses propres protections. L'article est alors bloqué
+  pour toi (les autres reçoivent « Some of the items belong to another purchase that is in
+  progress »), et la page de paiement s'affiche : il reste à valider. Sans validation, la
+  réservation expire. Le bouton existe aussi sur Telegram : il réserve sur l'ordinateur et
+  renvoie un lien « 💳 Payer maintenant ».
+- **Réservation automatique** : dans chaque recherche, « Réserver tout seul si le prix est de … €
+  ou moins ». Le bot réserve dès qu'il voit l'annonce, avant même d'envoyer l'alerte (au plus 10
+  par heure, et pas pendant les 2 minutes laissées pour payer la précédente).
+- **Telegram** : un seul message par annonce, avec les 3 photos réunies en une image, le texte et
+  les boutons « ⚡ Réserver » et « Voir sur Vinted ». Il est modifié quand l'annonce est vendue.
+  Utilise un bot Telegram dédié à VintedBot : deux programmes ne peuvent pas lire les boutons
+  d'un même bot.
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
   résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
   disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris

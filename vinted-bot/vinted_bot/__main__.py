@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(prog="vinted_bot", description="Alertes Vinted en quasi temps réel")
     parser.add_argument("command", nargs="?", default="ui",
-                        choices=["ui", "run", "check", "test-notify", "selftest"],
+                        choices=["ui", "run", "check", "test-notify", "selftest", "vinted-window", "window-probe"],
                         help="ui (défaut) = interface dans le navigateur")
     parser.add_argument("-c", "--config", default="config.toml")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -75,6 +75,15 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)-7s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    if args.command in ("vinted-window", "window-probe"):
+        from pathlib import Path
+
+        from . import app, window
+
+        if args.command == "window-probe":
+            return window.probe()
+        return window.main(Path(args.data_dir) if args.data_dir else app.default_data_dir())
 
     if args.command in ("ui", "selftest"):
         from pathlib import Path

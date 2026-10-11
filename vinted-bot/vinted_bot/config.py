@@ -53,6 +53,7 @@ class Search:
     min_price: float | None = None
     exclude_sellers: list[str] = field(default_factory=list)
     only_deals: bool = False
+    auto_reserve_max: float | None = None  # réserver tout seul les annonces à ce prix ou moins
     weight: int = 1
     key: str = ""  # identifiant stable pour la base (filigrane, prix) ; le nom par défaut
 
@@ -118,6 +119,7 @@ def _build_search(raw: dict) -> Search:
         min_price=raw.get("min_price"),
         exclude_sellers=[s.lower() for s in raw.get("exclude_sellers", [])],
         only_deals=bool(raw.get("only_deals", False)),
+        auto_reserve_max=raw.get("auto_reserve_max"),
         weight=max(1, int(raw.get("weight", 1))),
         key=str(raw.get("id") or ""),
     )

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import threading
 import time
@@ -642,53 +643,89 @@ def test_store_migrates_old_alerts_and_updates(tmp_path):
     assert store.update_alert(7, {"a": 1}) is None
 
 
-def test_telegram_album_and_sold_edit(monkeypatch):
+def test_telegram_single_message_with_photos_reserve_button_and_tap(monkeypatch):
+    import io as _io
+    from PIL import Image
     from vinted_bot import notifier as nt
     calls = []
 
-    class Resp:
-        status_code = 200
+    def jpeg(color):
+        out = _io.BytesIO()
+        Image.new("RGB", (60, 80), color).save(out, "JPEG")
+        return out.getvalue()
 
-        def __init__(self, payload):
-            self.payload = payload
+    class Resp:
+        def __init__(self, result, status=200, content=b""):
+            self.status_code, self.result, self.content, self.text = status, result, content, ""
 
         def json(self):
-            if self.payload.get("media"):
-                return {"ok": True, "result": [{"message_id": 77}, {"message_id": 78}, {"message_id": 79}]}
-            return {"ok": True, "result": {"message_id": 99}}
+            return {"ok": True, "result": self.result}
 
-    tg = nt.TelegramNotifier("T", "C")
+    tg = nt.TelegramNotifier("T", "123")
+    updates = [[{"update_id": 1}],  # appui ancien, d'avant le démarrage : ignoré
+               [{"update_id": 2, "callback_query": {"id": "q1", "data": f"r:{B}", "message": {"chat": {"id": 999}}}},
+                {"update_id": 3, "callback_query": {"id": "q2", "data": f"r:{B}", "message": {"chat": {"id": 123}}}}]]
 
-    async def post(url, json=None):
-        calls.append((url.rsplit("/", 1)[1], json))
-        return Resp(json)
+    async def get(url, **kw):
+        return Resp(None, content=jpeg((200, 30, 30)))
 
-    tg.http.post = post
+    async def post(url, json=None, data=None, multipart=None, timeout=None):
+        method = url.rsplit("/", 1)[1]
+        calls.append((method, json if json is not None else data))
+        if method == "getUpdates":
+            if not updates:
+                raise asyncio.CancelledError
+            return Resp(updates.pop(0))
+        return Resp({"message_id": 77 if method == "sendPhoto" else 99})
+
+    tg.http.get, tg.http.post = get, post
+    taps = []
+
+    async def on_reserve(item_id):
+        taps.append(item_id)
 
     async def scenario():
         sold = tracking.Tracked(B, "s", "u", time.time() - 420, status=tracking.SOLD, status_ts=time.time())
-        # 3 photos : un seul message (album avec texte et lien d'achat en légende)
         item = Item.from_api(svc_item(B), "vinted.fr")
         item.photo_urls = ["p1", "p2", "p3"]
-        album = await tg.send(item, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
-        await tg.status(sold, album)
-        # 1 seule photo : message classique avec bouton
+        photo = await tg.send(item, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
+        await tg.status(sold, photo)
         item.photo_urls = ["p1"]
         single = await tg.send(item, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
         await tg.status(sold, single)
-        await tg.close()
-        return album, single
+        await tg.reserved(B, {"ok": True, "seconds": 1.4, "checkout_url": "https://www.vinted.fr/checkout?purchase_id=5"},
+                          photo, auto=True)
+        with contextlib.suppress(asyncio.CancelledError):
+            await tg.listen(on_reserve)
+        await asyncio.sleep(0)
+        return photo, single
 
-    album, single = asyncio.run(scenario())
-    assert [c[0] for c in calls] == ["sendMediaGroup", "editMessageCaption", "sendMessage", "editMessageText"]
-    media = calls[0][1]["media"]
-    assert [m["media"] for m in media] == ["p1", "p2", "p3"]
-    assert "Acheter sur Vinted" in media[0]["caption"] and "caption" not in media[1]
-    assert album["message_id"] == 77 and calls[1][1]["message_id"] == 77
-    assert calls[1][1]["caption"].startswith("<b>❌ VENDUE 7 min après l&#x27;alerte</b>")
-    assert single["message_id"] == 99
-    assert calls[2][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "🛒 Acheter sur Vinted"
-    assert calls[3][1]["text"].startswith("<b>❌ VENDUE")
+    photo, single = asyncio.run(scenario())
+    methods = [c[0] for c in calls]
+    assert methods[:5] == ["sendPhoto", "editMessageCaption", "sendMessage", "editMessageText", "sendMessage"]
+    sent = calls[0][1]
+    assert json.loads(sent["reply_markup"])["inline_keyboard"][0][0] == {"text": "⚡ Réserver", "callback_data": f"r:{B}"}
+    assert photo["message_id"] == 77 and photo["caption"]
+    sold_edit = calls[1][1]
+    assert sold_edit["caption"].startswith("<b>❌ VENDUE 7 min après l&#x27;alerte</b>")
+    assert [b["text"] for b in sold_edit["reply_markup"]["inline_keyboard"][0]] == ["Voir sur Vinted"]
+    assert calls[2][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "⚡ Réserver"
+    paid = calls[4][1]
+    assert "Réservée pour toi automatiquement" in paid["text"] and paid["reply_parameters"]["message_id"] == 77
+    assert paid["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("purchase_id=5")
+    assert taps == [B]  # seul l'appui venant de ton propre compte Telegram compte
+    assert ("answerCallbackQuery", {"callback_query_id": "q2", "text": "⏳ Réservation sur ton ordinateur…"}) in calls
+
+
+def test_collage_layout():
+    import io as _io
+    from PIL import Image
+    from vinted_bot.notifier import collage
+    imgs = [Image.new("RGB", (300, 400), c) for c in ((255, 0, 0), (0, 255, 0), (0, 0, 255))]
+    out = Image.open(_io.BytesIO(collage(imgs)))
+    assert out.size == (1200, 800)
+    px = lambda x, y: out.getpixel((x, y))  # noqa: E731
+    assert px(300, 400)[0] > 200 and px(1000, 200)[1] > 200 and px(1000, 600)[2] > 200
 
 
 def test_likes_are_followed_live(tmp_path):
@@ -752,3 +789,68 @@ def test_old_sale_check_goes_before_new_photos(tmp_path):
     mon._page_queue[1]["since"] -= 200
     mon._enqueue_page(2, "u2", "vinted.fr", "photos")
     assert mon._pop_page("vinted.fr")[0] == 1
+
+
+FAKE_WINDOW = r'''
+import json, sys
+print(json.dumps({"event": "ready"}), flush=True)
+for line in sys.stdin:
+    cmd = json.loads(line)
+    if cmd["cmd"] == "user":
+        print(json.dumps({"event": "user", "login": "alice"}), flush=True)
+    elif cmd["cmd"] == "reserve":
+        if cmd["id"] == 1:
+            print("journal de la bibliothèque de fenêtres", flush=True)
+            print(json.dumps({"event": "reserve", "id": 1, "ok": True, "seconds": 1.2,
+                              "checkout_url": "https://www.vinted.fr/checkout?purchase_id=9"}), flush=True)
+        else:
+            print(json.dumps({"event": "reserve", "id": cmd["id"], "ok": False,
+                              "reason": "quelqu'un d'autre est déjà en train de l'acheter"}), flush=True)
+    elif cmd["cmd"] == "quit":
+        break
+'''
+
+
+def test_vinted_window_reserves_and_limits_auto(tmp_path):
+    import sys as _sys
+    from vinted_bot import buyer
+    script = tmp_path / "fake_window.py"
+    script.write_text(FAKE_WINDOW, "utf-8")
+    changes = []
+    win = buyer.VintedWindow(tmp_path, on_change=lambda: changes.append(1), command=[_sys.executable, str(script)])
+
+    async def scenario():
+        assert (await win.reserve(5, "u", auto=True))["reason"].startswith("fenêtre Vinted fermée")
+        ok = await win.reserve(1, "https://www.vinted.fr/items/1")  # ouvre la fenêtre au besoin
+        assert ok["ok"] and ok["seconds"] == 1.2
+        await asyncio.sleep(0.2)
+        assert win.state() == {"open": True, "user": "alice"}
+        # Juste après une réservation réussie, pas de réservation automatique (le temps de payer)
+        assert (await win.reserve(2, "u", auto=True))["reason"] == "une autre réservation est en cours"
+        win.busy_until = 0
+        taken = await win.reserve(2, "u", auto=True)
+        assert not taken["ok"] and "quelqu'un d'autre" in taken["reason"]
+        win.auto_times = [time.monotonic()] * buyer.AUTO_MAX_PER_HOUR
+        assert "limite" in (await win.reserve(3, "u", auto=True))["reason"]
+        win.close()
+        await asyncio.sleep(0.2)
+        assert win.state() == {"open": False, "user": None}
+
+    asyncio.run(scenario())
+    assert changes
+
+
+def test_auto_reserve_triggers_under_price_before_photos(tmp_path):
+    search = Search(name="s", auto_reserve_max=20.0)
+    mon, fake, rec = make_monitor(tmp_path, search)
+    asked = []
+    mon.on_auto_reserve = lambda item, s: asked.append(item.id)
+    older = [svc_item(B + i) for i in (40, 30, 20, 10)]
+
+    async def scenario():
+        fake.pages = [older, [svc_item(B + 60, price="35.00"), svc_item(B + 50, price="19.00"), *older]]
+        await mon.poll(search)
+        await mon.poll(search)
+
+    asyncio.run(scenario())
+    assert asked == [B + 50]
