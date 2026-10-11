@@ -5,3 +5,4 @@ __pycache__/
 ghostloc/desktop/build/
 ghostloc/desktop/dist/
 ghostloc/desktop/GhostLoc.spec
+ghostloc/supabase/.temp/
