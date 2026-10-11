@@ -84,10 +84,17 @@ contre la médiane des prix récents de la même recherche.
    ```
 
 3. Le script détecte ton type de Mac (puce Apple ou Intel), télécharge le bot dans le dossier
-   `VintedBot` de ton dossier utilisateur, pose un raccourci **VintedBot** sur le Bureau,
-   puis lance le bot. L'interface s'ouvre dans ton navigateur (http://127.0.0.1:8765).
-4. Laisse la fenêtre du Terminal ouverte : la fermer arrête le bot. Pour le relancer plus
-   tard, double-clique sur **VintedBot** sur le Bureau.
+   `VintedBot` de ton dossier utilisateur, pose une icône **VintedBot** sur le Bureau, puis
+   allume le bot. L'interface s'ouvre dans ton navigateur (http://127.0.0.1:8765). Tu peux
+   fermer le Terminal : le bot tourne en arrière-plan.
+
+**Allumer / éteindre** : clique sur l'icône **VintedBot** du Bureau.
+
+- Bot éteint : un clic l'allume (notification « VintedBot est allumé », l'interface s'ouvre).
+- Bot allumé : un clic propose **Ouvrir l'interface** ou **Éteindre**.
+- Pour mettre en pause sans l'éteindre : bouton **Arrêter le bot** en haut de l'interface.
+- Mise à jour : relancer la ligne `curl` ci-dessus. Elle éteint l'ancienne version, installe
+  la nouvelle et la rallume.
 
 Le bot empêche la mise en veille automatique tant qu'il tourne (`caffeinate`). En revanche,
 un MacBook dont on ferme le capot s'endort quand même, sauf s'il est branché sur secteur et

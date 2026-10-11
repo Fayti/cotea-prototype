@@ -117,5 +117,17 @@ jobs:
           mkdir -p "$HOME/Desktop"
           curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/download/vinted-bot-latest/install-mac.sh" \
             | VINTEDBOT_NO_LAUNCH=1 bash
-          test -x "$HOME/Desktop/VintedBot.command"
+          test -d "$HOME/Desktop/VintedBot.app"
           "$HOME/VintedBot/VintedBot" selftest
+      - name: Interrupteur (allumer, vérifier que l'interface répond, éteindre)
+        run: |
+          SW="$HOME/VintedBot/vintedbot-switch.sh"
+          test "$(bash "$SW" status)" = off
+          bash "$SW" on
+          for i in $(seq 1 60); do curl -fs http://127.0.0.1:8765/api/whoami | grep -q VintedBot && break; sleep 1; done
+          curl -fs http://127.0.0.1:8765/api/whoami | grep -q VintedBot
+          test "$(bash "$SW" status)" = on
+          bash "$SW" off
+          test "$(bash "$SW" status)" = off
+          ! curl -fs --max-time 3 http://127.0.0.1:8765/api/whoami
+          echo "INTERRUPTEUR OK"
