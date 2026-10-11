@@ -1,6 +1,5 @@
-"""Exploration ponctuelle (CI) : photos disponibles et détection « vendu » sur le vrai Vinted."""
+"""Exploration ponctuelle (CI), à rythme lent : photos d'une annonce et page d'une annonce vendue."""
 import asyncio
-import collections
 import json
 import re
 import time
@@ -9,116 +8,94 @@ from curl_cffi.requests import AsyncSession
 
 WWW = "https://www.vinted.fr"
 API = "https://api.vinted.fr"
+GAP = 6.0  # secondes entre deux pages d'annonce (la sonde précédente a été bloquée à ~3/s)
 
 
-def ld_json(html):
-    out = []
-    for m in re.finditer(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', html, re.S):
-        try:
-            out.append(json.loads(m.group(1)))
-        except Exception:
-            pass
-    return out
-
-
-def sold_markers(text):
-    keys = ["is_closed", "is_sold", "is_reserved", "is_hidden", "can_buy", "is_processing", "item_closing_action",
-            "availability", "SoldOut", "InStock", "OutOfStock", "Vendu", "transaction_permitted", "is_visible"]
-    found = {}
-    for k in keys:
-        m = re.search(re.escape(k) + r'.{0,40}', text)
-        if m:
-            found[k] = m.group(0)[:60]
-    return found
+def page_facts(html: str) -> dict:
+    facts = {"len": len(html)}
+    for key in ("availability", "is_reserved", "can_buy", "is_closed", "is_hidden", "item_closing_action",
+                "is_processing", "transaction_permitted", "\\\"status\\\"", "SoldOut", "OutOfStock"):
+        i = html.find(key)
+        facts[key] = (i, html[i:i + 70]) if i >= 0 else None
+    ids = []
+    for m in re.finditer(r'images1\.vinted\.net/t/([A-Za-z0-9_]+)/f800/', html):
+        if m.group(1) not in ids:
+            ids.append(m.group(1))
+    facts["photo_ids_f800"] = ids[:12]
+    first = re.search(r'images1\.vinted\.net/t/', html)
+    facts["first_photo_pos"] = first.start() if first else None
+    m = re.search(r'\\"photos\\":\[', html)
+    facts["photos_json_pos"] = m.start() if m else None
+    return facts
 
 
 async def main():
-    async with AsyncSession(impersonate="chrome", timeout=20, headers={"Accept-Language": "fr-FR,fr;q=0.9"}) as s:
+    async with AsyncSession(impersonate="chrome", timeout=25, headers={"Accept-Language": "fr-FR,fr;q=0.9"}) as s:
         await s.get(WWW + "/catalog")
         token = s.cookies.get("access_token_web")
         auth = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        feed = (await s.get(API + "/svc-catalogue/items", params={"order": "newest_first", "per_page": "20",
+                                                                  "page": "1"}, headers=auth)).json()["items"]
+        feed = [i for i in feed if not i.get("promoted")]
+        a = feed[0]["id"]
 
-        # 1. Photos dans la réponse de recherche
-        r = await s.get(API + "/svc-catalogue/items", params={"order": "newest_first", "per_page": "96", "page": "1"},
-                        headers=auth)
-        items = r.json()["items"]
-        counts = collections.Counter(len(i.get("photos") or []) for i in items)
-        print("PHOTOS PAR ANNONCE (recherche) :", sorted(counts.items()))
-        multi = [i for i in items if len(i.get("photos") or []) > 1]
-        sample = multi[0] if multi else items[0]
-        print("EXEMPLE photos urls :", [p.get("url", "")[-60:] for p in sample.get("photos", [])])
-        print("CLÉS photo :", sorted((sample.get("photos") or [{}])[0].keys()))
+        # 1. Plugins d'annonce : quelles « features » existent ?
+        for feat in ("x", "summary", "attributes", "photos", "status", "transaction", "seller", "description"):
+            r = await s.get(WWW + f"/api/v2/items/{a}/plugins/{feat}", headers=auth)
+            print("PLUGIN", feat, r.status_code, r.text[:400].replace("\n", " "))
+            await asyncio.sleep(2)
 
-        # 2. Endpoints de détail candidats
-        iid = items[5]["id"]
-        cands = [
-            API + f"/svc-catalogue/items/{iid}", API + f"/svc-items/items/{iid}", API + f"/svc-item/items/{iid}",
-            API + f"/svc-items/{iid}", WWW + f"/api/v2/items/{iid}", WWW + f"/api/v2/items/{iid}/details",
-            WWW + f"/api/v2/items/{iid}/plugins/details", API + f"/svc-catalogue/items?ids={iid}",
-        ]
-        for url in cands:
-            rr = await s.get(url, headers=auth)
-            body = rr.text
-            print("TRY", rr.status_code, url.replace(str(iid), "{id}"), "|", body[:150].replace("\n", " "))
-            if rr.status_code == 200 and body.startswith("{"):
-                d = rr.json()
-                print("   KEYS", list(d.keys())[:30])
-                inner = d.get("item") or d
-                if isinstance(inner, dict):
-                    print("   ITEM KEYS", sorted(inner.keys())[:80])
-                    print("   PHOTOS", len(inner.get("photos") or []), "| MARKERS", sold_markers(json.dumps(inner)))
-            await asyncio.sleep(0.4)
+        # 2. Le paramètre ids filtre-t-il la recherche ?
+        three = [i["id"] for i in feed[3:6]]
+        for name in ("ids", "ids[]", "item_ids", "item_ids[]", "attribute_ids[id]", "id"):
+            r = await s.get(API + "/svc-catalogue/items", params={name: ",".join(map(str, three)), "per_page": "20"},
+                            headers=auth)
+            got = [i["id"] for i in r.json().get("items", [])] if r.status_code == 200 else r.status_code
+            print("IDS", name, "->", got if isinstance(got, int) else (len(got), set(three) <= set(got), got[:5]))
+            await asyncio.sleep(2)
 
-        # 3. Page HTML de l'annonce : ld+json, photos, marqueurs, endpoints svc- du code du site
-        page = await s.get(WWW + f"/items/{iid}")
-        html = page.text
-        print("PAGE", page.status_code, len(html))
-        for d in ld_json(html):
-            if isinstance(d, dict):
-                print("LDJSON type", d.get("@type"), "| offers", json.dumps(d.get("offers"))[:300],
-                      "| images", len(d.get("image") or []) if isinstance(d.get("image"), list) else d.get("image"))
-        print("MARKERS page", sold_markers(html))
-        svc = sorted(set(re.findall(r'["`](/svc-[a-z0-9-]+/[A-Za-z0-9_/${}.-]*)', html)))
-        print("SVC dans la page", svc[:40])
-        scripts = re.findall(r'<script[^>]+src="([^"]+)"', html)
-        found = set()
-        for src in scripts[:80]:
-            try:
-                js = (await s.get(src if src.startswith("http") else WWW + src)).text
-            except Exception:
-                continue
-            for m in re.findall(r'["`](/svc-[a-z0-9-]+/[A-Za-z0-9_/${}.-]*)', js):
-                found.add(m)
-            for m in re.finditer(r'is_closed|item_closing_action|sold', js):
-                pass
-        print("SVC dans le JS", sorted(found)[:80])
+        # 3. Structure d'une page d'annonce : où sont les photos et l'état ?
+        r = await s.get(WWW + f"/items/{a}")
+        print("PAGE", r.status_code, r.url)
+        print("FACTS", json.dumps(page_facts(r.text), ensure_ascii=False)[:2500])
+        await asyncio.sleep(GAP)
+        r = await s.head(WWW + f"/items/{a}")
+        print("HEAD", r.status_code, dict(list(r.headers.items())[:6]))
+        await asyncio.sleep(GAP)
+        r = await s.get(WWW + f"/items/{a}", headers={"Range": "bytes=0-200000"})
+        print("RANGE", r.status_code, len(r.text))
+        await asyncio.sleep(GAP)
 
-        # 4. Observation de ventes : annonces bon marché récentes, re-vérifiées après 9 minutes
-        r = await s.get(API + "/svc-catalogue/items", params={"order": "newest_first", "per_page": "96", "page": "1",
-                                                               "price_to": "4"}, headers=auth)
-        watch = [i["id"] for i in r.json()["items"]][:60]
-        first = {}
-        for wid in watch:
-            pr = await s.get(WWW + f"/items/{wid}")
-            first[wid] = (pr.status_code, sold_markers(pr.text), [json.dumps(d.get("offers"))[:200] for d in ld_json(pr.text) if isinstance(d, dict)])
-            await asyncio.sleep(0.3)
-        print("SURVEILLANCE", len(watch), "annonces à <= 4 € ; attente 9 min")
-        await asyncio.sleep(540)
+        # 4. Ventes : 20 annonces récentes à moins de 3 €, vérifiées maintenant puis dans 10 min, lentement
+        cheap = (await s.get(API + "/svc-catalogue/items", params={"order": "newest_first", "per_page": "40",
+                                                                   "page": "1", "price_to": "3"}, headers=auth)).json()
+        watch = [i["id"] for i in cheap["items"] if not i.get("promoted")][:20]
+
+        async def check(iid):
+            pr = await s.get(WWW + f"/items/{iid}")
+            f = page_facts(pr.text) if pr.status_code == 200 else {}
+            return (pr.status_code, str(pr.url)[-40:], f.get("availability", (0, ""))[1][:40] if f.get("availability") else None,
+                    f.get("is_reserved", (0, ""))[1][:40] if f.get("is_reserved") else None,
+                    f.get("can_buy", (0, ""))[1][:30] if f.get("can_buy") else None, len(f.get("photo_ids_f800", [])))
+
+        before = {}
+        for iid in watch:
+            before[iid] = await check(iid)
+            await asyncio.sleep(GAP)
+        print("AVANT", json.dumps(before)[:1500])
+        r = await s.get(API + "/svc-catalogue/items", params={"order": "newest_first", "per_page": "5"}, headers=auth)
+        print("RECHERCHE après 20 pages lentes :", r.status_code)
+        await asyncio.sleep(600)
         changed = 0
-        for wid in watch:
-            pr = await s.get(WWW + f"/items/{wid}")
-            now = (pr.status_code, sold_markers(pr.text), [json.dumps(d.get("offers"))[:200] for d in ld_json(pr.text) if isinstance(d, dict)])
-            if now != first[wid]:
+        for iid in watch:
+            now = await check(iid)
+            if now != before[iid]:
                 changed += 1
-                if changed <= 6:
-                    print("CHANGÉ", wid, "\n   AVANT", first[wid], "\n   APRÈS", now)
-                    for url in (WWW + f"/api/v2/items/{wid}", API + f"/svc-catalogue/items/{wid}"):
-                        rr = await s.get(url, headers=auth)
-                        print("   ", rr.status_code, url.split('/')[-3:], rr.text[:300].replace("\n", " "))
-            await asyncio.sleep(0.3)
+                print("CHANGÉ", iid, "\n   AVANT", before[iid], "\n   APRÈS", now)
+            await asyncio.sleep(GAP)
         print("CHANGEMENTS", changed, "sur", len(watch))
-        sold_example = next(iter(first.values()))
-        print("EXEMPLE non changé", sold_example)
+        r = await s.get(API + "/svc-catalogue/items", params={"order": "newest_first", "per_page": "5"}, headers=auth)
+        print("RECHERCHE à la fin :", r.status_code)
 
 
 asyncio.run(main())
