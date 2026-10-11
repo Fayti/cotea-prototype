@@ -77,7 +77,7 @@ class Config:
     extra_photos: bool = True      # lire la page de l'annonce pour avoir plusieurs photos
     photos_per_alert: int = 3
     track_status: bool = True      # suivre si l'annonce est vendue, réservée, supprimée
-    page_gap: float = 30.0         # secondes minimum entre deux lectures de page d'annonce
+    page_gap: float = 10.0         # secondes minimum entre deux lectures de page d'annonce
     max_age: float = 3600.0
     per_page: int = 20
     warmup_per_page: int = 96
@@ -149,7 +149,7 @@ def config_from_dict(raw: dict, require_searches: bool = True) -> Config:
         extra_photos=bool(general.get("extra_photos", True)),
         photos_per_alert=max(1, min(10, int(general.get("photos_per_alert", 3)))),
         track_status=bool(general.get("track_status", True)),
-        page_gap=max(10.0, float(general.get("page_gap", 30))),
+        page_gap=max(10.0, float(general.get("page_gap", 10))),
         max_age=float(general.get("max_age_minutes", 60)) * 60,
         per_page=int(general.get("per_page", 20)),
         warmup_per_page=int(general.get("warmup_per_page", 96)),

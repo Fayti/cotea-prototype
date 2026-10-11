@@ -96,7 +96,7 @@ class TelegramNotifier:
         payload = {
             "text": text,
             "parse_mode": "HTML",
-            "reply_markup": {"inline_keyboard": [[{"text": "Ouvrir sur Vinted", "url": url}]]},
+            "reply_markup": {"inline_keyboard": [[{"text": "🛒 Acheter sur Vinted", "url": url}]]},
         }
         if photo:
             payload["link_preview_options"] = {"url": photo, "prefer_large_media": True, "show_above_text": True}
@@ -104,32 +104,38 @@ class TelegramNotifier:
             payload["link_preview_options"] = {"is_disabled": True}
         return payload
 
-    async def _call(self, method: str, payload: dict) -> dict:
+    async def _call(self, method: str, payload: dict):
         resp = await self.http.post(f"{self.api}/{method}", json={"chat_id": self.chat_id, **payload})
         if resp.status_code != 200:
             raise RuntimeError(f"Telegram {method} HTTP {resp.status_code}: {resp.text[:200]}")
         return resp.json().get("result") or {}
 
     async def send(self, item: Item, deal: Deal, search: Search) -> dict:
-        # sendMessage part immédiatement ; sendPhoto ferait d'abord télécharger l'image
-        # par Telegram. La photo arrive en aperçu de lien, au-dessus du texte.
         text = html.escape(format_text(item, deal, search).rsplit("\n", 1)[0])
+        if len(item.photo_urls) >= 2:
+            # Un seul message : les photos en album, le texte et le lien d'achat en légende.
+            # (Telegram n'accepte pas de bouton sous un album : le lien est dans le texte.)
+            caption = f'{text}\n\n<a href="{html.escape(item.url)}">🛒 Acheter sur Vinted</a>'
+            media = [{"type": "photo", "media": u} for u in item.photo_urls[:10]]
+            media[0].update(caption=caption, parse_mode="HTML")
+            result = await self._call("sendMediaGroup", {"media": media})
+            first = result[0] if isinstance(result, list) and result else {}
+            return {"message_id": first.get("message_id"), "text": caption, "album": True}
+        # Une seule photo : sendMessage part immédiatement (sendPhoto ferait d'abord télécharger
+        # l'image par Telegram) ; la photo arrive en aperçu de lien, au-dessus du texte.
         result = await self._call("sendMessage", self._message(text, item.url, item.photo_url))
-        # Référence gardée pour ajouter les photos et signaler la vente sur ce même message.
+        # Référence gardée pour signaler la vente sur ce même message.
         return {"message_id": result.get("message_id"), "text": text, "url": item.url, "photo": item.photo_url}
-
-    async def photos(self, item_id: int, urls: list[str], handle: dict | None) -> None:
-        """Album des photos, en réponse silencieuse à l'alerte : le téléphone ne sonne qu'une fois."""
-        payload = {"media": [{"type": "photo", "media": u} for u in urls[:10]], "disable_notification": True}
-        if handle and handle.get("message_id"):
-            payload["reply_parameters"] = {"message_id": handle["message_id"], "allow_sending_without_reply": True}
-        await self._call("sendMediaGroup", payload)
 
     async def status(self, t, handle: dict | None) -> None:
         """Bandeau d'état ajouté en tête du message d'alerte d'origine (sans nouvelle sonnerie)."""
         if not handle or not handle.get("message_id"):
             return
         text = f"<b>{html.escape(status_banner(t))}</b>\n{handle['text']}"
+        if handle.get("album"):
+            await self._call("editMessageCaption", {"message_id": handle["message_id"], "caption": text,
+                                                    "parse_mode": "HTML"})
+            return
         await self._call("editMessageText", {"message_id": handle["message_id"],
                                              **self._message(text, handle["url"], handle.get("photo", ""))})
 

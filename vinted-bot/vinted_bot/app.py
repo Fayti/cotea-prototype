@@ -66,6 +66,8 @@ def alert_payload(item: Item, deal, search) -> dict:
         "deal": deal.is_deal, "discount": deal.discount, "median": deal.median,
         # Photos : la recherche n'en donne qu'une ; les suivantes arrivent par mise à jour.
         "photos": item.photo_urls[:3] or ([item.photo_url] if item.photo_url else []),
+        # Favoris et vues : valeur à l'alerte, puis mises à jour en direct.
+        "likes": item.favourites, "likes_start": item.favourites, "views": item.views,
         # Disponibilité (« status » désigne déjà l'état de l'article : très bon état…).
         "availability": "available", "availability_ts": None, "availability_after_s": None,
     }
@@ -80,6 +82,9 @@ class UiNotifier:
 
     async def photos(self, item_id: int, urls: list[str], handle) -> None:
         self.engine.update_alert(item_id, {"photos": urls})
+
+    async def likes(self, t) -> None:
+        self.engine.update_alert(t.item_id, {"likes": t.likes, "views": t.views})
 
     async def status(self, t, handle) -> None:
         self.engine.update_alert(t.item_id, {

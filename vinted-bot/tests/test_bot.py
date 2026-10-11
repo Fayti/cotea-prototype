@@ -131,7 +131,7 @@ class Recorder:
 
 
 def make_monitor(tmp_path, search, **cfg_kw):
-    cfg = Config(searches=[search], deal_min_samples=3, **cfg_kw)
+    cfg = Config(searches=[search], deal_min_samples=3, **{"extra_photos": False, **cfg_kw})
     fake = FakeClient()
     rec = Recorder()
     mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [rec], client_factory=lambda d: fake)
@@ -530,6 +530,9 @@ class PageClient(FakeClient):
         self.pages_html = {}
         self.page_calls = []
 
+    async def acquire(self):
+        return None
+
     async def get_page(self, url, lane):
         self.page_calls.append(url)
         return self.pages_html.get(url, (200, url, LIVE_PAGE))
@@ -572,11 +575,12 @@ def test_alert_gets_photos_then_sale_is_detected_and_confirmed(tmp_path):
         await mon.poll(search)                       # amorçage
         alerted = await mon.poll(search)             # alerte sur B+50
         assert [i.id for i in alerted] == [B + 50]
-        await asyncio.sleep(0)
-        await fetch_next_page()                      # page lue pour les photos (annonce encore en vente)
-        assert rec.photo_events and rec.photo_events[0][0] == B + 50 and len(rec.photo_events[0][1]) == 3
-        assert rec.photo_events[0][2] == {"message_id": B + 50}  # en réponse au message d'alerte
-        assert rec.status_events == []               # page « en vente » : rien à signaler
+        for _ in range(5):
+            await asyncio.sleep(0)
+        # Une seule alerte, envoyée avec ses 3 photos (page lue avant l'envoi)
+        assert len(rec.sent) == 1 and len(rec.sent[0][0].photo_urls) == 3
+        assert rec.photo_events == [] and rec.status_events == [] and mon._pop_page("vinted.fr") is None
+        mon._next_page_at = 0
         # Vendue : elle disparaît alors que les annonces plus anciennes sont toujours là
         fake.pages_html[sold_url] = (200, sold_url, SOLD_PAGE)
         fake.pages = [older, older]
@@ -649,6 +653,8 @@ def test_telegram_album_and_sold_edit(monkeypatch):
             self.payload = payload
 
         def json(self):
+            if self.payload.get("media"):
+                return {"ok": True, "result": [{"message_id": 77}, {"message_id": 78}, {"message_id": 79}]}
             return {"ok": True, "result": {"message_id": 99}}
 
     tg = nt.TelegramNotifier("T", "C")
@@ -660,22 +666,59 @@ def test_telegram_album_and_sold_edit(monkeypatch):
     tg.http.post = post
 
     async def scenario():
+        sold = tracking.Tracked(B, "s", "u", time.time() - 420, status=tracking.SOLD, status_ts=time.time())
+        # 3 photos : un seul message (album avec texte et lien d'achat en légende)
         item = Item.from_api(svc_item(B), "vinted.fr")
-        handle = await tg.send(item, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
-        await tg.photos(item.id, ["p1", "p2", "p3"], handle)
-        t = tracking.Tracked(item.id, "s", item.url, time.time() - 420, status=tracking.SOLD, status_ts=time.time())
-        await tg.status(t, handle)
+        item.photo_urls = ["p1", "p2", "p3"]
+        album = await tg.send(item, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
+        await tg.status(sold, album)
+        # 1 seule photo : message classique avec bouton
+        item.photo_urls = ["p1"]
+        single = await tg.send(item, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
+        await tg.status(sold, single)
         await tg.close()
-        return handle
+        return album, single
 
-    handle = asyncio.run(scenario())
-    assert handle["message_id"] == 99
-    assert [c[0] for c in calls] == ["sendMessage", "sendMediaGroup", "editMessageText"]
-    album = calls[1][1]
-    assert [m["media"] for m in album["media"]] == ["p1", "p2", "p3"] and album["disable_notification"]
-    assert album["reply_parameters"]["message_id"] == 99
-    edit = calls[2][1]
-    assert edit["message_id"] == 99 and edit["text"].startswith("<b>❌ VENDUE 7 min après l&#x27;alerte</b>")
+    album, single = asyncio.run(scenario())
+    assert [c[0] for c in calls] == ["sendMediaGroup", "editMessageCaption", "sendMessage", "editMessageText"]
+    media = calls[0][1]["media"]
+    assert [m["media"] for m in media] == ["p1", "p2", "p3"]
+    assert "Acheter sur Vinted" in media[0]["caption"] and "caption" not in media[1]
+    assert album["message_id"] == 77 and calls[1][1]["message_id"] == 77
+    assert calls[1][1]["caption"].startswith("<b>❌ VENDUE 7 min après l&#x27;alerte</b>")
+    assert single["message_id"] == 99
+    assert calls[2][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "🛒 Acheter sur Vinted"
+    assert calls[3][1]["text"].startswith("<b>❌ VENDUE")
+
+
+def test_likes_are_followed_live(tmp_path):
+    search = Search(name="s")
+    mon, fake, rec = make_monitor(tmp_path, search)
+
+    class Likes:
+        def __init__(self):
+            self.seen = []
+
+        async def send(self, item, deal, search):
+            pass
+
+        async def likes(self, t):
+            self.seen.append((t.item_id, t.likes, t.views))
+
+    likes = Likes()
+    mon.notifiers.append(likes)
+    older = [svc_item(B + i) for i in (40, 30, 20, 10)]
+    fresh = svc_item(B + 50)
+
+    async def scenario():
+        fake.pages = [older, [fresh, *older], [dict(fresh, favourite_count=2, view_count=9), *older],
+                      [dict(fresh, favourite_count=2, view_count=9), *older]]
+        for _ in range(4):
+            await mon.poll(search)
+            await asyncio.sleep(0)
+
+    asyncio.run(scenario())
+    assert likes.seen == [(B + 50, 2, 9)]  # signalé une fois, au changement seulement
 
 
 def test_still_on_sale_stops_flip_flop_and_promoted_is_not_missing(tmp_path):

@@ -50,6 +50,8 @@ class Tracked:
     anchors: tuple[int, ...] = ()
     missing: int = 0
     handles: dict = field(default_factory=dict)  # notifier -> référence du message envoyé
+    likes: int | None = None   # favoris (« j'aime »), relevés à chaque passage de la recherche
+    views: int | None = None
 
 
 class Tracker:

@@ -37,6 +37,7 @@ class Item:
     promoted: bool = False
     age_estimated: bool = False
     photo_urls: list[str] = field(default_factory=list)  # photo principale d'abord
+    views: int = 0
 
     @classmethod
     def from_api(cls, raw: dict, domain: str) -> "Item":
@@ -81,6 +82,7 @@ class Item:
             seller=(raw.get("user") or {}).get("login") or "",
             created_ts=hires.get("timestamp"),  # absent depuis septembre 2026 : estimé par IdClock
             favourites=int(raw.get("favourite_count") or 0),
+            views=int(raw.get("view_count") or 0),
             promoted=bool(raw.get("promoted")) or raw.get("content_source") == "catalog_promoted_items",
             photo_urls=photo_urls,
         )

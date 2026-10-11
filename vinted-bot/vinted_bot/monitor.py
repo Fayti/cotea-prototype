@@ -38,6 +38,7 @@ CLOCK_EVERY = 30.0  # secondes entre deux relevés du numéro d'annonce le plus 
 PHOTOS_TTL = 180.0  # au-delà, les photos supplémentaires d'une alerte n'ont plus d'intérêt
 PAGE_PAUSE = 900.0  # pause des lectures de pages d'annonce après un blocage
 STATUS_WAIT = 120.0  # au-delà, une confirmation de vente passe avant les photos
+PHOTOS_WAIT = 5.0  # attente maximale des photos avant d'envoyer l'alerte quand même
 
 
 class IdClock:
@@ -292,14 +293,17 @@ class Monitor:
             self.stats.alerts += 1
             if age is not None:
                 self.stats.ages.append(age)
-            if self.cfg.track_status or self.cfg.extra_photos:
-                self.tracker.add(item.id, search.key, item.url)
-                self.store.save_tracked(self.tracker.items[item.id])
-                if self.cfg.extra_photos and len(item.photo_urls) < self.cfg.photos_per_alert:
-                    self._enqueue_page(item.id, item.url, search.domain, "photos")
-            self._dispatch(item, deal, search)
+            t = self.tracker.add(item.id, search.key, item.url)
+            t.likes, t.views = item.favourites, item.views
+            self.store.save_tracked(t)
+            if self.cfg.extra_photos and len(item.photo_urls) < self.cfg.photos_per_alert:
+                self._spawn(self._alert_with_photos(item, deal, search), "alerte")
+            else:
+                self._dispatch(item, deal, search)
             log.info("[%s] %s — %s%s", search.name, item.title, item.url,
                      f" (publiée il y a ~{age:.0f} s)" if age is not None else "")
+        if not warmup:
+            self._update_likes(items)
         if not warmup and seq is not None and self.cfg.track_status:
             self.tracker.expire()
             visible = [i.id for i in items if not i.promoted]
@@ -337,6 +341,50 @@ class Monitor:
             # Référence du message (ex. Telegram) pour l'enrichir ou le modifier plus tard.
             t.handles[type(notifier).__name__] = handle
             self.store.save_tracked(t)
+
+    async def _alert_with_photos(self, item, deal, search) -> None:
+        """Une seule alerte, déjà complète : la page de l'annonce est lue tout de suite (une
+        requête, ~1 s) pour joindre les photos suivantes. Si le rythme des pages ne le permet
+        pas, l'alerte part sans attendre et l'interface complètera la carte plus tard."""
+        photos = await self._photos_now(item, search.domain)
+        if len(photos) > len(item.photo_urls):
+            item.photo_urls = photos
+        elif len(item.photo_urls) < self.cfg.photos_per_alert:
+            self._enqueue_page(item.id, item.url, search.domain, "photos")
+        self._dispatch(item, deal, search)
+
+    async def _photos_now(self, item, domain: str) -> list[str]:
+        now = time.monotonic()
+        if self._page_busy or now < self._next_page_at or now < self._page_pause_until:
+            return []
+        self._page_busy, self._next_page_at = True, now + self.cfg.page_gap
+        try:
+            async def read():
+                client = self.client(domain)
+                return await client.get_page(item.url, await client.acquire())
+            code, final_url, page = await asyncio.wait_for(read(), PHOTOS_WAIT)
+            self.stats.request_times.append(time.monotonic())
+            return extract_photos(page, self.cfg.photos_per_alert) if code == 200 else []
+        except RateLimited as e:
+            self._page_pause_until = time.monotonic() + PAGE_PAUSE
+            self.stats.block_times.append(time.monotonic())
+            log.warning("Lecture des pages d'annonce suspendue %d min : %s", PAGE_PAUSE // 60, e)
+        except Exception as e:
+            log.debug("Photos de l'annonce %s indisponibles : %s", item.id, e)
+        finally:
+            self._page_busy = False
+        return []
+
+    def _update_likes(self, items) -> None:
+        """Favoris et vues des annonces déjà signalées, relevés gratuitement à chaque passage."""
+        for item in items:
+            t = self.tracker.items.get(item.id)
+            if t is None or (t.likes, t.views) == (item.favourites, item.views):
+                continue
+            t.likes, t.views = item.favourites, item.views
+            for notifier in self.notifiers:
+                if hasattr(notifier, "likes"):
+                    self._spawn(notifier.likes(t), f"{type(notifier).__name__}.likes")
 
     def _status_changed(self, t) -> None:
         self.store.save_tracked(t)

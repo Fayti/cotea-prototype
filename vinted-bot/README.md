@@ -42,9 +42,17 @@ contre la médiane des prix récents de la même recherche.
   tolère, et les autres IP continuent pendant la pause.
 - **Telegram** : `sendMessage` avec la photo en aperçu. Ce message part plus vite qu'un
   `sendPhoto`, qui oblige Telegram à télécharger l'image d'abord.
-- **3 photos par annonce** : Vinted n'en donne qu'une dans la recherche. Le bot lit ensuite la
-  page de l'annonce (une page toutes les 30 s au plus, pour ne pas se faire bloquer) et ajoute
-  2 photos : vignettes dans l'interface, album en réponse silencieuse sur Telegram.
+- **3 photos dans l'alerte** : Vinted n'en donne qu'une dans la recherche. Avant d'envoyer
+  l'alerte, le bot lit la page de l'annonce (~1 s, 5 s au maximum) et joint les 2 photos
+  suivantes : un seul message, album photo sur Telegram. Pour ne pas se faire bloquer, il lit au
+  plus une page toutes les 10 s. Une alerte arrivée entre-temps part avec 1 photo, et
+  l'interface ajoute les autres dès que possible.
+- **Likes et vues en direct** : relevés à chaque passage de la recherche (aucune requête en
+  plus), tant que l'annonce reste dans les 20 premiers résultats. « +3 depuis l'alerte » montre
+  si d'autres acheteurs sont sur le coup.
+- **Bouton « Acheter sur Vinted »** : ouvre l'annonce, où il reste à toucher « Acheter ». Vinted
+  ne propose plus de lien d'achat direct : la commande est créée par son API avec le compte
+  connecté.
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
   résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
   disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris

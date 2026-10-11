@@ -89,6 +89,9 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .thumbs img.on { opacity: 1; border-color: var(--accent); }
 .avail { position: absolute; left: 0; right: 0; bottom: 0; padding: 7px 10px; font-weight: 700; font-size: 13px;
   color: #fff; background: rgba(201,42,42,.92); text-align: center; }
+.likes { font-size: 13px; color: var(--muted); }
+.likes.up b { color: #e03131; }
+.btn.buy { display: block; text-align: center; width: 100%; box-sizing: border-box; font-weight: 700; }
 .avail.gone { background: rgba(194,124,14,.92); }
 .avail.back { background: rgba(43,138,62,.92); }
 .item.off .ph img { filter: grayscale(.85); opacity: .7; }
@@ -435,34 +438,44 @@ function duration(sec) {
   return `${Math.floor(sec / 3600)} h ${String(Math.round(sec % 3600 / 60)).padStart(2, "0")}`;
 }
 function photosOf(a) { return (a.photos && a.photos.length ? a.photos : (a.photo ? [a.photo] : [])).slice(0, 3); }
+function likesHTML(a) {
+  if (a.likes == null) return "";
+  const gained = a.likes - (a.likes_start || 0);
+  return `<div class="likes${gained > 0 ? " up" : ""}">❤️ ${a.likes} like${a.likes > 1 ? "s" : ""}`
+    + (gained > 0 ? ` <b>+${gained} depuis l'alerte</b>` : "")
+    + (a.views ? ` · 👁 ${a.views} vue${a.views > 1 ? "s" : ""}` : "") + `</div>`;
+}
+const chosen = new Map();  // annonce -> numéro de la photo choisie dans les vignettes
 function cardHTML(a) {
   const tag = a.deal && a.discount != null
     ? `<span class="tag hot">🔥 -${Math.round(a.discount * 100)} %</span>`
     : `<span class="tag">Nouveau</span>`;
   const meta = [a.brand, a.size, a.status].filter(Boolean).map(esc).join(" · ");
   const pics = photosOf(a);
+  const pick = Math.min(chosen.get(a.id) || 0, Math.max(0, pics.length - 1));
   const av = AVAIL[a.availability];
   const banner = av ? `<div class="avail ${av[1]}">${av[0]}${a.availability_after_s != null ? ` en ${duration(a.availability_after_s)}` : ""}</div>` : "";
   return `<div class="item${freshIds.has(a.id) ? " fresh" : ""}${isAvailable(a) ? "" : " off"}" data-id="${a.id}">
-    <div class="ph" data-act="zoom">${pics[0] ? `<img loading="lazy" src="${esc(pics[0])}" alt="">` : ""}${tag}
+    <div class="ph" data-act="zoom">${pics[pick] ? `<img loading="lazy" src="${esc(pics[pick])}" alt="">` : ""}${tag}
       <span class="age" data-ts="${a.detected_ts}">${ago(a.detected_ts)}</span>${banner}</div>
     ${pics.length > 1 ? `<div class="thumbs">${pics.map((u, i) =>
-      `<img loading="lazy" src="${esc(u)}" alt="Photo ${i + 1}" data-act="thumb" data-i="${i}"${i === 0 ? ' class="on"' : ""}>`).join("")}</div>` : ""}
+      `<img loading="lazy" src="${esc(u)}" alt="Photo ${i + 1}" data-act="thumb" data-i="${i}"${i === pick ? ' class="on"' : ""}>`).join("")}</div>` : ""}
     <div class="body">
       <div class="price">${money(a.price, a.currency)} ${a.total_price ? `<small>${money(a.total_price, a.currency)} avec frais</small>` : ""}</div>
       <div class="title"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a></div>
       ${meta ? `<div class="meta">${meta}</div>` : ""}
       ${a.median ? `<div class="meta">Médiane de la recherche : ${money(a.median, a.currency)}</div>` : ""}
       ${a.created_ts ? `<div class="meta">⚡ Repérée ${a.age_estimated ? "~" : ""}${Math.max(0, Math.round(a.detected_ts - a.created_ts))} s après sa mise en ligne</div>` : ""}
+      ${likesHTML(a)}
       <div><span class="chip">${esc(a.search)}</span></div>
-      <a class="btn small primary open" href="${esc(a.url)}" target="_blank" rel="noopener">Voir sur Vinted</a>
+      <a class="btn primary open buy" href="${esc(a.url)}" target="_blank" rel="noopener">🛒 Acheter sur Vinted</a>
     </div></div>`;
 }
 function openLightbox(a) {
   const lb = $("#lightbox");
   lb.innerHTML = `<div class="pics">${photosOf(a).map((u) => `<img src="${esc(u)}" alt="">`).join("")}</div>
     <div class="bar"><strong>${money(a.price, a.currency)}</strong> · ${esc(a.title)}
-      <a class="btn small primary" href="${esc(a.url)}" target="_blank" rel="noopener">Voir sur Vinted</a>
+      <a class="btn small primary" href="${esc(a.url)}" target="_blank" rel="noopener">🛒 Acheter sur Vinted</a>
       <button class="btn small" data-act="close">Fermer</button></div>`;
   lb.hidden = false;
 }
@@ -476,6 +489,7 @@ $("#grid").addEventListener("click", (e) => {
   const a = S.alerts.find((x) => String(x.id) === card.dataset.id); if (!a) return;
   const thumb = e.target.closest('[data-act="thumb"]');
   if (thumb) {
+    chosen.set(a.id, +thumb.dataset.i);
     card.querySelector(".ph img").src = thumb.src;
     card.querySelectorAll(".thumbs img").forEach((t) => t.classList.toggle("on", t === thumb));
   } else if (e.target.closest('[data-act="zoom"]')) {
@@ -531,7 +545,9 @@ function onUpdate(id, patch) {
   const a = S.alerts.find((x) => x.id === id);
   if (!a) return;
   Object.assign(a, patch);
-  renderFeed();
+  const card = document.querySelector(`.item[data-id="${id}"]`);
+  if (!card || "availability" in patch) { renderFeed(); return; }
+  card.outerHTML = cardHTML(a);  // likes ou photos : seule cette carte est redessinée
 }
 function onAlert(a) {
   S.alerts.unshift(a); S.alerts = S.alerts.slice(0, 150);
