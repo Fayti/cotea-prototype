@@ -547,6 +547,7 @@ function renderRadar() {
     : `${R.sales} vente(s) vue(s) sur ${R.listings} annonce(s) ≥ ${money(R.min_price)} en ${R.hours} h`
       + (R.per_hour != null ? ` · ${R.per_hour} nouvelles annonces/h` : "")
       + (R.pages ? ` · ${R.pages} page(s) relues toutes les 3 min` : "")
+      + (R.window_h ? ` · une annonce reste observée ~${String(R.window_h).replace(".", ",")} h après sa mise en ligne` : "")
       + (R.last_poll ? ` · relu ${ago(R.last_poll)}` : " · premier passage en cours…");
   if (!R.sales) { $("#radarBody").innerHTML = R.enabled ? `<p class="sub">Les premières ventes apparaissent en général dans l'heure.</p>` : ""; return; }
   const pct = (v) => v == null ? "—" : `${Math.round(v * 100)} %`;

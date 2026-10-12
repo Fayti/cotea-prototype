@@ -23,7 +23,7 @@ from aiohttp import web
 
 from .analysis import analyze
 from .buyer import VintedWindow
-from .market import DEFAULT_SEGMENTS, MarketWatch, radar_report, report as market_report
+from .market import DEFAULT_SEGMENTS, MarketWatch, radar_bands, radar_report, report as market_report
 from .client import VintedClient
 from .config import Search, config_from_dict, parse_vinted_url
 from .filters import margin
@@ -190,8 +190,7 @@ class Engine:
         radar = watch.get("radar") or {}
         if radar.get("enabled"):
             # Radar : tout le catalogue au-dessus d'un prix, sans recherche de départ.
-            segments.append({"id": "radar", "name": f"Radar ≥ {radar.get('min_price', 200):.0f} €",
-                             "query": "", "price_from": radar.get("min_price", 200), "radar": True})
+            segments.extend(radar_bands(radar.get("min_price", 200)))
         if not cfg.searches and not segments:
             return
         self.notifiers = build_notifiers(cfg)
@@ -507,12 +506,18 @@ async def get_market(request):
     rows = e.store.market_rows(time.time() - 7 * 86400)
     data = market_report(rows, w["segments"])
     radar = w["radar"]
-    data["radar"] = radar_report([r for r in rows if r["segment"] == "radar"], float(radar.get("min_price", 200)))
-    data["radar"].update(enabled=bool(radar.get("enabled")), running=e.market is not None and radar.get("enabled"),
-                         pages=e.market.pages.get("radar") if e.market else None,
-                         per_hour=round(e.market.rate["radar"], 1) if e.market and "radar" in e.market.rate else None,
-                         last_poll=e.market.last_poll.get("radar") if e.market else None,
-                         error=e.market.errors.get("radar") if e.market else None)
+    data["radar"] = radar_report([r for r in rows if r["segment"].startswith("radar")],
+                                 float(radar.get("min_price", 200)))
+    m = e.market
+    ids = [b["id"] for b in radar_bands(radar.get("min_price", 200))]
+    windows = [m.window_hours(i) for i in ids] if m else []
+    data["radar"].update(
+        enabled=bool(radar.get("enabled")), running=m is not None and bool(radar.get("enabled")),
+        pages=sum(m.pages.get(i, 0) for i in ids) if m else None,
+        per_hour=round(sum(m.rate.get(i, 0) for i in ids), 1) if m and any(i in m.rate for i in ids) else None,
+        window_h=min((w for w in windows if w), default=None),
+        last_poll=max((m.last_poll.get(i, 0) for i in ids), default=0) or None if m else None,
+        error=next((m.errors[i] for i in ids if m.errors.get(i)), None) if m else None)
     data["watch"] = {
         "enabled": bool(w.get("enabled")), "running": e.market is not None,
         "segments": [{**s, "last_poll": (e.market.last_poll.get(s["id"]) if e.market else None),

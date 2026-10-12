@@ -43,7 +43,20 @@ ALERT_MIN_GAIN = 15.0   # pépite signalée tout de suite si le gain estimé att
 MEDIAN_TTL = 600.0      # prix de vente habituel recalculé toutes les 10 min par segment
 RADAR_HOURS = 6.0       # le radar lit assez de pages pour couvrir ~6 h d'annonces
 RADAR_START_PAGES = 5
-RADAR_MAX_PAGES = 20
+RADAR_MAX_PAGES = 10    # l'API refuse au-delà de la page 10 (mesuré : page 11 -> HTTP 400)
+
+
+def radar_bands(min_price: float) -> list[dict]:
+    """Le radar découpe ses prix en 3 tranches, chacune lue sur 10 pages au plus : la fenêtre
+    d'observation de chaque tranche dure ainsi bien plus longtemps qu'une seule liste."""
+    m = float(min_price)
+    cuts = [(m, round(m * 1.5)), (round(m * 1.5), round(m * 2.5)), (round(m * 2.5), None)]
+    bands = []
+    for i, (low, high) in enumerate(cuts, 1):
+        name = f"Radar {low:.0f}–{high:.0f} €" if high else f"Radar ≥ {low:.0f} €"
+        bands.append({"id": f"radar-{i}", "name": name, "query": "", "price_from": low,
+                      "price_to": (high - 0.01) if high else None, "radar": True})
+    return bands
 
 
 def buy_cost(price: float) -> float:
@@ -60,6 +73,8 @@ def segment_params(seg: dict) -> tuple[str, dict[str, str]]:
         domain, params = "vinted.fr", ({"search_text": query} if query else {})
     if seg.get("price_from"):
         params["price_from"] = str(int(seg["price_from"]))
+    if seg.get("price_to"):
+        params["price_to"] = f"{seg['price_to']:.2f}"
     return domain, params
 
 
@@ -102,6 +117,11 @@ class MarketWatch:
         self.rate: dict[str, float] = memory.setdefault("rate", {})    # nouvelles annonces / heure
         self.pages: dict[str, int] = {}
         self._radar = {s["id"] for s in segments if s.get("radar")}
+
+    def window_hours(self, seg_id: str) -> float | None:
+        """Durée pendant laquelle une annonce reste visible dans la fenêtre lue."""
+        rate, pages = self.rate.get(seg_id), self.pages.get(seg_id)
+        return round(pages * PER_PAGE / rate, 1) if rate and pages else None
 
     def pages_for(self, seg: dict) -> int:
         """Radar : assez de pages pour couvrir RADAR_HOURS d'annonces (une vente plus tardive

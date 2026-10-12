@@ -1008,3 +1008,17 @@ def test_guess_category():
     assert guess_category("Doudoune The North Face Nuptse") == "Doudounes & manteaux"
     assert guess_category("Nike Dunk Low Panda") == "Baskets"
     assert guess_category("Chaise design") == "Autre"
+
+
+def test_radar_bands_and_page_cap():
+    from vinted_bot import market
+    bands = market.radar_bands(200)
+    assert [(b["price_from"], b["price_to"]) for b in bands] == [(200, 299.99), (300, 499.99), (500, None)]
+    assert market.segment_params(bands[0])[1] == {"price_from": "200", "price_to": "299.99"}
+    assert market.segment_params(bands[2])[1] == {"price_from": "500"}
+    mw = market.MarketWatch(None, None, bands)
+    mw.rate["radar-1"] = 5000.0                       # énormément d'annonces : plafonné à 10 pages
+    assert mw.pages_for(bands[0]) == 10
+    mw.rate["radar-1"] = 30.0                         # 30/h × 6 h = 180 annonces : 3 pages suffisent
+    assert mw.pages_for(bands[0]) == 3
+    assert mw.pages_for({"id": "x", "name": "x", "query": "nike"}) == 1
