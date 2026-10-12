@@ -39,6 +39,10 @@ class Store:
             CREATE INDEX IF NOT EXISTS market_seen ON market(last_seen);
             """
         )
+        market_cols = {row[1] for row in self.db.execute("PRAGMA table_info(market)")}
+        for col, decl in (("checked_ts", "REAL"), ("sampled", "INTEGER NOT NULL DEFAULT 0")):
+            if col not in market_cols:  # base créée par une version précédente
+                self.db.execute(f"ALTER TABLE market ADD COLUMN {col} {decl}")
         columns = {row[1] for row in self.db.execute("PRAGMA table_info(alerts)")}
         if "item_id" not in columns:  # base créée par une version précédente
             self.db.execute("ALTER TABLE alerts ADD COLUMN item_id INTEGER")
@@ -140,7 +144,9 @@ class Store:
             "INSERT INTO market(item_id, segment, title, brand, size, condition, price, currency, url, photo, "
             "first_seen, last_seen, fresh, likes0, likes, views) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(item_id) DO UPDATE SET last_seen=excluded.last_seen, price=excluded.price, "
-            "likes=excluded.likes, views=excluded.views, state='live', gone_ts=NULL",
+            "likes=excluded.likes, views=excluded.views, gone_ts=NULL, "
+            # Un verdict lu sur la page (vendue, invendue…) n'est pas effacé par une réapparition.
+            "state=CASE WHEN state IN ('gone', 'out', 'hidden', 'live') THEN 'live' ELSE state END",
             [(i.id, segment, i.title, i.brand, i.size, i.status, i.price, i.currency, i.url, i.photo_url,
               now, now, int(i.id in fresh_ids), i.favourites, i.favourites, i.views) for i in items])
         self.db.commit()
@@ -160,11 +166,30 @@ class Store:
         return self.db.execute(f"SELECT item_id, url FROM market WHERE item_id IN ({marks})", ids).fetchall()
 
     def market_confirm(self, item_id: int, verdict: str | None) -> None:
-        """Ce que la page de l'annonce dit d'un départ : vendue, réservée, supprimée, encore en vente."""
-        state = {"sold": "sold", "reserved": "reserved", "deleted": "deleted", "available": "hidden"}.get(verdict or "")
-        if state:
-            self.db.execute("UPDATE market SET state=? WHERE item_id=? AND state='gone'", (state, item_id))
-            self.db.commit()
+        """Ce que dit la page de l'annonce : vendue, réservée, supprimée ou encore en vente.
+
+        Après une disparition, « encore en vente » = « hidden » (sortie des résultats sans être
+        vendue). Pour une annonce tirée au sort, « unsold » (pas vendue à l'âge du contrôle).
+        """
+        if verdict in ("sold", "reserved", "deleted"):
+            self.db.execute("UPDATE market SET state=?, checked_ts=? WHERE item_id=? "
+                            "AND state IN ('gone', 'live', 'out')", (verdict, time.time(), item_id))
+        elif verdict == "available":
+            self.db.execute("UPDATE market SET state=CASE WHEN state='gone' THEN 'hidden' ELSE 'unsold' END, "
+                            "checked_ts=? WHERE item_id=? AND state IN ('gone', 'live', 'out')", (time.time(), item_id))
+        else:
+            return
+        self.db.commit()
+
+    def market_sample(self, prefix: str, listed_before: float, limit: int = 1) -> list[tuple[int, str]]:
+        """Annonces à contrôler au hasard : vues avant listed_before, jamais contrôlées."""
+        rows = self.db.execute(
+            "SELECT item_id, url FROM market WHERE segment LIKE ? AND state IN ('live', 'out') "
+            "AND first_seen <= ? AND sampled = 0 ORDER BY random() LIMIT ?",
+            (prefix + "%", listed_before, limit)).fetchall()
+        self.db.executemany("UPDATE market SET sampled=1 WHERE item_id=?", [(iid,) for iid, _ in rows])
+        self.db.commit()
+        return rows
 
     def market_sold_prices(self, segment: str, since: float) -> list[float]:
         rows = self.db.execute("SELECT price FROM market WHERE segment=? AND state IN ('sold', 'reserved') "

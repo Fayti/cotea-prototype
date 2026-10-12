@@ -19,7 +19,8 @@ async def main():
     mon.on_confirm = store.market_confirm
     mw = market.MarketWatch(store, mon.client, market.radar_bands(200), poll_every=150,
                             on_gone=lambda iid, url, d: mon._enqueue_page(iid, url, d, "confirm"))
-    tasks = [asyncio.create_task(mon.run()), asyncio.create_task(mw.run())]
+    tasks = [asyncio.create_task(mon.run()), asyncio.create_task(mw._poll_loop()),
+             asyncio.create_task(mw._sample_loop(age=300, every=20))]   # contrôle accéléré : 5 min
     await asyncio.sleep(840)
     for t in tasks:
         t.cancel()
@@ -31,7 +32,8 @@ async def main():
                             for b in ("radar-1", "radar-2", "radar-3")])
     rep = market.radar_report(rows, 200)
     print("ventes confirmées :", rep["sales"], "en attente :", rep["pending"], "supprimées :", rep["deleted"],
-          "encore en vente :", rep["hidden"])
+          "encore en vente :", rep["hidden"], "contrôlées :", rep["checked"], "dont vendues :", rep["checked_sold"])
+    print("pages lues :", sum(1 for t in mon.stats.request_times) , "(recherches comprises)")
     print("marques :", [(b["name"], b["sales"]) for b in rep["brands"][:10]])
     print("catégories :", [(c["name"], c["sales"]) for c in rep["categories"][:10]])
     print("ventes :", [(r["title"][:35], r["price"], r["sell_s"]) for r in rep["recent"][:12]])

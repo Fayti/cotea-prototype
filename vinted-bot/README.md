@@ -89,9 +89,14 @@ contre la médiane des prix récents de la même recherche.
   chacune lue sur 10 pages au plus, ce qui prolonge le temps d'observation de chaque annonce.
   Une annonce vendue après être sortie de cette fenêtre (plusieurs heures) n'est pas comptée :
   le radar mesure ce qui part vite. Coût : 30 requêtes toutes les 3 minutes au plus (≈ 0,17/s).
+- **Taux de vente mesuré par sondage** (radar) : toutes les 20 s, une annonce du radar mise en
+  ligne il y a 12 h est tirée au sort et sa page lue : vendue, supprimée ou encore en vente
+  (≈ 180 contrôles/heure). Par marque et par catégorie : taux de vente à 12 h, et ventes
+  estimées par jour = ce taux × annonces publiées par jour. Premiers taux le lendemain.
 - **Ventes vérifiées** (veille et radar) : une annonce qui disparaît n'est pas forcément vendue.
-  Mesuré sur le vrai Vinted : sur 7 disparitions d'annonces à plus de 200, 6 étaient des
-  suppressions et 1 était encore en vente. Chaque disparition est donc vérifiée sur la page de
+  Mesuré sur le vrai Vinted (annonces à plus de 200, ~30 min) : 14 disparitions vérifiées,
+  aucune vente — 6 suppressions, 8 annonces toujours en vente que la recherche n'affichait
+  plus. Chaque disparition est donc vérifiée sur la page de
   l'annonce (vendue, réservée, supprimée, encore en vente), après les photos des alertes et au
   même rythme prudent (une page toutes les 10 s au plus). Seules les ventes confirmées comptent.
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des

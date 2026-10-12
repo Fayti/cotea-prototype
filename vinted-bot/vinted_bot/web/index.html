@@ -542,35 +542,40 @@ function renderRadar() {
   const R = MK.radar;
   $("#radarOn").checked = R.enabled;
   if (document.activeElement !== $("#radarMin")) $("#radarMin").value = R.min_price;
+  const pct = (v) => v == null ? "—" : `${Math.round(v * 100)} %`;
   $("#radarStatus").textContent = !R.enabled ? "Radar éteint. Allume-le avec l'interrupteur."
     : R.error ? `⚠ ${R.error}`
-    : `${R.sales} vente(s) confirmée(s) sur ${R.listings} annonce(s) ≥ ${money(R.min_price)} en ${R.hours} h`
-      + (R.pending ? ` · ${R.pending} disparition(s) en cours de vérification` : "")
-      + (R.deleted || R.hidden ? ` · ${R.deleted + R.hidden} disparition(s) écartée(s) : supprimée(s) ou encore en vente` : "")
-      + (R.per_hour != null ? ` · ${R.per_hour} nouvelles annonces/h` : "")
-      + (R.pages ? ` · ${R.pages} page(s) relues toutes les 3 min` : "")
-      + (R.window_h ? ` · une annonce reste observée ~${String(R.window_h).replace(".", ",")} h après sa mise en ligne` : "")
+    : `${R.listings} annonce(s) ≥ ${money(R.min_price)} suivies en ${R.hours} h`
+      + (R.per_hour != null ? ` (${R.per_hour}/h)` : "")
+      + ` · ${R.checked} contrôlée(s) au hasard ${R.sample_age_h} h après leur mise en ligne`
+      + (R.sell_rate != null ? ` : ${pct(R.sell_rate)} vendues` : "")
+      + ` · ${R.sales} vente(s) confirmée(s)`
+      + (R.window_h ? ` · une annonce reste observée ~${String(R.window_h).replace(".", ",")} h` : "")
       + (R.last_poll ? ` · relu ${ago(R.last_poll)}` : " · premier passage en cours…");
-  if (!R.sales) { $("#radarBody").innerHTML = R.enabled ? `<p class="sub">Les premières ventes apparaissent en général dans l'heure.</p>` : ""; return; }
-  const pct = (v) => v == null ? "—" : `${Math.round(v * 100)} %`;
+  if (!R.sales && !R.checked) {
+    $("#radarBody").innerHTML = R.enabled ? `<p class="sub">Le radar mémorise d'abord les annonces. Les premiers contrôles commencent ${R.sample_age_h} h après leur mise en ligne : les taux de vente apparaissent le lendemain, les ventes rapides avant.</p>` : "";
+    return;
+  }
   const table = (title, rows, label) => `<h3>${title}</h3><div class="ana-wrap"><table class="ana"><thead><tr><th>${label}</th>
-      <th>Ventes</th><th>Chiffre vendu</th><th>Prix médian vendu</th><th>Taux de vente</th><th>Délai médian</th></tr></thead><tbody>
-    ${rows.map((g) => `<tr><td><strong>${esc(g.name)}</strong></td><td><strong>${g.sales}</strong></td><td>${money(g.revenue)}</td>
-      <td>${money(g.median_price)}</td><td>${pct(g.sell_rate)} <small>(${g.sales}/${g.listed})</small></td>
-      <td>${g.median_sell_s != null ? duration(g.median_sell_s) : "—"}</td></tr>`).join("")}</tbody></table></div>`;
+      <th>Ventes estimées / jour</th><th>Taux de vente à ${R.sample_age_h} h</th><th>Annonces / jour</th>
+      <th>Ventes confirmées</th><th>Prix médian vendu</th></tr></thead><tbody>
+    ${rows.map((g) => `<tr><td><strong>${esc(g.name)}</strong></td><td class="gain">${g.est_sales_day ?? "—"}</td>
+      <td><strong>${pct(g.sell_rate)}</strong> <small>(${g.checked_sold}/${g.checked} contrôlées)</small></td>
+      <td>${g.listed_per_day}</td><td>${g.sales}</td><td>${g.median_price != null ? money(g.median_price) : "—"}</td></tr>`).join("")}
+    </tbody></table></div>`;
   $("#radarBody").innerHTML = `
-    <div class="row"><span class="chip">💶 ${money(R.revenue)} vendus</span><span class="chip">🧾 ${R.sales} ventes</span></div>
+    <p class="sub"><strong>Ventes estimées / jour</strong> = taux de vente mesuré (contrôles au hasard sur la page des annonces) × annonces publiées par jour. Taux affiché à partir de 5 contrôles.</p>
     ${table("🏷 Marques qui se vendent le plus", R.brands, "Marque")}
     ${table("📦 Catégories", R.categories, "Catégorie (devinée d'après le titre)")}
     <h3>🔁 Modèles qui reviennent dans les ventes</h3>
     ${R.models.length ? `<div class="ana-wrap"><table class="ana"><thead><tr><th>Modèle (mots du titre)</th><th>Ventes</th><th>Prix médian</th><th>Chiffre</th></tr></thead><tbody>
       ${R.models.map((m) => `<tr><td><strong>${esc(m.model)}</strong></td><td>${m.sales}</td><td>${money(m.median_price)}</td><td>${money(m.revenue)}</td></tr>`).join("")}
       </tbody></table></div>` : `<p class="sub">Il faut au moins 3 ventes avec les mêmes mots pour faire ressortir un modèle.</p>`}
-    <h3>🧾 Dernières ventes</h3>
-    <div class="ana-wrap"><table class="ana"><tbody>${R.recent.map((c) => `<tr>
+    <h3>🧾 Dernières ventes confirmées</h3>
+    ${R.recent.length ? `<div class="ana-wrap"><table class="ana"><tbody>${R.recent.map((c) => `<tr>
       <td>${miniHTML({ ...c, segment: c.category, size: c.brand })}</td><td><strong>${money(c.price, c.currency)}</strong></td>
-      <td>${c.sell_s != null ? "partie en " + duration(c.sell_s) : "partie"} · ${ago(c.gone_ts)}</td><td>❤️ ${c.likes} · 👁 ${c.views}</td></tr>`).join("")}
-    </tbody></table></div>`;
+      <td>${c.sell_s != null ? "vendue en " + duration(c.sell_s) : `vendue moins de ${c.age_h} h après sa mise en ligne`}</td>
+      <td>❤️ ${c.likes} · 👁 ${c.views}</td></tr>`).join("")}</tbody></table></div>` : `<p class="sub">Aucune vente confirmée pour l'instant.</p>`}`;
 }
 async function loadMarket() { MK = await api("GET", "/api/market"); renderMarket(); renderRadar(); }
 $("#radarOn").addEventListener("change", (e) => guarded(null, async () => {

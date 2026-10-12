@@ -48,6 +48,12 @@ RECENT_IDS = 150_000     # ~10 min de numéros (Vinted en attribue ~250/s) : seu
 RADAR_HOURS = 6.0       # le radar lit assez de pages pour couvrir ~6 h d'annonces
 RADAR_START_PAGES = 5
 RADAR_MAX_PAGES = 10    # l'API refuse au-delà de la page 10 (mesuré : page 11 -> HTTP 400)
+# Contrôle au hasard : une annonce du radar mise en ligne il y a SAMPLE_AGE est tirée au sort
+# toutes les SAMPLE_EVERY secondes, et sa page dit si elle s'est vendue. Mesuré sur le vrai
+# Vinted : les disparitions des résultats sont surtout des suppressions ou des annonces encore
+# en vente ; ce sondage donne le vrai taux de vente, sans faux positif.
+SAMPLE_AGE = 12 * 3600.0
+SAMPLE_EVERY = 20.0
 
 
 def radar_bands(min_price: float) -> list[dict]:
@@ -152,12 +158,25 @@ class MarketWatch:
         if not self.segments:
             return
         log.info("Veille du marché : %d segment(s), relus toutes les %d s", len(self.segments), self.poll_every)
+        await asyncio.gather(self._poll_loop(), self._sample_loop())
+
+    async def _poll_loop(self) -> None:
         gap = self.poll_every / len(self.segments)   # étalées : pas de rafale
         while True:
             for seg in self.segments:
                 started = time.monotonic()
                 await self.poll(seg)
                 await asyncio.sleep(max(1.0, gap - (time.monotonic() - started)))
+
+    async def _sample_loop(self, age: float = SAMPLE_AGE, every: float = SAMPLE_EVERY) -> None:
+        """Radar : contrôle au hasard d'annonces assez anciennes (vendues ou non ?)."""
+        if not self._radar or not self.on_gone:
+            return
+        domain = segment_params(next(s for s in self.segments if s.get("radar")))[0]
+        while True:
+            await asyncio.sleep(every)
+            for iid, url in self.store.market_sample("radar", time.time() - age):
+                self.on_gone(iid, url, domain)
 
     async def poll(self, seg: dict) -> None:
         raw: list[dict] = []
@@ -442,19 +461,31 @@ def _models(sold: list[dict], top: int = 25) -> list[dict]:
             for g, c in kept[:top]]
 
 
-def _group(rows: list[dict], sold: list[dict], key) -> list[dict]:
-    listed: Counter = Counter(key(r) for r in rows)
+MIN_CHECKED = 5   # contrôles minimum pour afficher un taux de vente
+
+
+def _group(rows: list[dict], key, days: float) -> list[dict]:
+    """Par marque ou catégorie : ventes confirmées, taux de vente mesuré par contrôle au hasard,
+    ventes estimées par jour (taux × annonces publiées par jour), prix et délai."""
     by: dict[str, list[dict]] = defaultdict(list)
-    for r in sold:
+    for r in rows:
         by[key(r)].append(r)
     out = []
     for name, rs in by.items():
-        fresh = [r["sell_s"] for r in rs if r.get("sell_s") is not None]
-        out.append({"name": name, "sales": len(rs), "revenue": round(sum(r["price"] for r in rs), 2),
-                    "median_price": _median([r["price"] for r in rs]), "listed": listed[name],
-                    "sell_rate": round(len(rs) / listed[name], 3) if listed[name] else None,
-                    "median_sell_s": _median(fresh)})
-    out.sort(key=lambda g: (-g["sales"], -g["revenue"]))
+        sold = [r for r in rs if r["state"] in SOLD_STATES]
+        checked = [r for r in rs if r["sampled"] and r["state"] in (*SOLD_STATES, "deleted", "unsold")]
+        checked_sold = sum(1 for r in checked if r["state"] in SOLD_STATES)
+        rate = checked_sold / len(checked) if len(checked) >= MIN_CHECKED else None
+        per_day = len(rs) / days
+        if not sold and not checked:
+            continue
+        out.append({"name": name, "sales": len(sold), "revenue": round(sum(r["price"] for r in sold), 2),
+                    "median_price": _median([r["price"] for r in sold]), "listed": len(rs),
+                    "listed_per_day": round(per_day, 1), "checked": len(checked), "checked_sold": checked_sold,
+                    "sell_rate": round(rate, 3) if rate is not None else None,
+                    "est_sales_day": round(rate * per_day, 1) if rate is not None else None,
+                    "median_sell_s": _median([r["sell_s"] for r in sold if r.get("sell_s") is not None])})
+    out.sort(key=lambda g: (g["est_sales_day"] is None, -(g["est_sales_day"] or 0), -g["sales"], -g["revenue"]))
     return out
 
 
@@ -462,26 +493,34 @@ def radar_report(rows: list[dict], min_price: float, now: float | None = None) -
     """Tout ce qui se vend au-dessus de min_price : marques, catégories, modèles, dernières ventes."""
     now = now or time.time()
     rows = [r for r in rows if r.get("price") is not None and r["price"] >= min_price]
-    sold = [r for r in rows if r["state"] in SOLD_STATES and r["gone_ts"]]
-    for r in sold:
-        r["sell_s"] = max(0.0, r["gone_ts"] - r["first_seen"]) if r["fresh"] else None
-        r["category"] = guess_category(r["title"], r["brand"])
     for r in rows:
-        r.setdefault("category", guess_category(r["title"], r["brand"]))
+        r["category"] = guess_category(r["title"], r["brand"])
+        r.setdefault("sampled", 0)
+        r.setdefault("checked_ts", None)
+        r["sell_s"] = (max(0.0, r["gone_ts"] - r["first_seen"])
+                       if r["state"] in SOLD_STATES and r["fresh"] and r["gone_ts"] else None)
+    sold = [r for r in rows if r["state"] in SOLD_STATES]
+    checked = [r for r in rows if r["sampled"] and r["state"] in (*SOLD_STATES, "deleted", "unsold")]
     first = min((r["first_seen"] for r in rows), default=now)
     hours = max(1.0, (now - first) / 3600)
-    recent = sorted(sold, key=lambda r: -r["gone_ts"])[:40]
+    days = max(1.0, hours / 24)
+    checked_sold = sum(1 for r in checked if r["state"] in SOLD_STATES)
+    recent = sorted(sold, key=lambda r: -(r["checked_ts"] or r["gone_ts"] or 0))[:40]
     return {
         "min_price": min_price, "hours": round(hours, 1), "listings": len(rows), "sales": len(sold),
         "pending": sum(1 for r in rows if r["state"] == "gone"),
         "deleted": sum(1 for r in rows if r["state"] == "deleted"),
         "hidden": sum(1 for r in rows if r["state"] == "hidden"),
+        "checked": len(checked), "checked_sold": checked_sold,
+        "sell_rate": round(checked_sold / len(checked), 3) if len(checked) >= MIN_CHECKED else None,
+        "sample_age_h": SAMPLE_AGE / 3600,
         "revenue": round(sum(r["price"] for r in sold), 2),
-        "sales_per_day": round(len(sold) / hours * 24, 1) if hours >= 24 else len(sold),
-        "brands": _group(rows, sold, lambda r: (r["brand"] or "").strip() or "Sans marque")[:30],
-        "categories": _group(rows, sold, lambda r: r["category"])[:20],
+        "brands": _group(rows, lambda r: (r["brand"] or "").strip() or "Sans marque", days)[:30],
+        "categories": _group(rows, lambda r: r["category"], days)[:20],
         "models": _models(sold),
         "recent": [{"title": r["title"], "brand": r["brand"], "price": r["price"], "currency": r["currency"],
                     "url": r["url"], "photo": r["photo"], "category": r["category"], "likes": r["likes"],
-                    "views": r["views"], "sell_s": r["sell_s"], "gone_ts": r["gone_ts"]} for r in recent],
+                    "views": r["views"], "sell_s": r["sell_s"], "age_h": round(((r["checked_ts"] or r["gone_ts"] or now)
+                                                                               - r["first_seen"]) / 3600, 1),
+                    "when": r["checked_ts"] or r["gone_ts"]} for r in recent],
     }

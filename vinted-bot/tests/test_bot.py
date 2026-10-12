@@ -1076,3 +1076,36 @@ def test_watch_departures_are_checked_on_their_page_last(tmp_path):
 
     assert asyncio.run(scenario()) == [2, 1, 3]                 # photos d'une alerte d'abord
     assert verdicts == [(1, tracking.SOLD), (3, tracking.AVAILABLE)]
+
+
+def test_radar_random_checks_measure_the_real_sell_rate(tmp_path):
+    from vinted_bot import market
+    store = Store(str(tmp_path / "s.sqlite3"))
+    queued = []
+    mw = market.MarketWatch(store, None, market.radar_bands(200),
+                            on_gone=lambda iid, url, d: queued.append((iid, url, d)))
+    items = [dict(svc_item(B + i, price="300.00", title="Sac Louis Vuitton Speedy" if i % 2 else "iPhone 15 Pro",
+                           brand="Louis Vuitton" if i % 2 else "Apple")) for i in range(40, 0, -1)]
+    mw.process("radar-2", items, 0)                           # vues il y a longtemps
+
+    async def scenario():
+        task = asyncio.create_task(mw._sample_loop(age=0, every=0.001))
+        await asyncio.sleep(0.2)
+        task.cancel()
+
+    asyncio.run(scenario())
+    assert len(queued) == 40 and len({q[0] for q in queued}) == 40      # chaque annonce contrôlée une fois
+    assert all(q[2] == "vinted.fr" and q[1].startswith("https://www.vinted.fr/items/") for q in queued)
+    # La page dit : 3 sacs LV sur 20 vendus, 10 iPhone sur 20 vendus, le reste encore en vente
+    lv = [B + i for i in range(1, 41) if i % 2][:3]
+    ip = [B + i for i in range(1, 41) if not i % 2][:10]
+    for iid, _, _ in queued:
+        store.market_confirm(iid, tracking.SOLD if iid in lv + ip else tracking.AVAILABLE)
+    rep = market.radar_report(store.market_rows(-1), 200, now=3600)
+    assert rep["checked"] == 40 and rep["checked_sold"] == 13 and rep["sell_rate"] == round(13 / 40, 3)
+    top = rep["brands"][0]
+    assert top["name"] == "Apple" and top["sell_rate"] == 0.5 and top["est_sales_day"] == 10.0  # 50 % × 20/jour
+    assert rep["categories"][0]["name"] == "Téléphones"
+    # Une réapparition dans les résultats n'efface pas le verdict lu sur la page
+    mw.process("radar-2", items, 100)
+    assert {r["state"] for r in store.market_rows(-1)} == {"sold", "unsold"}
