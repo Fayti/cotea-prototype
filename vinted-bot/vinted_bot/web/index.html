@@ -106,6 +106,7 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .ana th { color: var(--muted); font-weight: 600; }
 .ana-wrap { overflow-x: auto; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#radarBody h3 { margin: 10px 0 0; font-size: 15px; }
 .segchip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); border-radius: 99px; padding: 4px 6px 4px 11px; font-size: 13px; }
 .segchip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
 .segchip.err { outline: 1px solid #e03131; }
@@ -306,6 +307,21 @@ details summary { cursor: pointer; font-weight: 600; }
   <!-- VEILLE -->
   <section id="tab-market" class="tab">
     <div class="stack">
+      <div class="card stack">
+        <div class="toolbar" style="margin:0">
+          <div class="grow"><h2>🎯 Radar : tout ce qui se vend cher</h2>
+            <p class="sub">Aucune recherche de départ : le bot lit toutes les nouvelles annonces de Vinted au-dessus du prix choisi, et ne retient que celles qui se vendent. Il te montre les marques, les catégories et les modèles qui partent le plus. Les chiffres se remplissent au fil des heures ; ils sont solides après 1 à 2 jours.</p></div>
+          <label class="switch" title="Activer / désactiver le radar"><input type="checkbox" id="radarOn"><span></span></label>
+        </div>
+        <div class="row">
+          <label class="field" style="max-width:220px"><span>Ventes à partir de (€)</span>
+            <input type="number" id="radarMin" min="20" step="10" value="200"></label>
+          <button id="radarSave" class="btn">Appliquer</button>
+        </div>
+        <p class="sub" id="radarStatus"></p>
+        <div id="radarBody" class="stack"></div>
+      </div>
+
       <div class="card stack">
         <div class="toolbar" style="margin:0">
           <div class="grow"><h2>📈 Veille du marché</h2>
@@ -522,7 +538,45 @@ function renderMarket() {
       <td>${miniHTML(c)}</td><td><strong>${money(c.price, c.currency)}</strong></td><td>❤️ ${c.likes} · <strong>${c.likes_per_h}/h</strong></td>
       <td>${c.median_sold ? `se vend ~${money(c.median_sold)}` : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Pas encore de données.</p>`;
 }
-async function loadMarket() { MK = await api("GET", "/api/market"); renderMarket(); }
+function renderRadar() {
+  const R = MK.radar;
+  $("#radarOn").checked = R.enabled;
+  if (document.activeElement !== $("#radarMin")) $("#radarMin").value = R.min_price;
+  $("#radarStatus").textContent = !R.enabled ? "Radar éteint. Allume-le avec l'interrupteur."
+    : R.error ? `⚠ ${R.error}`
+    : `${R.sales} vente(s) vue(s) sur ${R.listings} annonce(s) ≥ ${money(R.min_price)} en ${R.hours} h`
+      + (R.per_hour != null ? ` · ${R.per_hour} nouvelles annonces/h` : "")
+      + (R.pages ? ` · ${R.pages} page(s) relues toutes les 3 min` : "")
+      + (R.last_poll ? ` · relu ${ago(R.last_poll)}` : " · premier passage en cours…");
+  if (!R.sales) { $("#radarBody").innerHTML = R.enabled ? `<p class="sub">Les premières ventes apparaissent en général dans l'heure.</p>` : ""; return; }
+  const pct = (v) => v == null ? "—" : `${Math.round(v * 100)} %`;
+  const table = (title, rows, label) => `<h3>${title}</h3><div class="ana-wrap"><table class="ana"><thead><tr><th>${label}</th>
+      <th>Ventes</th><th>Chiffre vendu</th><th>Prix médian vendu</th><th>Taux de vente</th><th>Délai médian</th></tr></thead><tbody>
+    ${rows.map((g) => `<tr><td><strong>${esc(g.name)}</strong></td><td><strong>${g.sales}</strong></td><td>${money(g.revenue)}</td>
+      <td>${money(g.median_price)}</td><td>${pct(g.sell_rate)} <small>(${g.sales}/${g.listed})</small></td>
+      <td>${g.median_sell_s != null ? duration(g.median_sell_s) : "—"}</td></tr>`).join("")}</tbody></table></div>`;
+  $("#radarBody").innerHTML = `
+    <div class="row"><span class="chip">💶 ${money(R.revenue)} vendus</span><span class="chip">🧾 ${R.sales} ventes</span></div>
+    ${table("🏷 Marques qui se vendent le plus", R.brands, "Marque")}
+    ${table("📦 Catégories", R.categories, "Catégorie (devinée d'après le titre)")}
+    <h3>🔁 Modèles qui reviennent dans les ventes</h3>
+    ${R.models.length ? `<div class="ana-wrap"><table class="ana"><thead><tr><th>Modèle (mots du titre)</th><th>Ventes</th><th>Prix médian</th><th>Chiffre</th></tr></thead><tbody>
+      ${R.models.map((m) => `<tr><td><strong>${esc(m.model)}</strong></td><td>${m.sales}</td><td>${money(m.median_price)}</td><td>${money(m.revenue)}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="sub">Il faut au moins 3 ventes avec les mêmes mots pour faire ressortir un modèle.</p>`}
+    <h3>🧾 Dernières ventes</h3>
+    <div class="ana-wrap"><table class="ana"><tbody>${R.recent.map((c) => `<tr>
+      <td>${miniHTML({ ...c, segment: c.category, size: c.brand })}</td><td><strong>${money(c.price, c.currency)}</strong></td>
+      <td>${c.sell_s != null ? "partie en " + duration(c.sell_s) : "partie"} · ${ago(c.gone_ts)}</td><td>❤️ ${c.likes} · 👁 ${c.views}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+async function loadMarket() { MK = await api("GET", "/api/market"); renderMarket(); renderRadar(); }
+$("#radarOn").addEventListener("change", (e) => guarded(null, async () => {
+  await api("PUT", "/api/watch", { radar: { enabled: e.target.checked, min_price: +$("#radarMin").value || 200 } }); await loadMarket();
+  if (e.target.checked) toast("Radar allumé : premières ventes en général dans l'heure");
+}));
+$("#radarSave").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("PUT", "/api/watch", { radar: { min_price: +$("#radarMin").value || 200 } }); await loadMarket(); toast("Seuil du radar appliqué");
+}));
 $("#mkRefresh").addEventListener("click", (e) => guarded(e.target, loadMarket));
 $("#watchOn").addEventListener("change", (e) => guarded(null, async () => { await api("PUT", "/api/watch", { enabled: e.target.checked }); await loadMarket(); }));
 $("#segAdd").addEventListener("click", (e) => guarded(e.target, async () => {

@@ -950,3 +950,61 @@ def test_market_window_exit_is_not_a_sale(tmp_path):
     assert {r["item_id"]: r["state"] for r in store.market_rows(0)}[B + 8] == "gone"
     mw.process("s", [svc_item(B + i) for i in (9, 8, 7)], 500)
     assert {r["item_id"]: r["state"] for r in store.market_rows(0)}[B + 8] == "live"
+
+
+def test_radar_reads_several_pages_and_reports_what_sells(tmp_path):
+    from vinted_bot import market
+    store = Store(str(tmp_path / "r.sqlite3"))
+    calls = []
+
+    class Cat:
+        def __init__(self):
+            self.listing = []
+
+        async def search(self, params):
+            calls.append(params)
+            page, per = int(params["page"]), int(params["per_page"])
+            return self.listing[(page - 1) * per: page * per]
+
+    cat = Cat()
+    seg = {"id": "radar", "name": "Radar", "query": "", "price_from": 200, "radar": True}
+    mw = market.MarketWatch(store, lambda d: cat, [seg])
+    titles = ["Air Jordan 1 High Chicago", "iPhone 14 Pro 256 Go", "Sac Louis Vuitton Speedy 30", "Doudoune Moncler Maya"]
+    brands = ["Jordan", "Apple", "Louis Vuitton", "Moncler"]
+
+    def listing(ids):
+        return [dict(svc_item(B + i, price=f"{200 + (i % 4) * 100}.00", title=titles[i % 4], brand=brands[i % 4]))
+                for i in ids]
+
+    async def scenario():
+        cat.listing = listing(range(300, 0, -1))              # 300 annonces ≥ 200 € : 4 pages de 96
+        await mw.poll(seg)
+        assert {c["page"] for c in calls} == {"1", "2", "3", "4"} and calls[0]["price_from"] == "200"
+        assert "search_text" not in calls[0]
+        new = list(range(320, 300, -1))                        # 20 nouvelles, puis 12 vendues
+        cat.listing = listing([*new, *range(300, 0, -1)])
+        await mw.poll(seg)
+        sold = set(range(310, 322, 1))
+        cat.listing = listing([i for i in [*new, *range(300, 0, -1)] if i not in sold])
+        await mw.poll(seg)
+        await mw.poll(seg)
+
+    asyncio.run(scenario())
+    assert mw.rate["radar"] > 0                               # nouvelles annonces par heure mesurées
+    rep = market.radar_report(store.market_rows(0), 200)
+    assert rep["sales"] == 11                                 # 310 à 320 (321 n'a jamais existé)
+    assert rep["brands"][0]["sales"] >= 2 and {b["name"] for b in rep["brands"]} <= set(brands)
+    assert {c["name"] for c in rep["categories"]} <= {"Baskets", "Téléphones", "Sacs", "Doudounes & manteaux"}
+    models = {m["model"] for m in rep["models"]}
+    assert any("jordan 1" in m for m in models)               # 3 Jordan vendues : modèle qui ressort
+    assert not any("iphone" in m for m in models)             # 2 iPhone seulement : pas assez
+    assert rep["recent"][0]["price"] >= 200
+
+
+def test_guess_category():
+    from vinted_bot.market import guess_category
+    assert guess_category("iPhone 13 Pro Max 256Go") == "Téléphones"
+    assert guess_category("Sac à main Longchamp") == "Sacs"
+    assert guess_category("Doudoune The North Face Nuptse") == "Doudounes & manteaux"
+    assert guess_category("Nike Dunk Low Panda") == "Baskets"
+    assert guess_category("Chaise design") == "Autre"

@@ -23,7 +23,7 @@ from aiohttp import web
 
 from .analysis import analyze
 from .buyer import VintedWindow
-from .market import DEFAULT_SEGMENTS, MarketWatch, report as market_report
+from .market import DEFAULT_SEGMENTS, MarketWatch, radar_report, report as market_report
 from .client import VintedClient
 from .config import Search, config_from_dict, parse_vinted_url
 from .filters import margin
@@ -43,7 +43,7 @@ DEFAULT_SETTINGS = {
     "deals": {"threshold": 0.30},
     "telegram": {"token": "", "chat_id": ""},
     "search": [],
-    "watch": {"enabled": False, "segments": []},
+    "watch": {"enabled": False, "segments": [], "radar": {"enabled": False, "min_price": 200}},
 }
 
 
@@ -186,7 +186,12 @@ class Engine:
         cfg = self.config()
         self.crash = None
         watch = self.settings.get("watch") or {}
-        segments = watch.get("segments") or [] if watch.get("enabled") else []
+        segments = list(watch.get("segments") or []) if watch.get("enabled") else []
+        radar = watch.get("radar") or {}
+        if radar.get("enabled"):
+            # Radar : tout le catalogue au-dessus d'un prix, sans recherche de départ.
+            segments.append({"id": "radar", "name": f"Radar ≥ {radar.get('min_price', 200):.0f} €",
+                             "query": "", "price_from": radar.get("min_price", 200), "radar": True})
         if not cfg.searches and not segments:
             return
         self.notifiers = build_notifiers(cfg)
@@ -490,7 +495,9 @@ async def reserve_item(request):
 # --- veille du marché ---------------------------------------------------------------------
 
 def _watch(e) -> dict:
-    return e.settings.setdefault("watch", {"enabled": False, "segments": []})
+    w = e.settings.setdefault("watch", {"enabled": False, "segments": []})
+    w.setdefault("radar", {"enabled": False, "min_price": 200})
+    return w
 
 
 @routes.get("/api/market")
@@ -499,6 +506,13 @@ async def get_market(request):
     w = _watch(e)
     rows = e.store.market_rows(time.time() - 7 * 86400)
     data = market_report(rows, w["segments"])
+    radar = w["radar"]
+    data["radar"] = radar_report([r for r in rows if r["segment"] == "radar"], float(radar.get("min_price", 200)))
+    data["radar"].update(enabled=bool(radar.get("enabled")), running=e.market is not None and radar.get("enabled"),
+                         pages=e.market.pages.get("radar") if e.market else None,
+                         per_hour=round(e.market.rate["radar"], 1) if e.market and "radar" in e.market.rate else None,
+                         last_poll=e.market.last_poll.get("radar") if e.market else None,
+                         error=e.market.errors.get("radar") if e.market else None)
     data["watch"] = {
         "enabled": bool(w.get("enabled")), "running": e.market is not None,
         "segments": [{**s, "last_poll": (e.market.last_poll.get(s["id"]) if e.market else None),
@@ -516,6 +530,14 @@ async def put_watch(request):
         w["enabled"] = bool(body["enabled"])
         if w["enabled"]:
             e.settings["running"] = True
+    if "radar" in body:
+        r = body["radar"]
+        if "min_price" in r:
+            w["radar"]["min_price"] = max(20.0, min(5000.0, float(r["min_price"])))
+        if "enabled" in r:
+            w["radar"]["enabled"] = bool(r["enabled"])
+            if w["radar"]["enabled"]:
+                e.settings["running"] = True
     await e.reload()
     return web.json_response(w)
 
