@@ -69,6 +69,17 @@ contre la médiane des prix récents de la même recherche.
   moins d'une heure, prix de ces ventes rapides, délai de vente. Une annonce vendue en moins d'une
   heure était sous-évaluée : cette part mesure où le marché laisse passer des affaires. Calculé
   sur les alertes déjà enregistrées, sans requête en plus.
+- **Veille du marché** (onglet 📈 Veille) : le bot suit des segments (une marque, un type
+  d'article ; 24 segments conseillés en un clic, sans les marques très contrefaites). Chaque
+  segment est relu toutes les 3 minutes, 96 annonces à la fois : prix, likes, vues, et le moment
+  où l'annonce disparaît alors que des plus anciennes sont toujours là (presque toujours une
+  vente, au dernier prix vu). Il en tire, par segment : le prix de vente habituel, la part vendue
+  en 24 h, le délai de vente, les likes par heure et surtout **l'argent sur la table** : ce
+  qu'aurait gagné chaque jour l'acheteur des pépites (parties en moins d'une heure à 60 % ou
+  moins du prix habituel), revendues à ce prix, frais d'achat et envoi déduits. S'y ajoutent les
+  pépites encore en ligne, ce qui part vite et cher, et les annonces les plus likées. Une
+  nouvelle pépite (gain estimé ≥ 15 €) est signalée tout de suite, dans le fil et sur Telegram.
+  Coût : 24 segments ≈ 0,13 requête/s, partagées avec la surveillance au même rythme prudent.
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
   résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
   disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris

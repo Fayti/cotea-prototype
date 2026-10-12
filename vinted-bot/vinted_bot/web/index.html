@@ -42,7 +42,10 @@ header { position: sticky; top: 0; z-index: 10; background: var(--surface); bord
 @keyframes pulse { 50% { opacity: .3; } }
 .stats { color: var(--muted); font-size: 13px; flex: 1; min-width: 200px; }
 #toggleRun { margin-left: auto; }
-nav { display: flex; gap: 4px; }
+nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+nav::-webkit-scrollbar { display: none; }
+nav button { white-space: nowrap; flex: none; }
+@media (max-width: 520px) { nav button { padding: 10px 9px; } }
 nav button { border: 0; background: none; padding: 10px 14px; cursor: pointer; color: var(--muted);
   font-weight: 600; border-bottom: 2px solid transparent; }
 nav button.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -102,6 +105,13 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .ana th, .ana td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .ana th { color: var(--muted); font-weight: 600; }
 .ana-wrap { overflow-x: auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.segchip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); border-radius: 99px; padding: 4px 6px 4px 11px; font-size: 13px; }
+.segchip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
+.segchip.err { outline: 1px solid #e03131; }
+.mini { display: flex; gap: 10px; align-items: center; }
+.mini img { width: 44px; height: 58px; object-fit: cover; border-radius: 6px; background: var(--surface-2); flex: none; }
+.gain { color: #2b8a3e; font-weight: 700; }
 .likes { font-size: 13px; color: var(--muted); }
 .likes.up b { color: #e03131; }
 .btn.buy { font-weight: 700; font-size: 15px; }
@@ -194,6 +204,7 @@ details summary { cursor: pointer; font-weight: 600; }
     <nav>
       <button data-tab="feed" class="active">Annonces<span id="unseen" class="badge" hidden></span></button>
       <button data-tab="searches">Recherches</button>
+      <button data-tab="market">📈 Veille</button>
       <button data-tab="settings">Réglages</button>
     </nav>
   </div>
@@ -288,6 +299,51 @@ details summary { cursor: pointer; font-weight: 600; }
           <p class="sub">Une annonce vendue en moins d'une heure était sous-évaluée. Plus cette part est élevée, plus la recherche laisse passer des affaires. Mesure fiable sur les recherches précises (peu d'annonces par heure). Aucune requête en plus vers Vinted.</p></div>
           <button id="anaBtn" class="btn small">Actualiser</button></div>
         <div id="anaBox" class="ana-wrap"><p class="sub">Chargement…</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VEILLE -->
+  <section id="tab-market" class="tab">
+    <div class="stack">
+      <div class="card stack">
+        <div class="toolbar" style="margin:0">
+          <div class="grow"><h2>📈 Veille du marché</h2>
+            <p class="sub">Le bot suit les annonces de chaque segment : prix, likes, vues, et combien de temps elles mettent à partir. Il en déduit ce qui se vend, à quel prix, et où des articles partent bien sous le prix du marché. Une relecture par segment toutes les 3 minutes, au même rythme prudent que la surveillance. Les chiffres deviennent fiables après 1 à 3 jours.</p></div>
+          <label class="switch" title="Activer / désactiver la veille"><input type="checkbox" id="watchOn"><span></span></label>
+        </div>
+        <div id="segChips" class="chips"></div>
+        <div class="row">
+          <input type="text" id="segInput" placeholder="Marque ou article (ex. « salomon xt-6 ») ou lien de recherche Vinted" style="flex:1;min-width:220px">
+          <button id="segAdd" class="btn primary">Ajouter</button>
+          <button id="segDefaults" class="btn">Ajouter les 24 segments conseillés</button>
+        </div>
+        <p class="sub" id="watchStatus"></p>
+      </div>
+
+      <div class="card stack">
+        <div class="toolbar" style="margin:0"><div class="grow"><h2>🏆 Où est l'argent</h2>
+          <p class="sub"><strong>Argent sur la table</strong> : chaque jour, ce qu'aurait gagné l'acheteur des « pépites » (parties en moins d'une heure à 60 % ou moins du prix de vente habituel), en les revendant à ce prix habituel, frais d'achat et envoi déduits. C'est ce que le bot peut te faire attraper. « Vendu » = disparu des résultats alors que des annonces plus anciennes y sont encore : presque toujours une vente.</p></div>
+          <button id="mkRefresh" class="btn small">Actualiser</button></div>
+        <div id="mkTable" class="ana-wrap"><p class="sub">Chargement…</p></div>
+      </div>
+
+      <div class="card stack">
+        <h2>💎 Pépites en ligne maintenant</h2>
+        <p class="sub">Annonces encore en vente à 70 % ou moins du prix auquel leur segment se vend d'habitude. Vérifie l'état et l'authenticité avant d'acheter : un prix très bas peut aussi cacher un défaut ou un faux.</p>
+        <div id="mkPepites" class="grid"></div>
+      </div>
+
+      <div class="card stack">
+        <h2>💸 Parti vite et cher (7 derniers jours)</h2>
+        <p class="sub">Ce qui se vend cher en moins de 6 heures : la demande forte, les modèles à chercher.</p>
+        <div id="mkFast" class="ana-wrap"></div>
+      </div>
+
+      <div class="card stack">
+        <h2>❤️ Les plus likés en ce moment</h2>
+        <p class="sub">Likes gagnés par heure depuis la mise en ligne : ce que les acheteurs regardent.</p>
+        <div id="mkLiked" class="ana-wrap"></div>
       </div>
     </div>
   </section>
@@ -425,8 +481,74 @@ $("#addIdea").addEventListener("click", (e) => guarded(e.target, async () => {
     max_price: 90, resale_price: 130, weight: 2 });
   await refresh(); toast("Recherche Herno ajoutée : le bot la surveille");
 }));
+let MK = null;
+function miniHTML(c, extra) {
+  return `<div class="mini">${c.photo ? `<img loading="lazy" src="${esc(c.photo)}" alt="">` : ""}<div>
+    <a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a><br>
+    <small class="sub">${esc(c.segment)}${c.size ? " · " + esc(c.size) : ""}${c.condition ? " · " + esc(c.condition) : ""}</small>${extra || ""}</div></div>`;
+}
+function renderMarket() {
+  if (!MK) return;
+  const w = MK.watch;
+  $("#watchOn").checked = w.enabled;
+  $("#segChips").innerHTML = w.segments.map((s) => `<span class="segchip${s.error ? " err" : ""}" title="${esc(s.error || (s.last_poll ? "Relu " + ago(s.last_poll) : "Pas encore relu"))}">${esc(s.name)}<button data-seg="${esc(s.id)}" title="Retirer">×</button></span>`).join("")
+    || `<span class="sub">Aucun segment : ajoute une marque, ou les 24 segments conseillés.</span>`;
+  $("#watchStatus").textContent = !w.enabled ? "Veille désactivée." : !w.running ? "Veille activée : elle démarre avec le bot." :
+    `${w.segments.length} segment(s) suivis, chacun relu toutes les 3 minutes environ.`;
+  const pct = (v) => v == null ? "—" : `${Math.round(v * 100)} %`;
+  const eur = (v) => v == null ? "—" : money(v);
+  $("#mkTable").innerHTML = MK.segments.length ? `<table class="ana"><thead><tr><th>Segment</th><th>Argent sur la table / jour</th>
+      <th>Pépites / jour</th><th>Prix de vente habituel</th><th>Prix demandé médian</th><th>Vendu en 24 h</th>
+      <th>Délai de vente</th><th>Nouvelles / jour</th><th>Likes / h</th><th>Verdict</th></tr></thead><tbody>
+    ${MK.segments.map((r) => `<tr><td><strong>${esc(r.name)}</strong><br><small>${r.listings} annonce(s), ${r.sold} vente(s)</small></td>
+      <td class="gain">${r.money_per_day ? money(r.money_per_day) : "—"}</td><td>${r.pepites_per_day || "—"}</td>
+      <td>${eur(r.median_sold)}</td><td>${eur(r.median_list)}</td><td>${pct(r.sold_24h_rate)}</td>
+      <td>${r.median_sell_s != null ? duration(r.median_sell_s) : "—"}</td><td>${r.new_per_day}</td>
+      <td>${r.likes_per_h ?? "—"}</td><td>${esc(r.verdict)}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="sub">Active la veille et ajoute des segments : le classement apparaît ici.</p>`;
+  $("#mkPepites").innerHTML = MK.pepites.map((c) => `<div class="item"><div class="ph">${c.photo ? `<img loading="lazy" src="${esc(c.photo)}" alt="">` : ""}</div>
+    <div class="body"><div class="price">${money(c.price, c.currency)}</div>
+      <div class="title"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a></div>
+      <div class="meta">${esc(c.segment)} · se vend d'habitude ${money(c.median_sold)}</div>
+      <div class="margin pos">💰 Gain estimé +${money(c.gain)}</div>
+      <div class="likes">❤️ ${c.likes} like(s)${c.likes_per_h ? ` · ${c.likes_per_h}/h` : ""}</div>
+      <div class="row2"><button class="btn primary buy" data-reserve="${c.item_id}" data-url="${esc(c.url)}">⚡ Réserver</button>
+        <a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener">Voir</a></div></div></div>`).join("")
+    || `<p class="sub">Aucune pour l'instant. Il faut d'abord quelques ventes par segment pour connaître son prix habituel.</p>`;
+  $("#mkFast").innerHTML = MK.fast_dear.length ? `<table class="ana"><tbody>${MK.fast_dear.map((c) => `<tr>
+      <td>${miniHTML(c)}</td><td><strong>${money(c.price, c.currency)}</strong></td><td>parti en ${duration(c.sell_s)}</td>
+      <td>❤️ ${c.likes}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Pas encore de vente rapide repérée.</p>`;
+  $("#mkLiked").innerHTML = MK.most_liked.length ? `<table class="ana"><tbody>${MK.most_liked.map((c) => `<tr>
+      <td>${miniHTML(c)}</td><td><strong>${money(c.price, c.currency)}</strong></td><td>❤️ ${c.likes} · <strong>${c.likes_per_h}/h</strong></td>
+      <td>${c.median_sold ? `se vend ~${money(c.median_sold)}` : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Pas encore de données.</p>`;
+}
+async function loadMarket() { MK = await api("GET", "/api/market"); renderMarket(); }
+$("#mkRefresh").addEventListener("click", (e) => guarded(e.target, loadMarket));
+$("#watchOn").addEventListener("change", (e) => guarded(null, async () => { await api("PUT", "/api/watch", { enabled: e.target.checked }); await loadMarket(); }));
+$("#segAdd").addEventListener("click", (e) => guarded(e.target, async () => {
+  const q = $("#segInput").value.trim();
+  await api("POST", "/api/watch/segments", { query: q }); $("#segInput").value = ""; await loadMarket(); toast("Segment ajouté à la veille");
+}));
+$("#segInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#segAdd").click(); });
+$("#segDefaults").addEventListener("click", (e) => guarded(e.target, async () => {
+  const r = await api("POST", "/api/watch/segments", { defaults: true }); await loadMarket(); toast(`${r.added} segment(s) ajouté(s) : la veille démarre`);
+}));
+$("#segChips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-seg]"); if (!b) return;
+  guarded(b, async () => { await api("DELETE", "/api/watch/segments/" + b.dataset.seg); await loadMarket(); });
+});
+$("#mkPepites").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-reserve]"); if (!b) return;
+  if (!S.window?.open) toast("Ouverture de la fenêtre Vinted… Si tu n'es pas connecté, connecte-toi dedans puis reclique.");
+  guarded(b, async () => {
+    const r = await api("POST", "/api/reserve/" + b.dataset.reserve, { url: b.dataset.url });
+    toast(r.ok ? "✅ Réservée pour toi : paie dans la fenêtre Vinted" : "❌ Pas réservée : " + r.reason, !r.ok);
+  });
+});
+setInterval(() => { if ($("#tab-market").classList.contains("active") && !document.hidden) loadMarket().catch(() => {}); }, 60000);
 function showTab(name) {
   if (name === "searches") loadAnalysis().catch(() => {});
+  if (name === "market") loadMarket().catch(() => {});
   $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
   if (name === "feed") { unseen = 0; renderUnseen(); }

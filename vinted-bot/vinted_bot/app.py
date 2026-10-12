@@ -23,10 +23,11 @@ from aiohttp import web
 
 from .analysis import analyze
 from .buyer import VintedWindow
+from .market import DEFAULT_SEGMENTS, MarketWatch, report as market_report
 from .client import VintedClient
-from .config import config_from_dict, parse_vinted_url
+from .config import Search, config_from_dict, parse_vinted_url
 from .filters import margin
-from .models import Item
+from .models import Deal, Item
 from .monitor import Monitor
 from .notifier import TelegramNotifier, build_notifiers, sample_alert, telegram_detect
 from .store import Store
@@ -42,6 +43,7 @@ DEFAULT_SETTINGS = {
     "deals": {"threshold": 0.30},
     "telegram": {"token": "", "chat_id": ""},
     "search": [],
+    "watch": {"enabled": False, "segments": []},
 }
 
 
@@ -151,6 +153,8 @@ class Engine:
         self.crash: str | None = None
         self.window = VintedWindow(data_dir, on_change=self._window_changed)
         self.side_tasks: list[asyncio.Task] = []
+        self.market: MarketWatch | None = None
+        self.market_memory: dict = {}  # garde le suivi de la veille d'un redémarrage du moteur à l'autre
         self.reservations: dict[int, dict] = {}  # annonce -> état de réservation (affiché sur la carte)
 
     def _load(self) -> dict:
@@ -181,13 +185,19 @@ class Engine:
         self.save()
         cfg = self.config()
         self.crash = None
-        if not cfg.searches:
+        watch = self.settings.get("watch") or {}
+        segments = watch.get("segments") or [] if watch.get("enabled") else []
+        if not cfg.searches and not segments:
             return
         self.notifiers = build_notifiers(cfg)
         self.monitor = Monitor(cfg, self.store, [UiNotifier(self), *self.notifiers])
         self.monitor.on_auto_reserve = lambda item, search: asyncio.create_task(
             self.reserve(item.id, item.url, auto=True))
         self.task = asyncio.create_task(self._run(self.monitor))
+        if segments:  # veille du marché : mêmes connexions et même rythme que la surveillance
+            self.market = MarketWatch(self.store, self.monitor.client, segments, memory=self.market_memory,
+                                      on_pepite=self._pepite)
+            self.side_tasks.append(asyncio.create_task(self.market.run()))
         for n in self.notifiers:
             if hasattr(n, "listen"):  # boutons « ⚡ Réserver » de Telegram
                 self.side_tasks.append(asyncio.create_task(n.listen(self._reserve_from_phone)))
@@ -204,7 +214,7 @@ class Engine:
     async def stop(self, persist: bool = False) -> None:
         for t in self.side_tasks:
             t.cancel()
-        self.side_tasks = []
+        self.side_tasks, self.market = [], None
         if self.task:
             self.task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -225,6 +235,23 @@ class Engine:
     def _broadcast(self, message: dict) -> None:
         for q in list(self.listeners):
             q.put_nowait(message)
+
+    def _pepite(self, item, seg_id: str, median: float, gain: float) -> None:
+        """Pépite repérée par la veille : alerte immédiate (fil, Telegram), comme une recherche."""
+        m = self.monitor
+        if m is None or item.id in m._alerted:
+            return
+        m._alerted[item.id] = None
+        seg = next((s for s in self.settings.get("watch", {}).get("segments", []) if s["id"] == seg_id), {})
+        search = Search(name=f"💎 Veille · {seg.get('name', seg_id)}", key=f"veille-{seg_id}")
+        deal = Deal(median=median, discount=1 - item.price / median, is_deal=True)
+        log.info("💎 Pépite : %s à %s € (se vend ~%.0f €, gain estimé %.0f €) %s",
+                 item.title, item.price, median, gain, item.url)
+        m.tracker.add(item.id, search.key, item.url)
+        if m.cfg.extra_photos and len(item.photo_urls) < m.cfg.photos_per_alert:
+            m._spawn(m._alert_with_photos(item, deal, search), "pépite")
+        else:
+            m._dispatch(item, deal, search)
 
     def _window_changed(self) -> None:
         self._broadcast({"type": "window", "window": self.window.state()})
@@ -453,9 +480,75 @@ async def reserve_item(request):
     e = engine_of(request)
     item_id = int(request.match_info["id"])
     alert = next((a for a in e.alerts if a.get("id") == item_id), None)
-    if alert is None:
+    body = await request.json() if request.can_read_body else {}
+    url = (alert or {}).get("url") or body.get("url")   # annonce de la veille : lien fourni
+    if not url or "vinted." not in url:
         raise web.HTTPNotFound()
-    return web.json_response(await e.reserve(item_id, alert["url"]))
+    return web.json_response(await e.reserve(item_id, url))
+
+
+# --- veille du marché ---------------------------------------------------------------------
+
+def _watch(e) -> dict:
+    return e.settings.setdefault("watch", {"enabled": False, "segments": []})
+
+
+@routes.get("/api/market")
+async def get_market(request):
+    e = engine_of(request)
+    w = _watch(e)
+    rows = e.store.market_rows(time.time() - 7 * 86400)
+    data = market_report(rows, w["segments"])
+    data["watch"] = {
+        "enabled": bool(w.get("enabled")), "running": e.market is not None,
+        "segments": [{**s, "last_poll": (e.market.last_poll.get(s["id"]) if e.market else None),
+                      "error": (e.market.errors.get(s["id"]) if e.market else None)} for s in w["segments"]],
+    }
+    return web.json_response(data)
+
+
+@routes.put("/api/watch")
+async def put_watch(request):
+    e = engine_of(request)
+    body = await request.json()
+    w = _watch(e)
+    if "enabled" in body:
+        w["enabled"] = bool(body["enabled"])
+        if w["enabled"]:
+            e.settings["running"] = True
+    await e.reload()
+    return web.json_response(w)
+
+
+@routes.post("/api/watch/segments")
+async def add_segment(request):
+    e = engine_of(request)
+    body = await request.json()
+    w = _watch(e)
+    if body.get("defaults"):
+        known = {s["query"] for s in w["segments"]}
+        new = [{"id": secrets.token_hex(5), "name": n, "query": q} for n, q in DEFAULT_SEGMENTS if q not in known]
+    else:
+        query = (body.get("query") or "").strip()
+        if not query:
+            raise ValueError("Tape une marque ou un type d'article, ou colle un lien de recherche Vinted")
+        if query.startswith("http"):
+            parse_vinted_url(query)  # lève une erreur claire si ce n'est pas un lien Vinted
+        new = [{"id": secrets.token_hex(5), "name": (body.get("name") or "").strip() or query[:60], "query": query}]
+    w["segments"].extend(new)
+    w["enabled"] = True
+    e.settings["running"] = True
+    await e.reload()
+    return web.json_response({"added": len(new), "watch": w})
+
+
+@routes.delete("/api/watch/segments/{id}")
+async def delete_segment(request):
+    e = engine_of(request)
+    w = _watch(e)
+    w["segments"] = [s for s in w["segments"] if s["id"] != request.match_info["id"]]
+    await e.reload()
+    return web.json_response(w)
 
 
 @routes.delete("/api/alerts")

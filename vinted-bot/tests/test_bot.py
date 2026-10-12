@@ -889,3 +889,64 @@ def test_analysis_finds_searches_where_items_sell_fast():
     assert rows[1]["quick_rate"] == 0 and rows[1]["verdict"].startswith("🐢")
     assert next(r for r in rows if r["id"] == "new")["verdict"].startswith("Trop tôt")
     assert next(r for r in rows if r["id"] == "none")["alerts"] == 0
+
+
+def test_market_watch_follows_listings_and_finds_pepites(tmp_path):
+    from vinted_bot import market
+    store = Store(str(tmp_path / "m.sqlite3"))
+    mw = market.MarketWatch(store, None, [{"id": "h", "name": "Herno", "query": "herno"}])
+    t0 = 1_000_000.0
+
+    def page(*specs):  # (id, prix, likes)
+        return [dict(svc_item(B + i, price=f"{p:.2f}"), favourite_count=l, view_count=l * 10) for i, p, l in specs]
+
+    old = [(i, 100.0, 0) for i in range(10, 0, -1)]
+    mw.process("h", page(*old), t0)                                   # premier passage : âge inconnu
+    news = [(100 + k, 100.0 + k, 0) for k in range(12)]                # 12 nouvelles annonces
+    mw.process("h", page(*reversed(news), *old), t0 + 180)
+    news[0] = (100, 40.0, 0)                                           # deux bradées…
+    news[1] = (101, 45.0, 3)                                           # …dont une likée 3 fois
+    mw.process("h", page(*reversed(news), *old), t0 + 1200)
+    remaining = news[10:]                                               # 100 à 109 partent d'un coup
+    mw.process("h", page(*reversed(remaining), *old), t0 + 1380)
+    mw.process("h", page(*reversed(remaining), *old), t0 + 1560)       # 2e absence : confirmé
+    rows = {r["item_id"]: r for r in store.market_rows(0)}
+    assert all(rows[B + i]["state"] == "gone" for i in range(100, 110))
+    assert rows[B + 100]["price"] == 40.0 and rows[B + 100]["fresh"] == 1
+    assert rows[B + 110]["state"] == "live" and rows[B + 1]["fresh"] == 0
+    assert rows[B + 101]["likes"] == 3 and rows[B + 101]["likes0"] == 0
+    assert abs(rows[B + 100]["gone_ts"] - (t0 + 1200 + t0 + 1380) / 2) < 1
+
+    rep = market.report(store.market_rows(0), [{"id": "h", "name": "Herno"}], now=t0 + 8000)
+    seg = rep["segments"][0]
+    assert seg["sold"] == 10 and seg["median_sold"] == 104.5           # prix de vente habituel
+    # Les deux bradées sont parties en ~18 min à 40 et 45 € : 2 pépites, gain = 104,5 − coût d'achat
+    gain = (104.5 - market.buy_cost(40)) + (104.5 - market.buy_cost(45))
+    assert seg["pepites_per_day"] == 2 and seg["money_per_day"] == round(gain, 2)
+    assert rep["fast_dear"][0]["price"] == 109.0                       # ce qui part vite et cher
+    assert rep["pepites"] == []                                         # plus rien de bradé en ligne
+
+    # Nouvelle annonce bradée : signalée tout de suite, et listée parmi les pépites en ligne
+    seen = []
+    mw.on_pepite = lambda item, seg, median, gain: seen.append((item.id, seg, median, round(gain, 2)))
+    mw.process("h", page((120, 30.0, 0), (121, 100.0, 0), *reversed(remaining), *old), t0 + 8000)
+    assert seen == [(B + 120, "h", 104.5, round(104.5 - market.buy_cost(30), 2))]
+    rep = market.report(store.market_rows(0), [{"id": "h", "name": "Herno"}], now=t0 + 8100)
+    assert [c["item_id"] for c in rep["pepites"]] == [B + 120]
+
+
+def test_market_window_exit_is_not_a_sale(tmp_path):
+    from vinted_bot import market
+    store = Store(str(tmp_path / "m.sqlite3"))
+    mw = market.MarketWatch(store, None, [])
+    mw.process("s", [svc_item(B + i) for i in (5, 4, 3)], 0)
+    mw.process("s", [svc_item(B + i) for i in (9, 8, 7)], 100)       # trop de nouveautés : 5,4,3 sortis
+    mw.process("s", [svc_item(B + i) for i in (9, 8, 7)], 200)
+    states = {r["item_id"]: r["state"] for r in store.market_rows(0)}
+    assert states[B + 5] == states[B + 4] == states[B + 3] == "out"
+    # Une annonce qui réapparaît après avoir été crue partie redevient en ligne
+    mw.process("s", [svc_item(B + i) for i in (9, 7)], 300)
+    mw.process("s", [svc_item(B + i) for i in (9, 7)], 400)
+    assert {r["item_id"]: r["state"] for r in store.market_rows(0)}[B + 8] == "gone"
+    mw.process("s", [svc_item(B + i) for i in (9, 8, 7)], 500)
+    assert {r["item_id"]: r["state"] for r in store.market_rows(0)}[B + 8] == "live"

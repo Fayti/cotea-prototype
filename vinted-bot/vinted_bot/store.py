@@ -30,6 +30,13 @@ class Store:
                 item_id INTEGER PRIMARY KEY, search TEXT NOT NULL, url TEXT NOT NULL,
                 alerted_ts REAL NOT NULL, status TEXT NOT NULL, status_ts REAL,
                 handles TEXT NOT NULL DEFAULT '{}');
+            CREATE TABLE IF NOT EXISTS market (
+                item_id INTEGER PRIMARY KEY, segment TEXT NOT NULL, title TEXT, brand TEXT, size TEXT,
+                condition TEXT, price REAL, currency TEXT, url TEXT, photo TEXT,
+                first_seen REAL NOT NULL, last_seen REAL NOT NULL, fresh INTEGER NOT NULL,
+                likes0 INTEGER NOT NULL, likes INTEGER NOT NULL, views INTEGER NOT NULL,
+                gone_ts REAL, state TEXT NOT NULL DEFAULT 'live');
+            CREATE INDEX IF NOT EXISTS market_seen ON market(last_seen);
             """
         )
         columns = {row[1] for row in self.db.execute("PRAGMA table_info(alerts)")}
@@ -125,6 +132,37 @@ class Store:
         rows = self.db.execute("SELECT payload FROM alerts WHERE ts >= ? ORDER BY id", (since,)).fetchall()
         return [json.loads(r[0]) for r in rows]
 
+    # --- veille du marché ---------------------------------------------------------------
+
+    def market_upsert(self, segment: str, items, now: float, fresh_ids: set[int]) -> None:
+        """Annonces vues à ce passage. Une annonce réapparue redevient « en ligne »."""
+        self.db.executemany(
+            "INSERT INTO market(item_id, segment, title, brand, size, condition, price, currency, url, photo, "
+            "first_seen, last_seen, fresh, likes0, likes, views) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(item_id) DO UPDATE SET last_seen=excluded.last_seen, price=excluded.price, "
+            "likes=excluded.likes, views=excluded.views, state='live', gone_ts=NULL",
+            [(i.id, segment, i.title, i.brand, i.size, i.status, i.price, i.currency, i.url, i.photo_url,
+              now, now, int(i.id in fresh_ids), i.favourites, i.favourites, i.views) for i in items])
+        self.db.commit()
+
+    def market_mark(self, gone: list[tuple[int, float]], out: list[int]) -> None:
+        """gone : (annonce, première absence) ; partie entre sa dernière apparition et cette absence."""
+        self.db.executemany("UPDATE market SET state='gone', gone_ts=(last_seen + ?) / 2 "
+                            "WHERE item_id=? AND state='live'", [(since, iid) for iid, since in gone])
+        self.db.executemany("UPDATE market SET state='out' WHERE item_id=? AND state='live'",
+                            [(iid,) for iid in out])
+        self.db.commit()
+
+    def market_sold_prices(self, segment: str, since: float) -> list[float]:
+        rows = self.db.execute("SELECT price FROM market WHERE segment=? AND state='gone' AND fresh=1 "
+                               "AND gone_ts >= ? AND price IS NOT NULL", (segment, since)).fetchall()
+        return [r[0] for r in rows]
+
+    def market_rows(self, since: float) -> list[dict]:
+        cur = self.db.execute("SELECT * FROM market WHERE last_seen >= ?", (since,))
+        cols = [c[0] for c in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
     def clear_alerts(self) -> None:
         self.db.execute("DELETE FROM alerts")
         self.db.commit()
@@ -138,6 +176,7 @@ class Store:
         self.db.execute("DELETE FROM alerts WHERE ts < ? OR id NOT IN "
                         "(SELECT id FROM alerts ORDER BY id DESC LIMIT 5000)", (cutoff,))
         self.db.execute("DELETE FROM tracked WHERE alerted_ts < ?", (cutoff,))
+        self.db.execute("DELETE FROM market WHERE last_seen < ?", (cutoff,))
         self.db.commit()
 
     def close(self) -> None:
