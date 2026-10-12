@@ -1007,7 +1007,25 @@ def test_guess_category():
     assert guess_category("Sac à main Longchamp") == "Sacs"
     assert guess_category("Doudoune The North Face Nuptse") == "Doudounes & manteaux"
     assert guess_category("Nike Dunk Low Panda") == "Baskets"
-    assert guess_category("Chaise design") == "Autre"
+    assert guess_category("Chaise design") == "Maison & meubles"
+    assert guess_category("Lot de bougies parfumées") == "Autre"
+    # Cas vus sur le vrai Vinted : repli par marque, titres anglais
+    assert guess_category("Coach tabby 20", "Coach") == "Sacs"
+    assert guess_category("Meta Quest 3S- 128 GB") == "Consoles & jeux vidéo"
+    assert guess_category("Liz Lisa Heels ( see pictures)") == "Chaussures"
+    assert guess_category("Wedding band attached with engagement ring") == "Bijoux"
+
+
+def test_window_growth_is_not_counted_as_new_listings(tmp_path):
+    from vinted_bot import market
+    store = Store(str(tmp_path / "w.sqlite3"))
+    mw = market.MarketWatch(store, None, [])
+    recent = [svc_item(B + 1_000_000 + i) for i in range(5, 0, -1)]
+    deeper = [svc_item(B + i) for i in range(5, 0, -1)]            # 1 million de numéros plus anciennes
+    mw.process("r", recent, 0)
+    mw.process("r", [svc_item(B + 1_000_010), *recent, *deeper], 180)   # fenêtre allongée + 1 nouvelle
+    fresh = {r["item_id"] for r in store.market_rows(0) if r["fresh"]}
+    assert fresh == {B + 1_000_010}
 
 
 def test_radar_bands_and_page_cap():

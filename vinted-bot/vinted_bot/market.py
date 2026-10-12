@@ -41,6 +41,7 @@ MIN_SOLD = 8            # ventes minimum pour estimer un prix de vente habituel
 KEEP_DAYS = 14
 ALERT_MIN_GAIN = 15.0   # pépite signalée tout de suite si le gain estimé atteint ce montant
 MEDIAN_TTL = 600.0      # prix de vente habituel recalculé toutes les 10 min par segment
+RECENT_IDS = 150_000     # ~10 min de numéros (Vinted en attribue ~250/s) : seuil de « nouvelle »
 RADAR_HOURS = 6.0       # le radar lit assez de pages pour couvrir ~6 h d'annonces
 RADAR_START_PAGES = 5
 RADAR_MAX_PAGES = 10    # l'API refuse au-delà de la page 10 (mesuré : page 11 -> HTTP 400)
@@ -194,13 +195,13 @@ class MarketWatch:
                 items.append(item)
         ids = [i.id for i in items]
         prev = self._prev.get(seg_id)
-        # Âge connu seulement pour les annonces apparues entre deux passages. Au premier passage
-        # (ou après un arrêt), les annonces présentes ont un âge inconnu : suivies, mais exclues
-        # des délais de vente. Une vieille annonce qui refait surface (numéro sous la fenêtre)
-        # non plus.
+        # Âge connu seulement pour les annonces apparues entre deux passages, avec un numéro
+        # récent. Au premier passage (ou après un arrêt), les annonces présentes ont un âge
+        # inconnu : suivies, mais exclues des délais de vente. Idem pour une vieille annonce qui
+        # refait surface, ou qui devient visible quand la fenêtre lue s'allonge (plus de pages).
         fresh = set()
         if prev:
-            floor, before = min(prev), set(prev)
+            floor, before = max(prev) - RECENT_IDS, set(prev)
             fresh = {iid for iid in ids if iid not in before and iid >= floor}
         self.store.market_upsert(seg_id, items, now, fresh)
         if prev is not None and seg_id in self.last_poll:
@@ -351,15 +352,15 @@ def _norm(text: str) -> str:
 CATEGORIES = [
     ("Téléphones", "iphone galaxy smartphone pixel telephone"),
     ("Ordinateurs & tablettes", "macbook ipad laptop ordinateur tablette imac"),
-    ("Consoles & jeux vidéo", "ps5 ps4 playstation xbox nintendo switch console steam"),
+    ("Consoles & jeux vidéo", "ps5 ps4 playstation xbox nintendo switch console steam quest vr"),
     ("Audio", "airpods casque headphones enceinte speaker bose marshall"),
-    ("Photo", "appareil camera objectif lens leica fujifilm gopro reflex argentique"),
+    ("Photo", "appareil camera objectif lens leica fujifilm gopro reflex argentique canon nikon"),
     ("Électroménager & beauté tech", "dyson thermomix airwrap aspirateur robot nespresso kitchenaid lisseur"),
     ("Montres", "montre watch rolex omega cartier tudor"),
-    ("Bijoux", "bague collier bracelet boucles bijou ring necklace earrings"),
+    ("Bijoux", "bague collier bracelet boucles bijou bijoux ring necklace earrings wedding engagement diamant diamond"),
     ("Sacs", "sac bag pochette cabas tote speedy neverfull sacoche clutch handbag"),
     ("Baskets", "basket baskets sneaker sneakers jordan dunk yeezy"),
-    ("Chaussures", "chaussure chaussures bottes boots bottines escarpins mocassins derbies sandales shoes"),
+    ("Chaussures", "chaussure chaussures bottes boots bottines escarpins mocassins derbies sandales shoes heels talons loafers"),
     ("Doudounes & manteaux", "doudoune manteau parka puffer coat trench"),
     ("Vestes", "veste blouson jacket"),
     ("Pulls & sweats", "pull sweat cardigan gilet sweater hoodie"),
@@ -372,17 +373,33 @@ CATEGORIES = [
     ("Lego & jouets", "lego playmobil jouet"),
     ("Parfums", "parfum perfume"),
     ("Accessoires", "ceinture belt echarpe scarf foulard portefeuille wallet casquette"),
+    ("Maison & meubles", "canape chaise fauteuil table bureau commode lampe meuble dresser desk sofa"),
 ]
 _CATEGORY_WORDS = [(name, set(words.split())) for name, words in CATEGORIES]
+# Sans mot-clé dans le titre : catégorie la plus probable pour la marque, au-dessus de 200 €.
+BRAND_CATEGORY = [
+    ("Sacs", ["louis vuitton", "chanel", "dior", "gucci", "prada", "hermes", "celine", "fendi", "loewe",
+              "goyard", "saint laurent", "ysl", "coach", "longchamp", "michael kors", "polene", "balenciaga",
+              "bottega veneta", "miu miu", "chloe", "marc jacobs"]),
+    ("Montres", ["rolex", "omega", "cartier", "tudor", "breitling", "tag heuer", "longines"]),
+    ("Doudounes & manteaux", ["moncler", "canada goose"]),
+    ("Baskets", ["jordan", "nike", "adidas", "new balance", "yeezy"]),
+    ("Électroménager & beauté tech", ["dyson"]),
+    ("Consoles & jeux vidéo", ["nintendo", "playstation", "xbox", "meta quest"]),
+]
 _STOP = set("""de la le les des du et en a au aux un une pour avec sans sur the and for with of in taille size
 t tbe tres bon bonne etat neuf neuve new nwt avec etiquette homme femme men women mens womens unisex
 original originale authentique authentic 100 xs s m l xl xxl xxxl eu us fr uk it cm couleur color""".split())
 
 
-def guess_category(title: str) -> str:
+def guess_category(title: str, brand: str = "") -> str:
     words = set(re.findall(r"[a-z0-9-]+", _norm(title)))
     for name, keys in _CATEGORY_WORDS:
         if words & keys:
+            return name
+    text = f" {_norm(brand)} {_norm(title)} "
+    for name, brands in BRAND_CATEGORY:
+        if any(f" {b} " in text for b in brands):
             return name
     return "Autre"
 
@@ -437,9 +454,9 @@ def radar_report(rows: list[dict], min_price: float, now: float | None = None) -
     sold = [r for r in rows if r["state"] == "gone" and r["gone_ts"]]
     for r in sold:
         r["sell_s"] = max(0.0, r["gone_ts"] - r["first_seen"]) if r["fresh"] else None
-        r["category"] = guess_category(r["title"])
+        r["category"] = guess_category(r["title"], r["brand"])
     for r in rows:
-        r.setdefault("category", guess_category(r["title"]))
+        r.setdefault("category", guess_category(r["title"], r["brand"]))
     first = min((r["first_seen"] for r in rows), default=now)
     hours = max(1.0, (now - first) / 3600)
     recent = sorted(sold, key=lambda r: -r["gone_ts"])[:40]

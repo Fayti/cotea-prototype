@@ -19,7 +19,7 @@ async def main():
     # Contrôle direct de la pagination et du filtre de prix
     mw = market.MarketWatch(store, lambda d: client, market.radar_bands(200), poll_every=150)
     task = asyncio.create_task(mw.run())
-    await asyncio.sleep(780)
+    await asyncio.sleep(720)
     task.cancel()
     rows = store.market_rows(0)
     print("états :", collections.Counter(r["state"] + ("/fresh" if r["fresh"] else "") for r in rows))
@@ -31,6 +31,20 @@ async def main():
     print("catégories :", [(c["name"], c["sales"], c["median_price"]) for c in rep["categories"][:12]])
     print("modèles :", [(m["model"], m["sales"]) for m in rep["models"][:12]])
     print("dernières ventes :", [(r["title"][:35], r["price"], r["sell_s"]) for r in rep["recent"][:12]])
+    # Contrôle : que sont devenues vraiment les annonces comptées comme vendues ?
+    from vinted_bot.tracking import page_status
+    gone = [r for r in rows if r["state"] == "gone"][:12]
+    verdicts = collections.Counter()
+    for r in gone:
+        await asyncio.sleep(8)
+        try:
+            code, final_url, page = await client.get_page(r["url"], await client.acquire())
+            v = page_status(code, final_url, page) or f"illisible ({code})"
+        except Exception as e:
+            v = f"erreur {type(e).__name__}"
+        verdicts[v] += 1
+        print("  contrôle :", r["title"][:35], r["price"], "->", v, flush=True)
+    print("vérification des « ventes » :", dict(verdicts))
     await client.close()
 
 

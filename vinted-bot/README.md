@@ -80,6 +80,15 @@ contre la médiane des prix récents de la même recherche.
   pépites encore en ligne, ce qui part vite et cher, et les annonces les plus likées. Une
   nouvelle pépite (gain estimé ≥ 15 €) est signalée tout de suite, dans le fil et sur Telegram.
   Coût : 24 segments ≈ 0,13 requête/s, partagées avec la surveillance au même rythme prudent.
+- **Radar des ventes chères** (onglet 📈 Veille, en haut) : sans recherche de départ, le bot lit
+  toutes les nouvelles annonces de Vinted au-dessus d'un prix (200 € par défaut) et ne retient
+  que les ventes. Il classe les marques, les catégories (devinées d'après le titre) et les
+  modèles (mots qui reviennent dans les titres vendus) par nombre de ventes, chiffre vendu, prix
+  médian, taux de vente et délai, et affiche les dernières ventes. L'API refuse au-delà de la
+  page 10 : le radar découpe donc ses prix en 3 tranches (200–300, 300–500, 500 € et plus),
+  chacune lue sur 10 pages au plus, ce qui prolonge le temps d'observation de chaque annonce.
+  Une annonce vendue après être sortie de cette fenêtre (plusieurs heures) n'est pas comptée :
+  le radar mesure ce qui part vite. Coût : 30 requêtes toutes les 3 minutes au plus (≈ 0,17/s).
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
   résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
   disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris
