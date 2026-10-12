@@ -894,7 +894,9 @@ def test_analysis_finds_searches_where_items_sell_fast():
 def test_market_watch_follows_listings_and_finds_pepites(tmp_path):
     from vinted_bot import market
     store = Store(str(tmp_path / "m.sqlite3"))
-    mw = market.MarketWatch(store, None, [{"id": "h", "name": "Herno", "query": "herno"}])
+    to_check = []
+    mw = market.MarketWatch(store, None, [{"id": "h", "name": "Herno", "query": "herno"}],
+                            on_gone=lambda iid, url, domain: to_check.append(iid))
     t0 = 1_000_000.0
 
     def page(*specs):  # (id, prix, likes)
@@ -916,6 +918,11 @@ def test_market_watch_follows_listings_and_finds_pepites(tmp_path):
     assert rows[B + 110]["state"] == "live" and rows[B + 1]["fresh"] == 0
     assert rows[B + 101]["likes"] == 3 and rows[B + 101]["likes0"] == 0
     assert abs(rows[B + 100]["gone_ts"] - (t0 + 1200 + t0 + 1380) / 2) < 1
+    # Disparues = à vérifier : rien n'est compté comme vendu avant la lecture de leur page
+    assert sorted(to_check) == [B + i for i in range(100, 110)]
+    assert market.report(store.market_rows(0), [{"id": "h", "name": "Herno"}], now=t0 + 8000)["segments"][0]["sold"] == 0
+    for iid in to_check:
+        store.market_confirm(iid, tracking.SOLD)
 
     rep = market.report(store.market_rows(0), [{"id": "h", "name": "Herno"}], now=t0 + 8000)
     seg = rep["segments"][0]
@@ -990,9 +997,13 @@ def test_radar_reads_several_pages_and_reports_what_sells(tmp_path):
         await mw.poll(seg)
 
     asyncio.run(scenario())
+    gone = [r["item_id"] for r in store.market_rows(0) if r["state"] == "gone"]
+    assert len(gone) == 11
+    for iid in gone:                                          # la page dit : vendue… sauf une supprimée
+        store.market_confirm(iid, tracking.DELETED if iid == B + 319 else tracking.SOLD)
     assert mw.rate["radar"] > 0                               # nouvelles annonces par heure mesurées
     rep = market.radar_report(store.market_rows(0), 200)
-    assert rep["sales"] == 11                                 # 310 à 320 (321 n'a jamais existé)
+    assert rep["sales"] == 10 and rep["deleted"] == 1         # la suppression n'est pas une vente
     assert rep["brands"][0]["sales"] >= 2 and {b["name"] for b in rep["brands"]} <= set(brands)
     assert {c["name"] for c in rep["categories"]} <= {"Baskets", "Téléphones", "Sacs", "Doudounes & manteaux"}
     models = {m["model"] for m in rep["models"]}
@@ -1040,3 +1051,28 @@ def test_radar_bands_and_page_cap():
     mw.rate["radar-1"] = 30.0                         # 30/h × 6 h = 180 annonces : 3 pages suffisent
     assert mw.pages_for(bands[0]) == 3
     assert mw.pages_for({"id": "x", "name": "x", "query": "nike"}) == 1
+
+
+def test_watch_departures_are_checked_on_their_page_last(tmp_path):
+    search = Search(name="s")
+    fake = PageClient()
+    mon = Monitor(Config(searches=[search], page_gap=0), Store(str(tmp_path / "c.sqlite3")), [],
+                  client_factory=lambda d: fake)
+    verdicts = []
+    mon.on_confirm = lambda iid, v: verdicts.append((iid, v))
+    sold_url, live_url = "https://www.vinted.fr/items/1", "https://www.vinted.fr/items/3"
+    fake.pages_html[sold_url] = (200, sold_url, SOLD_PAGE)
+    mon._enqueue_page(1, sold_url, "vinted.fr", "confirm")
+    mon._enqueue_page(2, "https://www.vinted.fr/items/2", "vinted.fr", "photos")
+    mon._enqueue_page(3, live_url, "vinted.fr", "confirm")
+
+    async def scenario():
+        order = []
+        for _ in range(3):
+            entry = mon._pop_page("vinted.fr")
+            order.append(entry[0])
+            await mon._fetch_page("vinted.fr", None, asyncio.Semaphore(0), *entry)
+        return order
+
+    assert asyncio.run(scenario()) == [2, 1, 3]                 # photos d'une alerte d'abord
+    assert verdicts == [(1, tracking.SOLD), (3, tracking.AVAILABLE)]

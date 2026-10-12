@@ -38,6 +38,7 @@ CLOCK_EVERY = 30.0  # secondes entre deux relevés du numéro d'annonce le plus 
 PHOTOS_TTL = 180.0  # au-delà, les photos supplémentaires d'une alerte n'ont plus d'intérêt
 PAGE_PAUSE = 900.0  # pause des lectures de pages d'annonce après un blocage
 STATUS_WAIT = 120.0  # au-delà, une confirmation de vente passe avant les photos
+CONFIRM_TTL = 3 * 3600.0  # vérification d'un départ (veille) abandonnée au-delà
 PHOTOS_WAIT = 5.0  # attente maximale des photos avant d'envoyer l'alerte quand même
 
 
@@ -141,6 +142,8 @@ class Monitor:
         self._next_page_at = 0.0
         self._page_pause_until = 0.0
         self.on_auto_reserve = None  # rappel (annonce, recherche) pour la réservation automatique
+        self.on_confirm = None       # rappel (annonce, état lu sur sa page) pour la veille
+        self.page_domains: set[str] = set()  # domaines où lire des pages même sans recherche
         # État par recherche, lu par l'interface.
         self.state: dict[str, dict] = {
             s.key: {"last_ok": None, "last_error": None, "polls": 0, "ready": False}
@@ -169,6 +172,7 @@ class Monitor:
         try:
             await asyncio.gather(
                 *(self._drive(d, ss) for d, ss in by_domain.items()),
+                *(self._page_loop(d) for d in self.page_domains - set(by_domain)),
                 self._report(),
             )
         finally:
@@ -195,6 +199,16 @@ class Monitor:
             task = asyncio.create_task(coro)
             self._pending.add(task)
             task.add_done_callback(self._pending.discard)
+
+    async def _page_loop(self, domain: str) -> None:
+        """Lecteur de pages pour un domaine sans recherche (veille seule) : mêmes règles d'espacement."""
+        while True:
+            page = self._pop_page(domain)
+            if page is None:
+                await asyncio.sleep(1.0)
+                continue
+            lane = await self.client(domain).acquire()
+            await self._fetch_page(domain, lane, asyncio.Semaphore(0), *page)
 
     async def _tick_clock(self, domain: str, lane, inflight: asyncio.Semaphore) -> None:
         """Relève le numéro d'annonce le plus récent de tout le catalogue (sert à dater)."""
@@ -415,18 +429,23 @@ class Monitor:
             if "photos" in entry["reasons"] and now - entry["since"] > PHOTOS_TTL:
                 entry["reasons"].discard("photos")
                 log.info("Photos de l'annonce %s abandonnées (file d'attente trop longue)", iid)
+            if "confirm" in entry["reasons"] and now - entry["since"] > CONFIRM_TTL:
+                entry["reasons"].discard("confirm")
             if not entry["reasons"]:
                 del self._page_queue[iid]
         # Photos d'abord, de la plus récente alerte à la plus ancienne : c'est sur la dernière
         # annonce arrivée qu'il faut décider vite. Confirmations de vente ensuite, dans l'ordre,
         # sauf celles qui attendent depuis plus de STATUS_WAIT : elles passent devant.
+        # Vérifications de la veille en dernier : elles servent aux statistiques, pas à acheter.
         def rank(e):
             waited = now - e["since"]
             if "status" in e["reasons"] and waited > STATUS_WAIT:
                 return (0, e["since"])
             if "photos" in e["reasons"]:
                 return (1, -e["since"])
-            return (2, e["since"])
+            if "status" in e["reasons"]:
+                return (2, e["since"])
+            return (3, e["since"])
         candidates = [(*rank(e), iid) for iid, e in self._page_queue.items() if e["domain"] == domain]
         if not candidates:
             return None
@@ -440,6 +459,13 @@ class Monitor:
         try:
             code, final_url, page = await self.client(domain).get_page(entry["url"], lane)
             self.stats.request_times.append(time.monotonic())
+            if "confirm" in entry["reasons"] and self.on_confirm:
+                verdict = page_status(code, final_url, page)
+                if verdict is None and entry["tries"] < 1:   # page illisible : un nouvel essai
+                    entry["tries"] += 1
+                    self._page_queue.setdefault(item_id, {**entry, "reasons": {"confirm"}})
+                else:
+                    self.on_confirm(item_id, verdict)
             t = self.tracker.items.get(item_id)
             if "photos" in entry["reasons"]:
                 photos = extract_photos(page, self.cfg.photos_per_alert)

@@ -23,7 +23,7 @@ from aiohttp import web
 
 from .analysis import analyze
 from .buyer import VintedWindow
-from .market import DEFAULT_SEGMENTS, MarketWatch, radar_bands, radar_report, report as market_report
+from .market import DEFAULT_SEGMENTS, MarketWatch, radar_bands, radar_report, report as market_report, segment_params
 from .client import VintedClient
 from .config import Search, config_from_dict, parse_vinted_url
 from .filters import margin
@@ -199,8 +199,12 @@ class Engine:
             self.reserve(item.id, item.url, auto=True))
         self.task = asyncio.create_task(self._run(self.monitor))
         if segments:  # veille du marché : mêmes connexions et même rythme que la surveillance
-            self.market = MarketWatch(self.store, self.monitor.client, segments, memory=self.market_memory,
-                                      on_pepite=self._pepite)
+            monitor = self.monitor
+            self.market = MarketWatch(
+                self.store, monitor.client, segments, memory=self.market_memory, on_pepite=self._pepite,
+                on_gone=lambda iid, url, domain: monitor._enqueue_page(iid, url, domain, "confirm"))
+            monitor.on_confirm = self.store.market_confirm
+            monitor.page_domains = {segment_params(s)[0] for s in segments}
             self.side_tasks.append(asyncio.create_task(self.market.run()))
         for n in self.notifiers:
             if hasattr(n, "listen"):  # boutons « ⚡ Réserver » de Telegram

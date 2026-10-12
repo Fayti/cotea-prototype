@@ -3,9 +3,11 @@
 Vinted ne publie aucun prix de vente. On le reconstitue : chaque segment surveillé (une
 marque, un type d'article) est relu toutes les quelques minutes, 96 annonces à la fois, des
 plus récentes aux plus anciennes. Chaque annonce est suivie : prix, favoris (« likes »), vues.
-Quand elle disparaît alors que des annonces plus anciennes sont toujours là, elle est partie,
-presque toujours vendue, au dernier prix vu. Une annonce qui sort simplement de la fenêtre
-(trop de nouveautés derrière elle) n'est pas comptée.
+Quand elle disparaît alors que des annonces plus anciennes sont toujours là, elle est partie :
+sa page dit alors si elle est vendue (au dernier prix vu), réservée, supprimée ou encore en
+vente. Mesuré sur le vrai Vinted, beaucoup de disparitions sont des suppressions : seules les
+ventes confirmées comptent. Une annonce qui sort simplement de la fenêtre (trop de nouveautés
+derrière elle) n'est pas comptée.
 
 Une « pépite » est une annonce partie en moins d'une heure à un prix bien inférieur au prix
 de vente habituel de son segment : quelqu'un a acheté sous le marché. Leur somme par jour
@@ -39,6 +41,7 @@ FAST = 3600.0           # « partie vite » : en moins d'une heure
 PEPITE_RATIO = 0.6      # prix ≤ 60 % du prix de vente habituel
 MIN_SOLD = 8            # ventes minimum pour estimer un prix de vente habituel
 KEEP_DAYS = 14
+SOLD_STATES = ("sold", "reserved")   # vente confirmée par la page de l'annonce
 ALERT_MIN_GAIN = 15.0   # pépite signalée tout de suite si le gain estimé atteint ce montant
 MEDIAN_TTL = 600.0      # prix de vente habituel recalculé toutes les 10 min par segment
 RECENT_IDS = 150_000     # ~10 min de numéros (Vinted en attribue ~250/s) : seuil de « nouvelle »
@@ -100,9 +103,10 @@ DEFAULT_SEGMENTS = [
 
 class MarketWatch:
     def __init__(self, store, client_of, segments: list[dict], poll_every: float = POLL_EVERY,
-                 memory: dict | None = None, on_pepite=None):
+                 memory: dict | None = None, on_pepite=None, on_gone=None):
         self.store = store
         self.on_pepite = on_pepite          # rappel (annonce, segment, prix habituel, gain)
+        self.on_gone = on_gone              # rappel (annonce, lien, domaine) : départ à vérifier
         self._medians: dict[str, tuple[float | None, float]] = {}
         self.client_of = client_of          # domaine -> VintedClient (partagé avec la surveillance)
         self.segments = segments
@@ -239,6 +243,11 @@ class MarketWatch:
                 else:
                     self._missing[iid] = (count, since, seg_id)
             self.store.market_mark(gone, out)
+            if gone and self.on_gone:
+                # Une disparition n'est pas toujours une vente (mesuré : souvent une suppression).
+                # La page de l'annonce tranche : vendue, réservée, supprimée ou encore en vente.
+                for iid, url in self.store.market_urls([iid for iid, _ in gone]):
+                    self.on_gone(iid, url, domain)
         # Repères de chaque annonce présente : les annonces plus anciennes juste après elle.
         for i, iid in enumerate(ids):
             self._neighbours[iid] = tuple(ids[i + 1:i + 1 + NEIGHBOURS])
@@ -270,15 +279,15 @@ def report(rows: list[dict], segments: list[dict], now: float | None = None) -> 
     for seg in segments:
         rs = by_seg.get(seg["id"], [])
         fresh = [r for r in rs if r["fresh"]]
-        sold = [r for r in fresh if r["state"] == "gone" and r["gone_ts"]]
+        sold = [r for r in fresh if r["state"] in SOLD_STATES and r["gone_ts"]]
         for r in sold:
             r["sell_s"] = max(0.0, r["gone_ts"] - r["first_seen"])
         median_sold = _median([r["price"] for r in sold]) if len(sold) >= MIN_SOLD else None
         sold_median[seg["id"]] = median_sold
         first = min((r["first_seen"] for r in fresh), default=now)
         days = max(1.0, (now - first) / 86400)   # pas d'extrapolation le premier jour
-        mature = [r for r in fresh if now - r["first_seen"] >= 86400 and r["state"] != "out"]
-        sold_24h = [r for r in mature if r["state"] == "gone" and r.get("sell_s", 1e12) <= 86400]
+        mature = [r for r in fresh if now - r["first_seen"] >= 86400 and r["state"] in ("live", *SOLD_STATES)]
+        sold_24h = [r for r in mature if r["state"] in SOLD_STATES and r.get("sell_s", 1e12) <= 86400]
         pepites = []
         if median_sold:
             for r in sold:
@@ -290,6 +299,8 @@ def report(rows: list[dict], segments: list[dict], now: float | None = None) -> 
         row = {
             "id": seg["id"], "name": seg["name"],
             "listings": len(rs), "new_per_day": round(len(fresh) / days, 1),
+            "pending": sum(1 for r in rs if r["state"] == "gone"),
+            "deleted": sum(1 for r in rs if r["state"] == "deleted"),
             "median_list": _median([r["price"] for r in rs]),
             "sold": len(sold), "median_sold": median_sold,
             "median_sell_s": _median([r["sell_s"] for r in sold]),
@@ -329,7 +340,7 @@ def report(rows: list[dict], segments: list[dict], now: float | None = None) -> 
                     live_pepites.append(card)
             if card["likes_per_h"]:
                 most_liked.append(card)
-        elif r["state"] == "gone" and r["fresh"] and r["gone_ts"] and r["gone_ts"] - r["first_seen"] <= 6 * 3600:
+        elif r["state"] in SOLD_STATES and r["fresh"] and r["gone_ts"] and r["gone_ts"] - r["first_seen"] <= 6 * 3600:
             card["sell_s"] = round(r["gone_ts"] - r["first_seen"])
             card["gone_ts"] = r["gone_ts"]
             fast_dear.append(card)
@@ -451,7 +462,7 @@ def radar_report(rows: list[dict], min_price: float, now: float | None = None) -
     """Tout ce qui se vend au-dessus de min_price : marques, catégories, modèles, dernières ventes."""
     now = now or time.time()
     rows = [r for r in rows if r.get("price") is not None and r["price"] >= min_price]
-    sold = [r for r in rows if r["state"] == "gone" and r["gone_ts"]]
+    sold = [r for r in rows if r["state"] in SOLD_STATES and r["gone_ts"]]
     for r in sold:
         r["sell_s"] = max(0.0, r["gone_ts"] - r["first_seen"]) if r["fresh"] else None
         r["category"] = guess_category(r["title"], r["brand"])
@@ -462,6 +473,9 @@ def radar_report(rows: list[dict], min_price: float, now: float | None = None) -
     recent = sorted(sold, key=lambda r: -r["gone_ts"])[:40]
     return {
         "min_price": min_price, "hours": round(hours, 1), "listings": len(rows), "sales": len(sold),
+        "pending": sum(1 for r in rows if r["state"] == "gone"),
+        "deleted": sum(1 for r in rows if r["state"] == "deleted"),
+        "hidden": sum(1 for r in rows if r["state"] == "hidden"),
         "revenue": round(sum(r["price"] for r in sold), 2),
         "sales_per_day": round(len(sold) / hours * 24, 1) if hours >= 24 else len(sold),
         "brands": _group(rows, sold, lambda r: (r["brand"] or "").strip() or "Sans marque")[:30],

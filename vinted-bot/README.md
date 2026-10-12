@@ -72,8 +72,8 @@ contre la médiane des prix récents de la même recherche.
 - **Veille du marché** (onglet 📈 Veille) : le bot suit des segments (une marque, un type
   d'article ; 24 segments conseillés en un clic, sans les marques très contrefaites). Chaque
   segment est relu toutes les 3 minutes, 96 annonces à la fois : prix, likes, vues, et le moment
-  où l'annonce disparaît alors que des plus anciennes sont toujours là (presque toujours une
-  vente, au dernier prix vu). Il en tire, par segment : le prix de vente habituel, la part vendue
+  où l'annonce disparaît alors que des plus anciennes sont toujours là ; sa page dit ensuite si
+  elle est vendue (au dernier prix vu) ou simplement supprimée. Il en tire, par segment : le prix de vente habituel, la part vendue
   en 24 h, le délai de vente, les likes par heure et surtout **l'argent sur la table** : ce
   qu'aurait gagné chaque jour l'acheteur des pépites (parties en moins d'une heure à 60 % ou
   moins du prix habituel), revendues à ce prix, frais d'achat et envoi déduits. S'y ajoutent les
@@ -89,6 +89,11 @@ contre la médiane des prix récents de la même recherche.
   chacune lue sur 10 pages au plus, ce qui prolonge le temps d'observation de chaque annonce.
   Une annonce vendue après être sortie de cette fenêtre (plusieurs heures) n'est pas comptée :
   le radar mesure ce qui part vite. Coût : 30 requêtes toutes les 3 minutes au plus (≈ 0,17/s).
+- **Ventes vérifiées** (veille et radar) : une annonce qui disparaît n'est pas forcément vendue.
+  Mesuré sur le vrai Vinted : sur 7 disparitions d'annonces à plus de 200, 6 étaient des
+  suppressions et 1 était encore en vente. Chaque disparition est donc vérifiée sur la page de
+  l'annonce (vendue, réservée, supprimée, encore en vente), après les photos des alertes et au
+  même rythme prudent (une page toutes les 10 s au plus). Seules les ventes confirmées comptent.
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
   résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
   disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris

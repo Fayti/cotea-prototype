@@ -153,9 +153,22 @@ class Store:
                             [(iid,) for iid in out])
         self.db.commit()
 
+    def market_urls(self, ids: list[int]) -> list[tuple[int, str]]:
+        if not ids:
+            return []
+        marks = ",".join("?" * len(ids))
+        return self.db.execute(f"SELECT item_id, url FROM market WHERE item_id IN ({marks})", ids).fetchall()
+
+    def market_confirm(self, item_id: int, verdict: str | None) -> None:
+        """Ce que la page de l'annonce dit d'un départ : vendue, réservée, supprimée, encore en vente."""
+        state = {"sold": "sold", "reserved": "reserved", "deleted": "deleted", "available": "hidden"}.get(verdict or "")
+        if state:
+            self.db.execute("UPDATE market SET state=? WHERE item_id=? AND state='gone'", (state, item_id))
+            self.db.commit()
+
     def market_sold_prices(self, segment: str, since: float) -> list[float]:
-        rows = self.db.execute("SELECT price FROM market WHERE segment=? AND state='gone' AND fresh=1 "
-                               "AND gone_ts >= ? AND price IS NOT NULL", (segment, since)).fetchall()
+        rows = self.db.execute("SELECT price FROM market WHERE segment=? AND state IN ('sold', 'reserved') "
+                               "AND fresh=1 AND gone_ts >= ? AND price IS NOT NULL", (segment, since)).fetchall()
         return [r[0] for r in rows]
 
     def market_rows(self, since: float) -> list[dict]:
