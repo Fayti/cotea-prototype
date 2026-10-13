@@ -39,9 +39,14 @@ PHOTOS_TTL = 180.0  # au-delà, les photos supplémentaires d'une alerte n'ont p
 PAGE_PAUSE = 900.0  # pause des lectures de pages d'annonce après un blocage
 STATUS_WAIT = 120.0  # au-delà, une confirmation de vente passe avant les photos
 CONFIRM_TTL = 3 * 3600.0  # vérification d'un départ (veille) abandonnée au-delà
-LIKES_EVERY = 15.0        # une relecture de likes toutes les 15 s au plus (≈ 0,07 requête/s)
-LIKES_REFRESH = 300.0     # chaque alerte récente relue toutes les 5 min…
-LIKES_FOR = 3 * 3600.0    # … pendant ses 3 premières heures
+LIKES_EVERY = 8.0         # une relecture ciblée de likes toutes les 8 s au plus (≈ 0,12 requête/s)
+LIKES_FOR = 3 * 3600.0    # alertes suivies pendant leurs 3 premières heures
+
+
+def likes_interval(age: float) -> float:
+    """Fréquence de relecture des likes d'une alerte sortie des résultats : serrée au début,
+    quand tu décides d'acheter ou non, plus lâche ensuite."""
+    return 90.0 if age < 1800 else 300.0
 PHOTOS_WAIT = 5.0  # attente maximale des photos avant d'envoyer l'alerte quand même
 
 
@@ -207,8 +212,9 @@ class Monitor:
     def _likes_candidate(self, now: float):
         due = [t for t in self.tracker.items.values()
                if t.params is not None and t.price is not None and t.status == AVAILABLE
-               and now - t.alerted_ts <= LIKES_FOR and now - t.likes_ts >= LIKES_REFRESH]
-        return min(due, key=lambda t: t.likes_ts, default=None)
+               and now - t.alerted_ts <= LIKES_FOR and now - t.likes_ts >= likes_interval(now - t.alerted_ts)]
+        # Les alertes les plus récentes d'abord : ce sont elles qu'on achète.
+        return max(due, key=lambda t: t.alerted_ts, default=None)
 
     async def _likes_loop(self) -> None:
         """Likes en direct des alertes récentes, même sorties de la 1re page de leur recherche."""
@@ -434,9 +440,13 @@ class Monitor:
 
     def _update_likes(self, items) -> None:
         """Favoris et vues des annonces déjà signalées, relevés gratuitement à chaque passage."""
+        now = time.time()
         for item in items:
             t = self.tracker.items.get(item.id)
-            if t is None or (t.likes, t.views) == (item.favourites, item.views):
+            if t is None:
+                continue
+            t.likes_ts = now  # vue à l'instant : pas besoin de la relire à part
+            if (t.likes, t.views) == (item.favourites, item.views):
                 continue
             t.likes, t.views = item.favourites, item.views
             for notifier in self.notifiers:

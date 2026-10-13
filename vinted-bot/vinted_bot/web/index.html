@@ -187,6 +187,95 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .logs .WARNING { color: var(--warn); } .logs .ERROR { color: var(--err); }
 details summary { cursor: pointer; font-weight: 600; }
 
+
+/* ===== Thème : surfaces calmes, accent Vinted, cartes photo ===== */
+:root {
+  --bg: #f2f4f7; --surface: #ffffff; --surface-2: #f4f6f8; --text: #0f172a; --muted: #64748b;
+  --border: #e4e7ec; --accent: #007782; --accent-2: #00a3ad; --accent-ink: #ffffff; --accent-soft: #e3f3f4;
+  --hot: #f0592a; --hot-soft: #fff1ea; --ok: #15803d; --warn: #b45309; --err: #dc2626; --violet: #6d28d9;
+  --violet-soft: #f1ecfd; --shadow: 0 1px 2px rgba(15,23,42,.04), 0 6px 18px rgba(15,23,42,.06);
+  --shadow-hover: 0 2px 4px rgba(15,23,42,.06), 0 14px 30px rgba(15,23,42,.12); --radius: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f14; --surface: #121821; --surface-2: #1a222d; --text: #e6eaf0; --muted: #93a1b4;
+    --border: #243040; --accent: #19b3bc; --accent-2: #2dd4bf; --accent-ink: #04191b; --accent-soft: #0f2d31;
+    --hot: #ff7a45; --hot-soft: #34190f; --ok: #4ade80; --warn: #fbbf24; --err: #f87171; --violet: #a78bfa;
+    --violet-soft: #241a3d; --shadow: 0 1px 2px rgba(0,0,0,.3); --shadow-hover: 0 10px 30px rgba(0,0,0,.45);
+  }
+}
+html, body { font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased; }
+header { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px); }
+.top { padding: 12px 0 8px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.logo { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: #fff; font-weight: 900;
+  font-size: 17px; background: linear-gradient(135deg, var(--accent-2), var(--accent)); box-shadow: 0 4px 12px rgba(0,119,130,.35); }
+.brand small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0; margin-top: -2px; }
+nav { gap: 4px; padding-bottom: 8px; }
+nav button { border: 0; border-radius: 10px; padding: 8px 14px; color: var(--muted); font-weight: 650; }
+nav button:hover { background: var(--surface-2); color: var(--text); }
+nav button.active { background: var(--accent-soft); color: var(--accent); border-bottom-color: transparent; }
+.btn { border-radius: 10px; border-color: var(--border); font-weight: 650; transition: background .12s, transform .06s; }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: linear-gradient(180deg, var(--accent-2), var(--accent)); border-color: transparent; }
+.card { border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.banner { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+  box-shadow: var(--shadow); }
+.banner.hot { background: var(--surface); border-left-color: var(--hot); }
+.toolbar label.check { background: var(--surface); border: 1px solid var(--border); border-radius: 99px; padding: 6px 12px; font-size: 13px; }
+select { border-radius: 10px; }
+
+.views { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.views button { display: grid; grid-template-columns: 1fr auto; text-align: left; gap: 0 10px; padding: 12px 16px;
+  border-radius: 14px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); }
+.views .vt { font-size: 15px; font-weight: 750; }
+.views .vs { grid-column: 1; font-size: 12px; color: var(--muted); font-weight: 500; }
+.views .cnt { grid-row: 1 / span 2; grid-column: 2; align-self: center; min-width: 34px; text-align: center; font-weight: 800;
+  border-radius: 99px; padding: 4px 10px; background: var(--surface-2); color: var(--text); opacity: 1; }
+.views button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.views button.on .cnt { background: var(--accent); color: var(--accent-ink); }
+.views button.on .vs { color: var(--accent); }
+.hint { margin: -4px 0 12px; }
+.banner { padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
+.banner.slim { padding: 6px 12px; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+#tab-feed .toolbar { gap: 8px; }
+#tab-feed .toolbar .grow { flex: 1; }
+@media (max-width: 520px) { .stats { display: none; } .brand small { display: none; } }
+@media (max-width: 520px) { .views { grid-template-columns: 1fr; } }
+
+.grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.item { border: 0; border-radius: var(--radius); box-shadow: var(--shadow); transition: transform .15s, box-shadow .15s; }
+.item:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+.item.fresh { outline: 3px solid var(--accent-2); outline-offset: -3px; }
+.item.reco-card { box-shadow: 0 0 0 2px var(--violet), var(--shadow); }
+.ph { aspect-ratio: 4/5; }
+.ph::after { content: ""; position: absolute; inset: 55% 0 0 0; pointer-events: none;
+  background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0)); }
+.ph-price { position: absolute; left: 12px; bottom: 10px; z-index: 1; color: #fff; line-height: 1.1; text-shadow: 0 1px 6px rgba(0,0,0,.4); }
+.ph-price b { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.ph-price small { display: block; font-size: 12px; opacity: .9; font-weight: 500; }
+.item.off .ph-price b { text-decoration: line-through; opacity: .8; }
+.tag, .age { z-index: 1; border-radius: 99px; padding: 4px 9px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.tag { background: rgba(255,255,255,.92); color: #0f172a; }
+.age { background: rgba(15,23,42,.62); }
+.avail { z-index: 2; }
+.thumbs { padding: 6px 6px 0; gap: 6px; }
+.thumbs img { border-radius: 9px; }
+.body { padding: 10px 14px 14px; gap: 5px; }
+.title { font-weight: 650; font-size: 14.5px; }
+.metrics { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.metrics .up { color: var(--err); font-weight: 750; }
+.metrics .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 4px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); animation: pulse 1.6s infinite; }
+.reco { color: var(--violet); background: var(--violet-soft); border-radius: 10px; padding: 7px 10px; font-weight: 700; }
+.margin { font-size: 14px; }
+.chip { border-radius: 99px; padding: 3px 9px; }
+.row2 { margin-top: 4px; }
+.btn.buy { font-size: 15px; padding-top: 10px; padding-bottom: 10px; }
+
 #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg);
   padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); opacity: 0; pointer-events: none; transition: .2s; z-index: 50; }
 #toast.show { opacity: 1; }
@@ -203,16 +292,16 @@ details summary { cursor: pointer; font-weight: 600; }
 <header>
   <div class="wrap">
     <div class="top">
-      <span class="brand">🛍️ VintedBot</span>
+      <span class="brand"><span class="logo">V</span><span>VintedBot<small>alertes · veille · réservation</small></span></span>
       <span id="pill" class="pill"><span class="dot"></span><span id="pillText">…</span></span>
       <span id="stats" class="stats"></span>
       <button id="toggleRun" class="btn">…</button>
     </div>
     <nav>
-      <button data-tab="feed" class="active">Annonces<span id="unseen" class="badge" hidden></span></button>
-      <button data-tab="searches">Recherches</button>
-      <button data-tab="market">📈 Veille</button>
-      <button data-tab="settings">Réglages</button>
+      <button data-tab="feed" class="active">🔔 Annonces<span id="unseen" class="badge" hidden></span></button>
+      <button data-tab="searches">🔎 Mes recherches</button>
+      <button data-tab="market">📈 Veille du bot</button>
+      <button data-tab="settings">⚙️ Réglages</button>
     </nav>
   </div>
 </header>
@@ -225,26 +314,28 @@ details summary { cursor: pointer; font-weight: 600; }
       <button class="btn primary" data-goto="searches" data-open-form>Ajouter une recherche</button>
     </div>
     <div id="tgHint" class="banner hot" hidden>
-      <div>📱 Pour recevoir les alertes sur ton téléphone, même loin de l'ordinateur, connecte Telegram (2 minutes).</div>
-      <button class="btn" data-goto="settings">Connecter Telegram</button>
+      <div>📱 <strong>Alertes sur ton téléphone</strong> : connecte Telegram (2 minutes).</div>
+      <div class="row"><button class="btn small" data-goto="settings">Connecter Telegram</button>
+        <button class="btn small ghost" id="tgHide" title="Masquer">✕</button></div>
     </div>
     <div id="vwBar" class="banner">
       <div id="vwText"></div>
-      <button id="vwBtn" class="btn primary">Ouvrir la fenêtre Vinted</button>
+      <button id="vwBtn" class="btn primary small">Ouvrir la fenêtre Vinted</button>
     </div>
     <div class="views" id="feedViews">
-      <button data-view="mine">📥 Mes recherches <span id="cntMine" class="cnt"></span></button>
-      <button data-view="reco">💎 Recommandées <span id="cntReco" class="cnt"></span></button>
+      <button data-view="mine"><span class="vt">📥 Mes alertes</span><span class="vs">tes recherches enregistrées</span><span id="cntMine" class="cnt"></span></button>
+      <button data-view="bot"><span class="vt">🤖 Trouvailles du bot</span><span class="vs">veille et pépites, à part</span><span id="cntBot" class="cnt"></span></button>
     </div>
-    <p class="sub" id="recoHelp" hidden>Ce que le bot te conseille, tiré de la veille et de tes propres recherches : pépites de la veille, marge estimée de 30 € ou plus, prix 40 % sous le prix habituel de ta recherche, prix sous celui auquel ça part en moins d'une heure, ou annonce qui gagne vite des likes. La raison est écrite sur chaque carte.</p>
+    <p class="sub hint" id="botHelp" hidden>Ce que le bot a trouvé tout seul, en dehors de tes recherches : pépites de la veille (articles partis d'habitude bien plus cher). Rien ici ne vient de tes recherches enregistrées.</p>
     <div class="toolbar">
       <select id="filterSearch"><option value="">Toutes les recherches</option></select>
-      <label class="check"><input type="checkbox" id="onlyHot"> Seulement les 🔥 bonnes affaires</label>
-      <label class="check"><input type="checkbox" id="hideGone"> Masquer les annonces parties</label>
+      <label class="check" title="Seulement les bonnes affaires (prix bien sous le prix habituel)"><input type="checkbox" id="onlyHot"> 🔥 Bonnes affaires</label>
+      <label class="check" id="onlyRecoWrap" title="Seulement celles que le bot te conseille (raison écrite sur la carte)"><input type="checkbox" id="onlyReco"> 💎 Conseillées</label>
+      <label class="check" title="Masquer les annonces vendues, réservées ou supprimées"><input type="checkbox" id="hideGone"> Masquer les parties</label>
       <span class="grow"></span>
-      <button id="soundBtn" class="btn small">🔔 Son activé</button>
-      <button id="notifBtn" class="btn small" hidden>Notifications de l'ordinateur</button>
-      <button id="clearBtn" class="btn small">Vider</button>
+      <button id="soundBtn" class="btn small" title="Son à chaque alerte">🔔</button>
+      <button id="notifBtn" class="btn small" hidden title="Notifications de l'ordinateur">🖥 Notifications</button>
+      <button id="clearBtn" class="btn small" title="Vider la liste">🗑</button>
     </div>
     <div id="grid" class="grid"></div>
     <div id="feedEmpty" class="empty" hidden>
@@ -300,11 +391,6 @@ details summary { cursor: pointer; font-weight: 600; }
 
       <div id="searchList" class="stack"></div>
 
-      <div class="card stack" id="ideaCard">
-        <h2>💡 Piste : doudounes Herno, achetées sur Vinted, revendues sur Vestiaire</h2>
-        <p class="sub">Herno est une marque italienne de doudounes de luxe (500 à 1000 € neuves), peu connue du grand public et très peu contrefaite, contrairement à Moncler ou CP Company. Sur Vinted, des modèles d'occasion se vendent 45 à 70 €, quand le même type de pièce est proposé 150 à 200 € sur Vestiaire Collective, où les acheteurs connaissent la marque. Ajoute la recherche, laisse tourner quelques jours, puis lis l'analyse ci-dessous.</p>
-        <div class="row"><button id="addIdea" class="btn primary">Ajouter la recherche Herno (≤ 90 €, revente 130 €)</button></div>
-      </div>
 
       <div class="card stack">
         <div class="toolbar" style="margin:0"><div class="grow"><h2>📊 Ce que disent tes données</h2>
@@ -503,11 +589,6 @@ async function loadAnalysis() {
     </tbody></table>` : `<p class="sub">Ajoute une recherche pour commencer.</p>`;
 }
 $("#anaBtn").addEventListener("click", (e) => guarded(e.target, loadAnalysis));
-$("#addIdea").addEventListener("click", (e) => guarded(e.target, async () => {
-  await api("POST", "/api/searches", { url: "https://www.vinted.fr/catalog?brand_ids[]=159254", name: "Herno (revente Vestiaire)",
-    max_price: 90, resale_price: 130, weight: 2 });
-  await refresh(); toast("Recherche Herno ajoutée : le bot la surveille");
-}));
 let MK = null;
 function miniHTML(c, extra) {
   return `<div class="mini">${c.photo ? `<img loading="lazy" src="${esc(c.photo)}" alt="">` : ""}<div>
@@ -677,17 +758,26 @@ $("#toggleRun").addEventListener("click", (e) => guarded(e.target, async () => {
 
 // ---------- annonces ----------
 let feedView = pref.get("feedView", "mine");
-function inView(a, view) { return view === "reco" ? !!a.reco : !a.veille; }
+if (feedView !== "bot") feedView = "mine";
+// Source d'une alerte : une de TES recherches enregistrées, sinon une trouvaille du bot.
+function isMine(a) { return (S.settings?.search || []).some((s) => s.id === a.search_key); }
+function inView(a, view) { return view === "bot" ? !isMine(a) : isMine(a); }
 function visibleAlerts() {
   const f = $("#filterSearch").value, hot = $("#onlyHot").checked, hide = $("#hideGone").checked;
-  return S.alerts.filter((a) => inView(a, feedView) && (!f || a.search_key === f) && (!hot || a.deal) && (!hide || isAvailable(a)));
+  const onlyReco = feedView === "mine" && $("#onlyReco").checked;
+  return S.alerts.filter((a) => inView(a, feedView) && (feedView === "bot" || !f || a.search_key === f)
+    && (!hot || a.deal) && (!hide || isAvailable(a)) && (!onlyReco || a.reco));
 }
 function renderViews() {
   $$("#feedViews button").forEach((b) => b.classList.toggle("on", b.dataset.view === feedView));
   $("#cntMine").textContent = S.alerts.filter((a) => inView(a, "mine")).length;
-  $("#cntReco").textContent = S.alerts.filter((a) => inView(a, "reco") && isAvailable(a)).length;
-  $("#recoHelp").hidden = feedView !== "reco";
+  $("#cntBot").textContent = S.alerts.filter((a) => inView(a, "bot") && isAvailable(a)).length;
+  $("#botHelp").hidden = feedView !== "bot";
+  $("#filterSearch").hidden = feedView === "bot";
+  $("#onlyRecoWrap").hidden = feedView === "bot";
 }
+$("#onlyReco").checked = pref.get("onlyReco", false);
+$("#onlyReco").addEventListener("change", (e) => { pref.set("onlyReco", e.target.checked); renderFeed(); });
 $("#feedViews").addEventListener("click", (e) => {
   const b = e.target.closest("[data-view]"); if (!b) return;
   feedView = b.dataset.view; pref.set("feedView", feedView); renderFeed();
@@ -715,12 +805,15 @@ function reserveHTML(a) {
   const auto = a.reserve_auto && a.reserve !== "fail" ? " (automatique)" : "";
   return `<div class="resv ${r[1]}">${r[0]}${auto}${a.reserve_msg ? ` : ${esc(a.reserve_msg)}` : ""}</div>`;
 }
-function likesHTML(a) {
-  if (a.likes == null) return "";
+function likesHTML(a, spotted = "") {
+  if (a.likes == null) return spotted ? `<div class="metrics"><span title="Repérée après sa mise en ligne">${spotted}</span></div>` : "";
   const gained = a.likes - (a.likes_start || 0);
-  return `<div class="likes${gained > 0 ? " up" : ""}">❤️ ${a.likes} like${a.likes > 1 ? "s" : ""}`
-    + (gained > 0 ? ` <b>+${gained} depuis l'alerte</b>` : "")
-    + (a.views ? ` · 👁 ${a.views} vue${a.views > 1 ? "s" : ""}` : "") + `</div>`;
+  // Point vert : likes relus il y a moins de 2 minutes (en direct).
+  const live = a.likes_ts && Date.now() / 1000 - a.likes_ts < 120;
+  return `<div class="metrics"><span title="Likes${live ? ", relus à l'instant" : ""}">${live ? '<i class="live-dot"></i>' : ""}❤️ ${a.likes}`
+    + (gained > 0 ? ` <span class="up">+${gained}</span>` : "") + `</span>`
+    + (a.views ? `<span title="Vues">👁 ${a.views}</span>` : "")
+    + (spotted ? `<span title="Repérée après sa mise en ligne">${spotted}</span>` : "") + `</div>`;
 }
 const chosen = new Map();  // annonce -> numéro de la photo choisie dans les vignettes
 function cardHTML(a) {
@@ -732,20 +825,20 @@ function cardHTML(a) {
   const pick = Math.min(chosen.get(a.id) || 0, Math.max(0, pics.length - 1));
   const av = AVAIL[a.availability];
   const banner = av ? `<div class="avail ${av[1]}">${av[0]}${a.availability_after_s != null ? ` en ${duration(a.availability_after_s)}` : ""}</div>` : "";
-  return `<div class="item${freshIds.has(a.id) ? " fresh" : ""}${isAvailable(a) ? "" : " off"}" data-id="${a.id}">
+  const spotted = a.created_ts ? `⚡ ${a.age_estimated ? "~" : ""}${Math.max(0, Math.round(a.detected_ts - a.created_ts))} s` : "";
+  return `<div class="item${freshIds.has(a.id) ? " fresh" : ""}${isAvailable(a) ? "" : " off"}${a.reco ? " reco-card" : ""}" data-id="${a.id}">
     <div class="ph" data-act="zoom">${pics[pick] ? `<img loading="lazy" src="${esc(pics[pick])}" alt="">` : ""}${tag}
-      <span class="age" data-ts="${a.detected_ts}">${ago(a.detected_ts)}</span>${banner}</div>
+      <span class="age" data-ts="${a.detected_ts}">${ago(a.detected_ts)}</span>
+      <div class="ph-price"><b>${money(a.price, a.currency)}</b>${a.total_price ? `<small>${money(a.total_price, a.currency)} avec frais</small>` : ""}</div>${banner}</div>
     ${pics.length > 1 ? `<div class="thumbs">${pics.map((u, i) =>
       `<img loading="lazy" src="${esc(u)}" alt="Photo ${i + 1}" data-act="thumb" data-i="${i}"${i === pick ? ' class="on"' : ""}>`).join("")}</div>` : ""}
     <div class="body">
-      <div class="price">${money(a.price, a.currency)} ${a.total_price ? `<small>${money(a.total_price, a.currency)} avec frais</small>` : ""}</div>
+      ${a.reco && a.reco_reason ? `<div class="reco">${esc(a.reco_reason)}</div>` : ""}
       <div class="title"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a></div>
       ${meta ? `<div class="meta">${meta}</div>` : ""}
-      ${a.median ? `<div class="meta">Médiane de la recherche : ${money(a.median, a.currency)}</div>` : ""}
-      ${a.created_ts ? `<div class="meta">⚡ Repérée ${a.age_estimated ? "~" : ""}${Math.max(0, Math.round(a.detected_ts - a.created_ts))} s après sa mise en ligne</div>` : ""}
-      ${a.reco && a.reco_reason ? `<div class="reco">${esc(a.reco_reason)}</div>` : ""}
+      ${likesHTML(a, spotted)}
       ${a.margin != null ? `<div class="margin ${a.margin > 0 ? "pos" : "neg"}">💰 Marge estimée ${a.margin > 0 ? "+" : ""}${money(a.margin, a.currency)} <small>si revendue ${money(a.resale, a.currency)}</small></div>` : ""}
-      ${likesHTML(a)}
+      ${a.median ? `<div class="meta">Prix habituel de la recherche : ${money(a.median, a.currency)}</div>` : ""}
       <div><span class="chip">${esc(a.search)}</span></div>
       ${reserveHTML(a)}
       <div class="row2">
@@ -791,8 +884,10 @@ function renderFeed() {
   $("#grid").innerHTML = list.map(cardHTML).join("");
   $("#feedEmpty").hidden = list.length > 0;
   const has = (S.settings?.search || []).length;
-  $("#feedEmptyText").textContent = !has ? "Ajoute une recherche pour commencer."
-    : S.alerts.length ? "Aucune annonce ne correspond à ce filtre."
+  $("#feedEmptyText").textContent = feedView === "bot"
+    ? "Rien pour l'instant. Les trouvailles du bot viennent de la veille : onglet 📈 Veille, active-la et ajoute des segments."
+    : !has ? "Ajoute une recherche pour commencer."
+    : S.alerts.some((a) => isMine(a)) ? "Aucune annonce ne correspond à ce filtre."
     : "En attente de nouvelles annonces… Au premier lancement, le bot mémorise d'abord les annonces déjà en ligne, puis ne te montre que les nouvelles.";
   const sel = $("#filterSearch"), cur = sel.value;
   sel.innerHTML = `<option value="">Toutes les recherches</option>` +
@@ -812,7 +907,7 @@ setInterval(() => $$(".age").forEach((el) => (el.textContent = ago(+el.dataset.t
 
 // son + notifications
 let soundOn = pref.get("sound", true), audio = null;
-function renderSound() { $("#soundBtn").textContent = soundOn ? "🔔 Son activé" : "🔕 Son coupé"; }
+function renderSound() { $("#soundBtn").textContent = soundOn ? "🔔" : "🔕"; $("#soundBtn").title = soundOn ? "Son activé" : "Son coupé"; }
 $("#soundBtn").addEventListener("click", () => { soundOn = !soundOn; pref.set("sound", soundOn); renderSound(); if (soundOn) beep(false); });
 document.addEventListener("click", () => { if (!audio && window.AudioContext) audio = new AudioContext(); }, { once: true });
 function beep(hot) {
@@ -869,7 +964,6 @@ function connectEvents() {
 // ---------- recherches ----------
 const weightLabel = { 1: "", 2: "Priorité haute", 3: "Priorité maximale" };
 function renderSearches() {
-  $("#ideaCard").hidden = (S.settings?.search || []).some((s) => (s.url || "").includes("159254"));
   const list = S.settings?.search || [];
   const live = S.status?.monitor?.searches || {};
   $("#searchList").innerHTML = list.length ? list.map((s) => {
@@ -1050,12 +1144,14 @@ function renderWindow() {
   const w = S.window || {};
   $("#vwBar").classList.toggle("hot", !w.open);
   $("#vwText").innerHTML = !w.open
-    ? "🔐 <strong>Réserver en 1 clic</strong> : ouvre la fenêtre Vinted et connecte-toi à ton compte dedans (une seule fois, la connexion est gardée). Ensuite, « ⚡ Réserver » bloque l'article pour toi et ouvre directement le paiement."
+    ? "🔐 <strong>Réserver en 1 clic</strong> : ouvre la fenêtre Vinted et connecte-toi dedans, une seule fois."
     : w.user
-      ? `✅ Fenêtre Vinted prête, compte <strong>${esc(w.user)}</strong>. « ⚡ Réserver » bloque l'article pour toi, puis tu paies dans cette fenêtre.`
-      : "🔐 Fenêtre Vinted ouverte : si ce n'est pas déjà fait, connecte-toi à ton compte dedans. Laisse-la ouverte (tu peux la réduire).";
-  $("#vwBtn").textContent = w.open ? "Afficher la fenêtre Vinted" : "Ouvrir la fenêtre Vinted";
+      ? `✅ Fenêtre Vinted prête · compte <strong>${esc(w.user)}</strong>`
+      : "🔐 Fenêtre Vinted ouverte : connecte-toi dedans si ce n'est pas fait, puis laisse-la ouverte.";
+  $("#vwBar").classList.toggle("slim", !!w.user);
+  $("#vwBtn").textContent = w.open ? "Afficher la fenêtre" : "Ouvrir la fenêtre Vinted";
 }
+$("#tgHide").addEventListener("click", () => { pref.set("tgHintHidden", true); $("#tgHint").hidden = true; });
 $("#vwBtn").addEventListener("click", (e) => guarded(e.target, async () => { S.window = await api("POST", "/api/vinted-window"); renderWindow(); }));
 async function refresh() {
   const r = await api("GET", "/api/state");

@@ -99,14 +99,18 @@ contre la médiane des prix récents de la même recherche.
   plus. Chaque disparition est donc vérifiée sur la page de
   l'annonce (vendue, réservée, supprimée, encore en vente), après les photos des alertes et au
   même rythme prudent (une page toutes les 10 s au plus). Seules les ventes confirmées comptent.
-- **Recommandées** (onglet Annonces, à côté de « Mes recherches ») : ce que le bot conseille,
-  avec la raison sur chaque carte : pépite de la veille, marge estimée ≥ 30 €, prix 40 % sous le
-  prix habituel de la recherche, prix sous celui auquel les annonces de la recherche partent en
-  moins d'une heure, ou annonce qui gagne au moins 3 likes dans sa première heure (Telegram
-  prévient alors en réponse à l'alerte). Les pépites de la veille n'apparaissent que là.
-- **Likes en direct** : les alertes des 3 dernières heures sont relues toutes les 5 minutes,
-  même sorties de la première page de leur recherche : la recherche d'origine, relancée au prix
-  exact de l'annonce, la retrouve (une requête toutes les 15 s au plus).
+- **Mes alertes / Trouvailles du bot** (onglet Annonces) : deux vues strictement séparées.
+  « Mes alertes » ne montre que les annonces de tes recherches enregistrées ; un filtre « 💎
+  Conseillées » y garde celles que le bot recommande (marge ≥ 30 €, prix 40 % sous le prix
+  habituel, prix sous celui des ventes rapides de la recherche, ou ≥ 3 likes dans la première
+  heure ; la raison est écrite sur la carte). « Trouvailles du bot » contient tout le reste
+  (pépites de la veille). Une recherche ajoutée autrefois par le bot (piste Herno) est déplacée
+  dans la veille.
+- **Likes en direct** : chaque passage lit les 96 dernières annonces de la recherche (mesuré :
+  303 ms contre 279 ms pour 20) et met à jour likes et vues de toutes les alertes encore
+  visibles, toutes les quelques secondes. Les alertes sorties de cette fenêtre sont relues à
+  part, les plus récentes d'abord : toutes les 90 s pendant 30 min, puis toutes les 5 min
+  pendant 3 h. Un point vert sur la carte signale des likes relus il y a moins de 2 minutes.
 - **Veille sans déchets** : boîtes, sacs en papier, dustbags, étiquettes, factures… vendus sous
   le nom d'une grande marque sont écartés, et une pépite doit coûter au moins 25 % du prix de
   vente habituel (en dessous : accessoire, emballage ou faux).

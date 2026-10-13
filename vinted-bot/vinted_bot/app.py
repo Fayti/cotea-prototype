@@ -91,7 +91,7 @@ class UiNotifier:
         self.engine.update_alert(item_id, {"photos": urls})
 
     async def likes(self, t) -> None:
-        self.engine.update_alert(t.item_id, {"likes": t.likes, "views": t.views})
+        self.engine.update_alert(t.item_id, {"likes": t.likes, "views": t.views, "likes_ts": t.likes_ts or time.time()})
         await self.engine.reco_from_likes(t.item_id)
 
     async def status(self, t, handle) -> None:
@@ -170,6 +170,17 @@ class Engine:
                     settings[key].update(value)
                 else:
                     settings[key] = value
+        # Séparation stricte : « Mes recherches » ne contient que ce que tu as enregistré. Une
+        # recherche ajoutée par le bot (ancienne suggestion Herno) part dans la veille.
+        mine, moved = [], []
+        for s in settings.get("search", []):
+            (moved if s.get("origin") == "bot" or s.get("name") == "Herno (revente Vestiaire)" else mine).append(s)
+        if moved:
+            settings["search"] = mine
+            watch = settings.setdefault("watch", {"enabled": False, "segments": []})
+            for s in moved:
+                if not any(seg.get("query") == s["url"] for seg in watch.setdefault("segments", [])):
+                    watch["segments"].append({"id": s["id"], "name": s["name"], "query": s["url"]})
         return settings
 
     def save(self) -> None:
@@ -353,7 +364,12 @@ class Engine:
                 with contextlib.suppress(Exception):
                     await n.recommend(reason, handle)
 
+    def source_of(self, search_key) -> str:
+        """« mine » : alerte d'une recherche que tu as enregistrée ; « bot » : trouvaille du bot."""
+        return "mine" if any(s.get("id") == search_key for s in self.settings.get("search", [])) else "bot"
+
     def push_alert(self, payload: dict) -> None:
+        payload["source"] = self.source_of(payload.get("search_key"))
         payload.update(self.reservations.get(payload.get("id"), {}))
         payload.update(self.reco_marks.pop(payload.get("id"), {}))
         if not payload.get("reco"):

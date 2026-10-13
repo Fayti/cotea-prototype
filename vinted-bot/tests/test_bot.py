@@ -155,7 +155,7 @@ def test_warmup_then_only_new_items(tmp_path):
         assert await mon.poll(search) == []
         assert fake.calls[0]["per_page"] == "96" and fake.calls[0]["order"] == "newest_first"
         second = await mon.poll(search)
-        assert fake.calls[1]["per_page"] == "20"
+        assert fake.calls[1]["per_page"] == "96"  # 96 par passage : likes relus, moins de ratés
         third = await mon.poll(search)
         await asyncio.sleep(0)
         return second, third
@@ -1138,6 +1138,9 @@ def test_likes_are_refreshed_after_the_listing_left_the_first_page(tmp_path):
     async def scenario():
         for _ in range(3):                                  # alerte, puis l'annonce sort de la 1re page
             await mon.poll(search)
+        t = mon.tracker.items[B + 50]
+        assert mon._likes_candidate(time.time()) is None    # vue il y a un instant : pas encore due
+        t.likes_ts -= 120                                   # 2 min sans la voir : à relire (alerte récente)
         await mon.refresh_likes_once()
         await asyncio.sleep(0)
 
@@ -1172,4 +1175,19 @@ def test_recommendations_are_separated_and_explained(tmp_path):
     asyncio.run(e.reco_from_likes(3))
     a3 = next(a for a in e.alerts if a["id"] == 3)
     assert a3["reco"] and a3["reco_reason"].startswith("❤️ +4 likes")
+    e.store.close()
+
+
+def test_my_searches_stay_mine_and_bot_finds_are_apart(tmp_path):
+    from vinted_bot.app import Engine
+    (tmp_path / "settings.json").write_text(json.dumps({"search": [
+        {"id": "u1", "name": "Ma recherche Nike", "url": "https://www.vinted.fr/catalog?search_text=nike"},
+        {"id": "b1", "name": "Herno (revente Vestiaire)", "url": "https://www.vinted.fr/catalog?brand_ids[]=159254"},
+    ]}), "utf-8")
+    e = Engine(tmp_path)
+    assert [s["id"] for s in e.settings["search"]] == ["u1"]                     # seule la tienne reste
+    assert any(seg["query"].endswith("159254") for seg in e.settings["watch"]["segments"])
+    e.push_alert({"id": 1, "title": "Nike", "search_key": "u1", "detected_ts": time.time(), "price": 10.0})
+    e.push_alert({"id": 2, "title": "Herno", "search_key": "veille-x", "detected_ts": time.time(), "price": 10.0})
+    assert [a["source"] for a in e.alerts] == ["mine", "bot"]
     e.store.close()

@@ -82,7 +82,10 @@ class Config:
     track_status: bool = True      # suivre si l'annonce est vendue, réservée, supprimée
     page_gap: float = 10.0         # secondes minimum entre deux lectures de page d'annonce
     max_age: float = 3600.0
-    per_page: int = 20
+    # 96 annonces par passage (mesuré : 303 ms contre 279 ms pour 20). Chaque passage relit
+    # ainsi les likes et les vues des 96 dernières annonces, et rate moins de nouveautés quand
+    # beaucoup arrivent d'un coup.
+    per_page: int = 96
     warmup_per_page: int = 96
     db_path: str = "vinted_bot.sqlite3"
     proxies: list[str] = field(default_factory=list)
@@ -157,7 +160,7 @@ def config_from_dict(raw: dict, require_searches: bool = True) -> Config:
         track_status=bool(general.get("track_status", True)),
         page_gap=max(10.0, float(general.get("page_gap", 10))),
         max_age=float(general.get("max_age_minutes", 60)) * 60,
-        per_page=int(general.get("per_page", 20)),
+        per_page=int(general.get("per_page", 96)),
         warmup_per_page=int(general.get("warmup_per_page", 96)),
         db_path=general.get("db_path", "vinted_bot.sqlite3"),
         proxies=list(general.get("proxies", [])),
