@@ -99,6 +99,17 @@ contre la médiane des prix récents de la même recherche.
   plus. Chaque disparition est donc vérifiée sur la page de
   l'annonce (vendue, réservée, supprimée, encore en vente), après les photos des alertes et au
   même rythme prudent (une page toutes les 10 s au plus). Seules les ventes confirmées comptent.
+- **Recommandées** (onglet Annonces, à côté de « Mes recherches ») : ce que le bot conseille,
+  avec la raison sur chaque carte : pépite de la veille, marge estimée ≥ 30 €, prix 40 % sous le
+  prix habituel de la recherche, prix sous celui auquel les annonces de la recherche partent en
+  moins d'une heure, ou annonce qui gagne au moins 3 likes dans sa première heure (Telegram
+  prévient alors en réponse à l'alerte). Les pépites de la veille n'apparaissent que là.
+- **Likes en direct** : les alertes des 3 dernières heures sont relues toutes les 5 minutes,
+  même sorties de la première page de leur recherche : la recherche d'origine, relancée au prix
+  exact de l'annonce, la retrouve (une requête toutes les 15 s au plus).
+- **Veille sans déchets** : boîtes, sacs en papier, dustbags, étiquettes, factures… vendus sous
+  le nom d'une grande marque sont écartés, et une pépite doit coûter au moins 25 % du prix de
+  vente habituel (en dessous : accessoire, emballage ou faux).
 - **Vendue ?** Le bot surveille chaque annonce signalée pendant 48 h. Si elle disparaît des
   résultats alors que des annonces plus anciennes y sont encore, elle est marquée « plus
   disponible », puis sa page confirme : vendue, réservée ou supprimée. La carte passe en gris

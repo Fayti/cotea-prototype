@@ -4,10 +4,10 @@ Principe : une annonce vendue très vite était sous-évaluée. La part d'annonc
 moins d'une heure mesure donc, recherche par recherche, à quel point le marché laisse passer
 des affaires, et le prix de ces ventes rapides donne le vrai prix d'achat à viser.
 
-Limite : la vente est détectée quand l'annonce disparaît des résultats alors que des annonces
-plus anciennes y sont encore. Sur une recherche très large (des centaines d'annonces par
-heure), les annonces sortent de la première page avant d'être vendues et les ventes sont
-sous-comptées. Les chiffres sont fiables pour les recherches précises.
+Limite : la vente est d'abord soupçonnée quand l'annonce disparaît des résultats, puis confirmée
+sur sa page (une disparition est souvent une suppression). Sur une recherche très large (des
+centaines d'annonces par heure), les annonces sortent de la première page avant d'être vendues
+et les ventes sont sous-comptées. Les chiffres sont fiables pour les recherches précises.
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def analyze(alerts: list[dict], searches: list[dict], now: float | None = None) 
         first = min(a["detected_ts"] for a in items)
         hours = max(1.0, (now - first) / 3600)
         judged = [a for a in items if now - a["detected_ts"] >= QUICK]  # ont eu une heure pour partir
-        sold = [a for a in items if a.get("availability") in ("sold", "gone", "reserved")
+        sold = [a for a in items if a.get("availability") in ("sold", "reserved")
                 and a.get("availability_after_s") is not None]
         quick = [a for a in sold if a["availability_after_s"] <= QUICK]
         quick_rate = len([a for a in quick if a in judged]) / len(judged) if judged else None
@@ -49,6 +49,7 @@ def analyze(alerts: list[dict], searches: list[dict], now: float | None = None) 
             "median_sale_s": _median([a["availability_after_s"] for a in sold]),
             "quick_rate": round(quick_rate, 3) if quick_rate is not None else None,
             "quick_price": _median([a["price"] for a in quick if a.get("price") is not None]),
+            "quick_count": len(quick),
             "median_margin": _median(margins),
             "positive_margins": sum(1 for m in margins if m > 0) if margins else None,
         }

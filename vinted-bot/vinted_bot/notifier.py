@@ -205,6 +205,14 @@ class TelegramNotifier:
             await self._call("editMessageText", {"message_id": handle["message_id"], **self._message(
                 text, handle["url"], handle.get("photo", ""), handle.get("item_id"), still_on_sale)})
 
+    async def recommend(self, reason: str, handle: dict | None) -> None:
+        """Une alerte devient recommandée (ex. likes qui montent vite) : réponse au message, avec sonnerie."""
+        payload = {"text": f"💎 <b>Recommandée</b> : {html.escape(reason)}", "parse_mode": "HTML",
+                   "link_preview_options": {"is_disabled": True}}
+        if handle and handle.get("message_id"):
+            payload["reply_parameters"] = {"message_id": handle["message_id"], "allow_sending_without_reply": True}
+        await self._call("sendMessage", payload)
+
     async def reserved(self, item_id: int, result: dict, handle: dict | None, auto: bool) -> None:
         """Résultat d'une réservation, en réponse au message d'alerte. Sonne : il faut payer vite."""
         if result.get("ok"):

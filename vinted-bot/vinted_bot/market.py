@@ -39,6 +39,18 @@ NEIGHBOURS = 20         # annonces plus anciennes retenues comme repères (une f
 MISSING_POLLS = 2       # absences consécutives avant de la dire partie
 FAST = 3600.0           # « partie vite » : en moins d'une heure
 PEPITE_RATIO = 0.6      # prix ≤ 60 % du prix de vente habituel
+PEPITE_FLOOR = 0.25     # … mais ≥ 25 % : en dessous, c'est un accessoire, un emballage ou un faux
+# Emballages et à-côtés vendus sous le nom d'une grande marque (« boîte Loro Piana », « sac
+# papier Dior »…) : écartés de la veille, ils passeraient pour des pépites à 5 €.
+JUNK = re.compile(
+    r"\b(boite|box vide|empty box|emballage|packaging|sac (en )?papier|sacs (en )?papier|paper bag|shopping bag|"
+    r"sac shopping|sac cadeau|gift bag|dust ?bag|pochon|pochette de protection|housse|cintre|ruban|ribbon|"
+    r"certificat|certificate|facture|ticket|etiquette|carte cadeau|gift card|catalogue|magazine|flyer|"
+    r"autocollant|sticker|notice|mode d.emploi|boucle seule|bouton(s)? seul)", re.I)
+
+
+def is_junk(title: str) -> bool:
+    return bool(JUNK.search(_norm(title)))
 MIN_SOLD = 8            # ventes minimum pour estimer un prix de vente habituel
 KEEP_DAYS = 14
 SOLD_STATES = ("sold", "reserved")   # vente confirmée par la page de l'annonce
@@ -214,7 +226,7 @@ class MarketWatch:
                 item = Item.from_api(r, domain)
             except (KeyError, TypeError, ValueError):
                 continue
-            if not item.promoted:
+            if not item.promoted and not is_junk(item.title):
                 items.append(item)
         ids = [i.id for i in items]
         prev = self._prev.get(seg_id)
@@ -234,7 +246,8 @@ class MarketWatch:
         if fresh and self.on_pepite and seg_id not in self._radar:
             median = self.median_sold(seg_id, now)
             for item in items:
-                if item.id in fresh and median and item.price is not None and item.price <= PEPITE_RATIO * median:
+                if (item.id in fresh and median and item.price is not None
+                        and PEPITE_FLOOR * median <= item.price <= PEPITE_RATIO * median):
                     gain = round(median - buy_cost(item.price), 2)
                     if gain >= ALERT_MIN_GAIN:
                         self.on_pepite(item, seg_id, median, gain)
@@ -310,7 +323,7 @@ def report(rows: list[dict], segments: list[dict], now: float | None = None) -> 
         pepites = []
         if median_sold:
             for r in sold:
-                if r["sell_s"] <= FAST and r["price"] <= PEPITE_RATIO * median_sold:
+                if r["sell_s"] <= FAST and PEPITE_FLOOR * median_sold <= r["price"] <= PEPITE_RATIO * median_sold:
                     gain = median_sold - buy_cost(r["price"])
                     if gain > 0:
                         pepites.append(gain)
@@ -353,7 +366,7 @@ def report(rows: list[dict], segments: list[dict], now: float | None = None) -> 
         hours = _row_hours(r)
         card["likes_per_h"] = round((r["likes"] - r["likes0"]) / hours, 2) if hours >= 0.5 else None
         if r["state"] == "live" and now - r["last_seen"] <= 900:
-            if median_sold and r["price"] <= 0.7 * median_sold:
+            if median_sold and PEPITE_FLOOR * median_sold <= r["price"] <= 0.7 * median_sold:
                 card["gain"] = round(median_sold - buy_cost(r["price"]), 2)
                 if card["gain"] > 0:
                     live_pepites.append(card)

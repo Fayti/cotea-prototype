@@ -22,6 +22,7 @@ from pathlib import Path
 from aiohttp import web
 
 from .analysis import analyze
+from .market import is_junk
 from .buyer import VintedWindow
 from .market import DEFAULT_SEGMENTS, MarketWatch, radar_bands, radar_report, report as market_report, segment_params
 from .client import VintedClient
@@ -91,6 +92,7 @@ class UiNotifier:
 
     async def likes(self, t) -> None:
         self.engine.update_alert(t.item_id, {"likes": t.likes, "views": t.views})
+        await self.engine.reco_from_likes(t.item_id)
 
     async def status(self, t, handle) -> None:
         self.engine.update_alert(t.item_id, {
@@ -155,7 +157,9 @@ class Engine:
         self.side_tasks: list[asyncio.Task] = []
         self.market: MarketWatch | None = None
         self.market_memory: dict = {}  # garde le suivi de la veille d'un redémarrage du moteur à l'autre
-        self.reservations: dict[int, dict] = {}  # annonce -> état de réservation (affiché sur la carte)
+        self.reservations: dict[int, dict] = {}
+        self.reco_marks: dict[int, dict] = {}      # annonce -> recommandation décidée avant son affichage
+        self._stats_cache: tuple[float, dict] = (0.0, {})  # annonce -> état de réservation (affiché sur la carte)
 
     def _load(self) -> dict:
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
@@ -252,10 +256,15 @@ class Engine:
         m._alerted[item.id] = None
         seg = next((s for s in self.settings.get("watch", {}).get("segments", []) if s["id"] == seg_id), {})
         search = Search(name=f"💎 Veille · {seg.get('name', seg_id)}", key=f"veille-{seg_id}")
+        self.reco_marks[item.id] = {"reco": True, "veille": True, "reco_reason":
+                                    f"💎 Veille : se vend ~{median:.0f} € d'habitude, gain estimé +{gain:.0f} €"}
         deal = Deal(median=median, discount=1 - item.price / median, is_deal=True)
         log.info("💎 Pépite : %s à %s € (se vend ~%.0f €, gain estimé %.0f €) %s",
                  item.title, item.price, median, gain, item.url)
-        m.tracker.add(item.id, search.key, item.url)
+        t = m.tracker.add(item.id, search.key, item.url)
+        if seg:  # likes en direct : la veille de ce segment, relancée au prix exact
+            t.domain, t.params = segment_params(seg)
+            t.price, t.likes, t.views = item.price, item.favourites, item.views
         if m.cfg.extra_photos and len(item.photo_urls) < m.cfg.photos_per_alert:
             m._spawn(m._alert_with_photos(item, deal, search), "pépite")
         else:
@@ -300,8 +309,57 @@ class Engine:
             self.update_alert(item_id, patch)
         # Sinon l'alerte n'est pas encore affichée (photos en cours) : push_alert reprendra l'état.
 
+    # --- recommandations ----------------------------------------------------------------
+
+    def search_stats(self) -> dict:
+        """Par recherche : prix auquel ses annonces partent en moins d'une heure (10 min de cache)."""
+        ts, stats = self._stats_cache
+        if time.time() - ts > 600:
+            rows = analyze(self.store.alerts_since(time.time() - 14 * 86400), self.settings.get("search", []))
+            stats = {r["id"]: r for r in rows}
+            self._stats_cache = (time.time(), stats)
+        return stats
+
+    def recommend(self, payload: dict) -> str | None:
+        """Pourquoi cette alerte vaut le coup d'œil, ou None. Calculé à partir de tes recherches."""
+        if is_junk(payload.get("title") or ""):
+            return None
+        price, margin_ = payload.get("price"), payload.get("margin")
+        if margin_ is not None and margin_ >= 30:
+            return f"💰 Marge estimée +{margin_:.0f} €"
+        if payload.get("deal") and (payload.get("discount") or 0) >= 0.4:
+            return f"🔥 {payload['discount']:.0%} sous le prix habituel de ta recherche".replace("%", " %")
+        st = self.search_stats().get(payload.get("search_key"), {})
+        quick = st.get("quick_price")
+        if price is not None and quick and (st.get("quick_count") or 0) >= 3 and price <= 0.75 * quick:
+            return f"⚡ Dans ta recherche, ce genre d'annonce part en moins d'1 h à ~{quick:.0f} €"
+        return None
+
+    async def reco_from_likes(self, item_id: int) -> None:
+        """Une alerte qui gagne vite des likes devient recommandée (et Telegram te prévient)."""
+        a = next((x for x in self.alerts if x.get("id") == item_id), None)
+        if not a or a.get("reco") or is_junk(a.get("title") or ""):
+            return
+        gained = (a.get("likes") or 0) - (a.get("likes_start") or 0)
+        minutes = max(1, round((time.time() - a["detected_ts"]) / 60))
+        if gained < 3 or minutes > 60:
+            return
+        reason = f"❤️ +{gained} likes en {minutes} min : elle intéresse, décide vite"
+        self.update_alert(item_id, {"reco": True, "reco_reason": reason})
+        tracked = self.monitor.tracker.items.get(item_id) if self.monitor else None
+        for n in self.notifiers:
+            if hasattr(n, "recommend"):
+                handle = tracked.handles.get(type(n).__name__) if tracked else None
+                with contextlib.suppress(Exception):
+                    await n.recommend(reason, handle)
+
     def push_alert(self, payload: dict) -> None:
         payload.update(self.reservations.get(payload.get("id"), {}))
+        payload.update(self.reco_marks.pop(payload.get("id"), {}))
+        if not payload.get("reco"):
+            reason = self.recommend(payload)
+            if reason:
+                payload.update(reco=True, reco_reason=reason)
         self.store.add_alert(payload)
         self.alerts.append(payload)
         self._broadcast({"type": "alert", "alert": payload})

@@ -1109,3 +1109,67 @@ def test_radar_random_checks_measure_the_real_sell_rate(tmp_path):
     # Une réapparition dans les résultats n'efface pas le verdict lu sur la page
     mw.process("radar-2", items, 100)
     assert {r["state"] for r in store.market_rows(-1)} == {"sold", "unsold"}
+
+
+def test_likes_are_refreshed_after_the_listing_left_the_first_page(tmp_path):
+    search = Search(name="s", params={"search_text": "herno"})
+    mon, fake, rec = make_monitor(tmp_path, search)
+    seen_likes, asked = [], []
+
+    class Likes:
+        async def send(self, *a):
+            pass
+
+        async def likes(self, t):
+            seen_likes.append((t.item_id, t.likes))
+
+    mon.notifiers.append(Likes())
+    older = [svc_item(B + i) for i in (40, 30, 20, 10)]
+
+    async def search_fn(params, lane=None):
+        asked.append(params)
+        if params.get("price_from"):                       # recherche ciblée : l'annonce et ses likes
+            return [dict(svc_item(B + 50, price="35.00"), favourite_count=7)]
+        return fake.pages.pop(0) if fake.pages else []
+
+    fake.search = search_fn
+    fake.pages = [older, [svc_item(B + 50, price="35.00"), *older], [svc_item(B + 60 + i) for i in range(20)]]
+
+    async def scenario():
+        for _ in range(3):                                  # alerte, puis l'annonce sort de la 1re page
+            await mon.poll(search)
+        await mon.refresh_likes_once()
+        await asyncio.sleep(0)
+
+    asyncio.run(scenario())
+    target = asked[-1]
+    assert target["search_text"] == "herno" and target["price_from"] == target["price_to"] == "35.00"
+    assert seen_likes and seen_likes[-1] == (B + 50, 7)
+    assert mon._likes_candidate(time.time()) is None or mon._likes_candidate(time.time()).item_id != B + 50
+
+
+def test_recommendations_are_separated_and_explained(tmp_path):
+    from vinted_bot.app import Engine
+    e = Engine(tmp_path)
+    now = time.time()
+
+    def payload(i, **kw):
+        base = {"id": i, "title": "Doudoune Herno", "price": 60.0, "search_key": "s1", "search": "Herno",
+                "detected_ts": now, "deal": False, "discount": None, "margin": None, "likes": 0, "likes_start": 0}
+        return {**base, **kw}
+
+    e.push_alert(payload(1, margin=45.0))
+    e.push_alert(payload(2, deal=True, discount=0.55))
+    e.push_alert(payload(3))
+    e.push_alert(payload(4, title="Boîte Loro Piana", margin=80.0))            # emballage : jamais conseillé
+    e.reco_marks[5] = {"reco": True, "veille": True, "reco_reason": "💎 Veille : se vend ~120 €"}
+    e.push_alert(payload(5))
+    got = {a["id"]: a.get("reco_reason") for a in e.alerts}
+    assert got[1].startswith("💰 Marge estimée +45") and "55 %" in got[2]
+    assert got[3] is None and got[4] is None and got[5].startswith("💎 Veille")
+    # Une alerte ordinaire qui gagne 4 likes en quelques minutes devient recommandée
+    e.update_alert(3, {"likes": 4})
+    asyncio.run(e.reco_from_likes(3))
+    a3 = next(a for a in e.alerts if a["id"] == 3)
+    assert a3["reco"] and a3["reco_reason"].startswith("❤️ +4 likes")
+    e.store.close()

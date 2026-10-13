@@ -39,6 +39,9 @@ PHOTOS_TTL = 180.0  # au-delà, les photos supplémentaires d'une alerte n'ont p
 PAGE_PAUSE = 900.0  # pause des lectures de pages d'annonce après un blocage
 STATUS_WAIT = 120.0  # au-delà, une confirmation de vente passe avant les photos
 CONFIRM_TTL = 3 * 3600.0  # vérification d'un départ (veille) abandonnée au-delà
+LIKES_EVERY = 15.0        # une relecture de likes toutes les 15 s au plus (≈ 0,07 requête/s)
+LIKES_REFRESH = 300.0     # chaque alerte récente relue toutes les 5 min…
+LIKES_FOR = 3 * 3600.0    # … pendant ses 3 premières heures
 PHOTOS_WAIT = 5.0  # attente maximale des photos avant d'envoyer l'alerte quand même
 
 
@@ -173,6 +176,7 @@ class Monitor:
             await asyncio.gather(
                 *(self._drive(d, ss) for d, ss in by_domain.items()),
                 *(self._page_loop(d) for d in self.page_domains - set(by_domain)),
+                self._likes_loop(),
                 self._report(),
             )
         finally:
@@ -199,6 +203,40 @@ class Monitor:
             task = asyncio.create_task(coro)
             self._pending.add(task)
             task.add_done_callback(self._pending.discard)
+
+    def _likes_candidate(self, now: float):
+        due = [t for t in self.tracker.items.values()
+               if t.params is not None and t.price is not None and t.status == AVAILABLE
+               and now - t.alerted_ts <= LIKES_FOR and now - t.likes_ts >= LIKES_REFRESH]
+        return min(due, key=lambda t: t.likes_ts, default=None)
+
+    async def _likes_loop(self) -> None:
+        """Likes en direct des alertes récentes, même sorties de la 1re page de leur recherche."""
+        while True:
+            await asyncio.sleep(LIKES_EVERY)
+            await self.refresh_likes_once()
+
+    async def refresh_likes_once(self) -> None:
+        t = self._likes_candidate(time.time())
+        if t is not None:
+            t.likes_ts = time.time()
+            price = f"{t.price:.2f}"
+            params = {**t.params, "price_from": price, "price_to": price,
+                      "order": "newest_first", "per_page": "20", "page": "1"}
+            try:
+                raw = await self.client(t.domain).search(params)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.debug("Likes de l'annonce %s : %s", t.item_id, e)
+                return
+            items = []
+            for r in raw:
+                try:
+                    items.append(Item.from_api(r, t.domain))
+                except (KeyError, TypeError, ValueError):
+                    pass
+            self._update_likes([i for i in items if i.id == t.item_id])
 
     async def _page_loop(self, domain: str) -> None:
         """Lecteur de pages pour un domaine sans recherche (veille seule) : mêmes règles d'espacement."""
@@ -313,6 +351,7 @@ class Monitor:
                 self.on_auto_reserve(item, search)  # avant tout le reste : chaque seconde compte
             t = self.tracker.add(item.id, search.key, item.url)
             t.likes, t.views = item.favourites, item.views
+            t.domain, t.params, t.price = search.domain, dict(search.params), item.price
             self.store.save_tracked(t)
             if self.cfg.extra_photos and len(item.photo_urls) < self.cfg.photos_per_alert:
                 self._spawn(self._alert_with_photos(item, deal, search), "alerte")

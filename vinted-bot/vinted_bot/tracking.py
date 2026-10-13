@@ -52,6 +52,12 @@ class Tracked:
     handles: dict = field(default_factory=dict)  # notifier -> référence du message envoyé
     likes: int | None = None   # favoris (« j'aime »), relevés à chaque passage de la recherche
     views: int | None = None
+    # Pour relire ses likes même quand l'annonce a quitté la 1re page de sa recherche :
+    # la recherche d'origine, relancée au prix exact de l'annonce, la retrouve.
+    domain: str = ""
+    params: dict | None = None
+    price: float | None = None
+    likes_ts: float = 0.0
 
 
 class Tracker:
