@@ -15,6 +15,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from vinted_bot.config import Config, Search  # noqa: E402
+from vinted_bot.models import Deal, Item  # noqa: E402
 from vinted_bot.monitor import Monitor  # noqa: E402
 from vinted_bot.store import Store  # noqa: E402
 
@@ -30,15 +31,41 @@ class Recorder:
         pass
 
 
+async def check_pages(count: int = 3) -> int:
+    """Description et avis du vendeur lus sur la page de vraies annonces PS5, comme le fait le bot
+    avant d'alerter pour une recherche avec mots interdits ou avis minimum."""
+    search = Search(name="ps5 vérifiée", params={"search_text": "ps5"}, exclude_desc=["paypal"], min_reviews=1)
+    rec = Recorder()
+    with tempfile.TemporaryDirectory() as tmp:
+        store = Store(os.path.join(tmp, "check.sqlite3"))
+        mon = Monitor(Config(searches=[search], stats_every=0), store, [rec])
+        raw = await mon.client("vinted.fr").search(search.api_params(20))
+        items = [Item.from_api(r, "vinted.fr") for r in raw if not r.get("promoted")][:count]
+        for item in items:
+            await mon._check_then_alert(item, Deal(None, None, False), search, None)
+        while pending := [t for t in mon._pending if not t.done()]:
+            await asyncio.gather(*pending)
+        for c in mon.clients.values():
+            await c.close()
+        store.close()
+    st = mon.state.get(search.key, {})
+    print(f"\nVérification sur la page ({len(items)} annonces PS5) : {len(rec.items)} alertée(s), "
+          f"{st.get('checked_out', 0)} écartée(s) (dernière raison : {st.get('checked_out_last')})")
+    for it in items:
+        print(f"  avis={it.seller_reviews} note={it.seller_rating} vérifiée={it.checked} "
+              f"description={len(it.description or '')} car. | {it.title[:45]!r}")
+    lus = sum(1 for it in items if it.seller_reviews is not None and it.description is not None)
+    print(f"Avis et description lus : {lus}/{len(items)}")
+    return lus
+
+
 async def main(duration: float) -> int:
     searches = [
         Search(name="tout le catalogue", weight=2),
         Search(name="nike", params={"search_text": "nike"}),
         Search(name="vestes Nike/adidas < 30", params={"attribute_ids[brand]": "53,14", "price_to": "30"}),
-        # Description et avis du vendeur lus sur la page de l'annonce avant l'alerte.
-        Search(name="ps5 vérifiée", params={"search_text": "ps5"}, exclude_desc=["paypal"], min_reviews=1),
     ]
-    cfg = Config(searches=searches, request_gap=1.0, per_page=48, stats_every=0, extra_photos=False)
+    cfg = Config(searches=searches, request_gap=1.0, per_page=48, stats_every=0)
     rec = Recorder()
     with tempfile.TemporaryDirectory() as tmp:
         store = Store(os.path.join(tmp, "probe.sqlite3"))
@@ -66,20 +93,12 @@ async def main(duration: float) -> int:
     for _, it, name in rec.items[:8]:
         print(f"  [{name}] {it.price} {it.currency} | {it.title[:40]!r} | {it.brand} | {it.size} | {it.status}"
               f" | {it.url}")
-    checked = [it for _, it, name in rec.items if name == "ps5 vérifiée"]
-    st = status["searches"].get("ps5 vérifiée", {})
-    print(f"Vérification sur la page : {len(checked)} alerte(s), {st.get('checked_out', 0)} écartée(s)"
-          f" (dernière raison : {st.get('checked_out_last')})")
-    for it in checked[:6]:
-        print(f"  avis={it.seller_reviews} note={it.seller_rating} vérifiée={it.checked} "
-              f"description={len(it.description or '')} car. | {it.title[:40]!r}")
     by_search = {}
     for _, _, name in rec.items:
         by_search[name] = by_search.get(name, 0) + 1
     print("Par recherche :", by_search)
-    lus = sum(1 for it in checked if it.seller_reviews is not None) + st.get("checked_out", 0)
-    print("Avis lus sur de vraies annonces :", lus)
-    ok = len(rec.items) > 0 and status["blocked"] == 0
+    lus = await check_pages()
+    ok = len(rec.items) > 0 and status["blocked"] == 0 and lus > 0
     print("VERDICT :", "OK" if ok else "ÉCHEC")
     return 0 if ok else 1
 
