@@ -35,8 +35,10 @@ async def main(duration: float) -> int:
         Search(name="tout le catalogue", weight=2),
         Search(name="nike", params={"search_text": "nike"}),
         Search(name="vestes Nike/adidas < 30", params={"attribute_ids[brand]": "53,14", "price_to": "30"}),
+        # Description et avis du vendeur lus sur la page de l'annonce avant l'alerte.
+        Search(name="ps5 vérifiée", params={"search_text": "ps5"}, exclude_desc=["paypal"], min_reviews=1),
     ]
-    cfg = Config(searches=searches, request_gap=1.0, per_page=48, stats_every=0)
+    cfg = Config(searches=searches, request_gap=1.0, per_page=48, stats_every=0, extra_photos=False)
     rec = Recorder()
     with tempfile.TemporaryDirectory() as tmp:
         store = Store(os.path.join(tmp, "probe.sqlite3"))
@@ -64,10 +66,19 @@ async def main(duration: float) -> int:
     for _, it, name in rec.items[:8]:
         print(f"  [{name}] {it.price} {it.currency} | {it.title[:40]!r} | {it.brand} | {it.size} | {it.status}"
               f" | {it.url}")
+    checked = [it for _, it, name in rec.items if name == "ps5 vérifiée"]
+    st = status["searches"].get("ps5 vérifiée", {})
+    print(f"Vérification sur la page : {len(checked)} alerte(s), {st.get('checked_out', 0)} écartée(s)"
+          f" (dernière raison : {st.get('checked_out_last')})")
+    for it in checked[:6]:
+        print(f"  avis={it.seller_reviews} note={it.seller_rating} vérifiée={it.checked} "
+              f"description={len(it.description or '')} car. | {it.title[:40]!r}")
     by_search = {}
     for _, _, name in rec.items:
         by_search[name] = by_search.get(name, 0) + 1
     print("Par recherche :", by_search)
+    lus = sum(1 for it in checked if it.seller_reviews is not None) + st.get("checked_out", 0)
+    print("Avis lus sur de vraies annonces :", lus)
     ok = len(rec.items) > 0 and status["blocked"] == 0
     print("VERDICT :", "OK" if ok else "ÉCHEC")
     return 0 if ok else 1
