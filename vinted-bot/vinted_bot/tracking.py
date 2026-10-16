@@ -183,6 +183,45 @@ def page_status(status_code: int, final_url: str, page: str) -> str | None:
     return None
 
 
+_LD_JSON = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+_DESC_PROP = re.compile(r'itemProp="description".*?<span>(.*?)</span>', re.S)
+_META_DESC = re.compile(r'<meta name="description" content="([^"]*)"')
+_FEEDBACK = re.compile(r'"feedback_count":(\d+),"feedback_reputation":([\d.]+)')
+
+
+def extract_facts(page: str, item_id: int) -> dict:
+    """Description de l'annonce et avis du vendeur, lus sur sa page (None si introuvable).
+
+    Relevé sur de vraies pages (16/10/2026) :
+    - description : bloc `application/ld+json` de type Product (texte complet), sinon le
+      bloc `itemProp="description"` ;
+    - vendeur : greffon de la colonne de droite `{"feedback_count":N,"feedback_reputation":R,
+      …,"item_id":"<annonce>"}` (une seule occurrence par page).
+    """
+    description = None
+    for m in _LD_JSON.finditer(page):
+        try:
+            data = json.loads(m.group(1))
+        except ValueError:
+            continue
+        if isinstance(data, dict) and data.get("@type") == "Product" and isinstance(data.get("description"), str):
+            description = data["description"]
+            break
+    if description is None and (m := _DESC_PROP.search(page)):
+        description = _unescape(re.sub(r"<[^>]+>", " ", m.group(1)))
+    if description is None and (m := _META_DESC.search(page)):
+        description = html_lib.unescape(m.group(1))
+    reviews = rating = None
+    flat = page.replace('\\"', '"')
+    matches = list(_FEEDBACK.finditer(flat))
+    for m in matches:
+        # Le greffon du vendeur de CETTE annonce (repère : son numéro, juste après).
+        if f'"item_id":"{item_id}"' in flat[m.end():m.end() + 300] or len(matches) == 1:
+            reviews, rating = int(m.group(1)), float(m.group(2))
+            break
+    return {"description": description, "reviews": reviews, "rating": rating}
+
+
 def page_facts_json(page: str) -> str:
     """Résumé compact pour le journal (diagnostic)."""
     return json.dumps({"len": len(page), "photos": len(extract_photos(page, 20))})

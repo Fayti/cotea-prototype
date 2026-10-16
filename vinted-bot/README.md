@@ -65,17 +65,31 @@ contre la médiane des prix récents de la même recherche.
 - **Marge estimée** : pour chaque recherche, un « prix de revente visé » (ex. sur Vestiaire
   Collective). Chaque annonce affiche alors `revente × 0,8 − (prix + protection acheteurs) − 6 €
   d'envoi`, et une « marge minimale » filtre les alertes.
-- **Analyse des recherches** (onglet Recherches) : annonces par jour, prix médian, part vendue en
-  moins d'une heure, prix de ces ventes rapides, délai de vente. Une annonce vendue en moins d'une
-  heure était sous-évaluée : cette part mesure où le marché laisse passer des affaires. Calculé
-  sur les alertes déjà enregistrées, sans requête en plus.
+- **Mots interdits dans la description, avis minimum du vendeur** : la liste des annonces ne
+  donne ni la description ni les avis (relevé le 16/10/2026). Pour une recherche qui les filtre,
+  le bot lit donc la page de l'annonce AVANT d'alerter (une requête, 1 à 2 s ; la même lecture
+  donne les 3 photos) et ne réserve automatiquement qu'après. Les mots interdits sont aussi
+  vérifiés dans le titre, sans lecture. Si Vinted freine la lecture des pages, les avis sont lus
+  sur le profil du vendeur (`/api/v2/users/<id>`, 2 Ko) et l'annonce part quand même, marquée
+  « non vérifiée » : mieux vaut un coup d'œil de trop qu'une affaire ratée. Un mot de 3 lettres
+  ou moins est cherché en mot entier (« pro » n'écarte pas « propre »).
+- **Préréglages PS5** (formulaire de recherche) : PS5 Pro, PS5 Digital, PS5 avec lecteur. Ils
+  remplissent le lien (texte « ps5 » et prix plancher contre jeux et manettes), les mots du
+  titre qui séparent les modèles, les mots interdits dans la description (paypal, whatsapp,
+  virement, hors vinted, pour pièces…) et 1 avis minimum. Rien n'est enregistré sans toi.
+- **Analyse des recherches** (onglet Recherches) : une vraie affaire part en moins de 20 min.
+  Par recherche, et par modèle reconnu dans le titre (PS5 Pro, PS5 Digital, PS5 avec lecteur) :
+  annonces par jour, prix médian, part partie en moins de 20 min, prix de ces ventes, « Achète
+  sous » (le prix le plus haut auquel une annonce serait conseillée) et délai de vente. Le moment
+  de la vente est celui où l'annonce quitte les résultats (sa page confirme ensuite le motif).
+  Calculé sur les alertes déjà enregistrées, sans requête en plus.
 - **Veille du marché** (onglet 📈 Veille) : le bot suit des segments (une marque, un type
   d'article ; 24 segments conseillés en un clic, sans les marques très contrefaites). Chaque
   segment est relu toutes les 3 minutes, 96 annonces à la fois : prix, likes, vues, et le moment
   où l'annonce disparaît alors que des plus anciennes sont toujours là ; sa page dit ensuite si
   elle est vendue (au dernier prix vu) ou simplement supprimée. Il en tire, par segment : le prix de vente habituel, la part vendue
   en 24 h, le délai de vente, les likes par heure et surtout **l'argent sur la table** : ce
-  qu'aurait gagné chaque jour l'acheteur des pépites (parties en moins d'une heure à 60 % ou
+  qu'aurait gagné chaque jour l'acheteur des pépites (parties en moins de 20 minutes à 60 % ou
   moins du prix habituel), revendues à ce prix, frais d'achat et envoi déduits. S'y ajoutent les
   pépites encore en ligne, ce qui part vite et cher, et les annonces les plus likées. Une
   nouvelle pépite (gain estimé ≥ 15 €) est signalée tout de suite, dans le fil et sur Telegram.
@@ -101,9 +115,11 @@ contre la médiane des prix récents de la même recherche.
   même rythme prudent (une page toutes les 10 s au plus). Seules les ventes confirmées comptent.
 - **Mes alertes / Trouvailles du bot** (onglet Annonces) : deux vues strictement séparées.
   « Mes alertes » ne montre que les annonces de tes recherches enregistrées ; un filtre « 💎
-  Conseillées » y garde celles que le bot recommande (marge ≥ 30 €, prix 40 % sous le prix
-  habituel, prix sous celui des ventes rapides de la recherche, ou ≥ 3 likes dans la première
-  heure ; la raison est écrite sur la carte). « Trouvailles du bot » contient tout le reste
+  Conseillées » y garde celles que le bot recommande : parmi les 10 annonces passées du même
+  modèle les plus proches en prix (de 15 % moins cher à 25 % plus cher), au moins 4 dont on
+  connaît l'issue et la moitié parties en moins de 20 min. Les annonces que tu as réservées
+  toi-même ne comptent pas. La raison est écrite sur la carte, et le message Telegram commence
+  par « 💎 CONSEILLÉE ». « Trouvailles du bot » contient tout le reste
   (pépites de la veille). Une recherche ajoutée autrefois par le bot (piste Herno) est déplacée
   dans la veille.
 - **Likes en direct** : chaque passage lit les 96 dernières annonces de la recherche (mesuré :
@@ -193,7 +209,9 @@ Dans `config.toml`, la section `[[search]]` accepte :
 | Clé | Effet |
 |---|---|
 | `url` | lien de recherche copié depuis vinted.fr (filtres appliqués côté serveur) |
-| `exclude` | rejette si le titre contient un mot commençant ainsi (accents ignorés) |
+| `exclude` | rejette si le titre contient un mot commençant ainsi (accents ignorés ; 3 lettres ou moins : mot entier) |
+| `exclude_desc` | mots interdits dans la description et le titre (page de l'annonce lue avant l'alerte) |
+| `min_reviews` | nombre minimum d'évaluations du vendeur |
 | `include_any` | exige au moins un de ces mots dans le titre |
 | `max_price` / `min_price` | bornes de prix (`max_price` est aussi envoyé à l'API) |
 | `exclude_sellers` | logins ignorés |

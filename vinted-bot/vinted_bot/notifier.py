@@ -55,6 +55,8 @@ def status_banner(t) -> str:
 
 
 def headline(item: Item, deal: Deal) -> str:
+    if item.reco:
+        return "💎 CONSEILLÉE"
     if deal.is_deal and deal.discount is not None:
         return f"🔥 -{deal.discount:.0%} vs médiane"
     return "🆕 Nouvelle annonce"
@@ -62,6 +64,8 @@ def headline(item: Item, deal: Deal) -> str:
 
 def format_text(item: Item, deal: Deal, search: Search) -> str:
     lines = [f"{headline(item, deal)} · {search.name}", item.title]
+    if item.reco:
+        lines.append(item.reco)
     price = _money(item.price, item.currency)
     if item.total_price is not None:
         price += f" ({_money(item.total_price, item.currency)} avec frais)"
@@ -75,10 +79,15 @@ def format_text(item: Item, deal: Deal, search: Search) -> str:
     if details:
         lines.append(f"🏷 {details}")
     meta = f"👤 {item.seller}" if item.seller else ""
+    if item.seller_reviews is not None:
+        stars = f"{item.seller_rating * 5:.1f}".replace(".", ",") + " ★, " if item.seller_rating and item.seller_reviews else ""
+        meta += f" ({stars}{item.seller_reviews} avis)"
     if age := _age(item):
         meta += f" · ⏱ publiée il y a {age}"
     if meta:
         lines.append(meta.strip(" ·"))
+    if item.checked is False:
+        lines.append("⚠️ Description ou avis non vérifiés (Vinted a freiné la lecture des pages) : regarde avant d'acheter")
     lines.append(item.url)
     return "\n".join(lines)
 
@@ -204,14 +213,6 @@ class TelegramNotifier:
         else:
             await self._call("editMessageText", {"message_id": handle["message_id"], **self._message(
                 text, handle["url"], handle.get("photo", ""), handle.get("item_id"), still_on_sale)})
-
-    async def recommend(self, reason: str, handle: dict | None) -> None:
-        """Une alerte devient recommandée (ex. likes qui montent vite) : réponse au message, avec sonnerie."""
-        payload = {"text": f"💎 <b>Recommandée</b> : {html.escape(reason)}", "parse_mode": "HTML",
-                   "link_preview_options": {"is_disabled": True}}
-        if handle and handle.get("message_id"):
-            payload["reply_parameters"] = {"message_id": handle["message_id"], "allow_sending_without_reply": True}
-        await self._call("sendMessage", payload)
 
     async def reserved(self, item_id: int, result: dict, handle: dict | None, auto: bool) -> None:
         """Résultat d'une réservation, en réponse au message d'alerte. Sonne : il faut payer vite."""

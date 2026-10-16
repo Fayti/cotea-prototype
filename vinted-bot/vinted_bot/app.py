@@ -21,8 +21,8 @@ from pathlib import Path
 
 from aiohttp import web
 
-from .analysis import analyze
-from .market import is_junk
+from .analysis import analyze, recommend_reason, samples
+from .market import looks_like_packaging
 from .buyer import VintedWindow
 from .market import DEFAULT_SEGMENTS, MarketWatch, radar_bands, radar_report, report as market_report, segment_params
 from .client import VintedClient
@@ -77,6 +77,9 @@ def alert_payload(item: Item, deal, search) -> dict:
         "likes": item.favourites, "likes_start": item.favourites, "views": item.views,
         # Disponibilité (« status » désigne déjà l'état de l'article : très bon état…).
         "availability": "available", "availability_ts": None, "availability_after_s": None,
+        # Vendeur et vérification (recherches avec mots interdits dans la description / avis minimum).
+        "seller_reviews": item.seller_reviews, "seller_rating": item.seller_rating, "checked": item.checked,
+        "reco_reason": item.reco,
     }
 
 
@@ -92,7 +95,6 @@ class UiNotifier:
 
     async def likes(self, t) -> None:
         self.engine.update_alert(t.item_id, {"likes": t.likes, "views": t.views, "likes_ts": t.likes_ts or time.time()})
-        await self.engine.reco_from_likes(t.item_id)
 
     async def status(self, t, handle) -> None:
         self.engine.update_alert(t.item_id, {
@@ -129,6 +131,9 @@ def normalize_search(body: dict, existing: dict | None = None) -> dict:
         "name": name[:80],
         "url": url,
         "exclude": _word_list(body.get("exclude")),
+        "include_any": _word_list(body.get("include_any")),
+        "exclude_desc": _word_list(body.get("exclude_desc")),
+        "min_reviews": max(0, int(_float_or_none(body.get("min_reviews")) or 0)) or None,
         "max_price": _float_or_none(body.get("max_price")),
         "only_deals": bool(body.get("only_deals")),
         "auto_reserve_max": _float_or_none(body.get("auto_reserve_max")),
@@ -159,7 +164,7 @@ class Engine:
         self.market_memory: dict = {}  # garde le suivi de la veille d'un redémarrage du moteur à l'autre
         self.reservations: dict[int, dict] = {}
         self.reco_marks: dict[int, dict] = {}      # annonce -> recommandation décidée avant son affichage
-        self._stats_cache: tuple[float, dict] = (0.0, {})  # annonce -> état de réservation (affiché sur la carte)
+        self._pool_cache: tuple[float, list] = (0.0, [])  # issues à 20 min des alertes passées
 
     def _load(self) -> dict:
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
@@ -212,6 +217,8 @@ class Engine:
         self.monitor = Monitor(cfg, self.store, [UiNotifier(self), *self.notifiers])
         self.monitor.on_auto_reserve = lambda item, search: asyncio.create_task(
             self.reserve(item.id, item.url, auto=True))
+        self.monitor.recommender = lambda item, search: (
+            self.recommend(item.title, item.price, search.key, item.id) if self.source_of(search.key) == "mine" else None)
         self.task = asyncio.create_task(self._run(self.monitor))
         if segments:  # veille du marché : mêmes connexions et même rythme que la surveillance
             monitor = self.monitor
@@ -322,47 +329,19 @@ class Engine:
 
     # --- recommandations ----------------------------------------------------------------
 
-    def search_stats(self) -> dict:
-        """Par recherche : prix auquel ses annonces partent en moins d'une heure (10 min de cache)."""
-        ts, stats = self._stats_cache
-        if time.time() - ts > 600:
-            rows = analyze(self.store.alerts_since(time.time() - 14 * 86400), self.settings.get("search", []))
-            stats = {r["id"]: r for r in rows}
-            self._stats_cache = (time.time(), stats)
-        return stats
+    def sample_pool(self) -> list[dict]:
+        """Alertes des 14 derniers jours dont on sait si elles sont parties en moins de 20 min."""
+        ts, pool = self._pool_cache
+        if time.time() - ts > 120:
+            pool = samples(self.store.alerts_since(time.time() - 14 * 86400))
+            self._pool_cache = (time.time(), pool)
+        return pool
 
-    def recommend(self, payload: dict) -> str | None:
-        """Pourquoi cette alerte vaut le coup d'œil, ou None. Calculé à partir de tes recherches."""
-        if is_junk(payload.get("title") or ""):
+    def recommend(self, title: str, price, search_key, item_id=None) -> str | None:
+        """Conseillée = les annonces du même modèle, à ce prix, sont parties en moins de 20 min."""
+        if looks_like_packaging(title or ""):
             return None
-        price, margin_ = payload.get("price"), payload.get("margin")
-        if margin_ is not None and margin_ >= 30:
-            return f"💰 Marge estimée +{margin_:.0f} €"
-        if payload.get("deal") and (payload.get("discount") or 0) >= 0.4:
-            return f"🔥 {payload['discount']:.0%} sous le prix habituel de ta recherche".replace("%", " %")
-        st = self.search_stats().get(payload.get("search_key"), {})
-        quick = st.get("quick_price")
-        if price is not None and quick and (st.get("quick_count") or 0) >= 3 and price <= 0.75 * quick:
-            return f"⚡ Dans ta recherche, ce genre d'annonce part en moins d'1 h à ~{quick:.0f} €"
-        return None
-
-    async def reco_from_likes(self, item_id: int) -> None:
-        """Une alerte qui gagne vite des likes devient recommandée (et Telegram te prévient)."""
-        a = next((x for x in self.alerts if x.get("id") == item_id), None)
-        if not a or a.get("reco") or is_junk(a.get("title") or ""):
-            return
-        gained = (a.get("likes") or 0) - (a.get("likes_start") or 0)
-        minutes = max(1, round((time.time() - a["detected_ts"]) / 60))
-        if gained < 3 or minutes > 60:
-            return
-        reason = f"❤️ +{gained} likes en {minutes} min : elle intéresse, décide vite"
-        self.update_alert(item_id, {"reco": True, "reco_reason": reason})
-        tracked = self.monitor.tracker.items.get(item_id) if self.monitor else None
-        for n in self.notifiers:
-            if hasattr(n, "recommend"):
-                handle = tracked.handles.get(type(n).__name__) if tracked else None
-                with contextlib.suppress(Exception):
-                    await n.recommend(reason, handle)
+        return recommend_reason(self.sample_pool(), search_key, title, price, item_id)
 
     def source_of(self, search_key) -> str:
         """« mine » : alerte d'une recherche que tu as enregistrée ; « bot » : trouvaille du bot."""
@@ -372,10 +351,8 @@ class Engine:
         payload["source"] = self.source_of(payload.get("search_key"))
         payload.update(self.reservations.get(payload.get("id"), {}))
         payload.update(self.reco_marks.pop(payload.get("id"), {}))
-        if not payload.get("reco"):
-            reason = self.recommend(payload)
-            if reason:
-                payload.update(reco=True, reco_reason=reason)
+        if payload.get("reco_reason"):
+            payload["reco"] = True
         self.store.add_alert(payload)
         self.alerts.append(payload)
         self._broadcast({"type": "alert", "alert": payload})

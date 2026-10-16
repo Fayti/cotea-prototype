@@ -99,6 +99,12 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .resv.ok { background: #d3f9d8; color: #1b5e20; }
 .resv.err { background: #ffe3e3; color: #a51111; }
 .margin { font-weight: 700; font-size: 14px; }
+.seller { font-size: 13px; color: var(--muted); }
+.seller b { color: var(--ok); font-weight: 600; }
+.warn-line { font-size: 12.5px; font-weight: 600; color: var(--warn); background: var(--hot-soft); border-radius: 8px; padding: 5px 8px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ana tr.sub td { background: var(--surface-2); font-size: 13px; }
+.ana tr.sub td:first-child { padding-left: 22px; }
 .margin.pos { color: #2b8a3e; } .margin.neg { color: #c92a2a; }
 .margin small { font-weight: 400; color: var(--muted); }
 .ana { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -354,6 +360,11 @@ select { border-radius: 10px; }
 
       <form id="searchForm" class="card stack" hidden autocomplete="off">
         <h2 id="formTitle">Nouvelle recherche</h2>
+        <div class="presets"><span class="sub">Préréglages :</span>
+          <button type="button" class="btn small" data-preset="pro">🎮 PS5 Pro</button>
+          <button type="button" class="btn small" data-preset="digital">🎮 PS5 Digital</button>
+          <button type="button" class="btn small" data-preset="disc">🎮 PS5 avec lecteur</button>
+          <small class="sub">Remplit le formulaire (lien, mots interdits, 1 avis minimum) : ajuste les prix, puis enregistre.</small></div>
         <ol class="steps">
           <li>Sur Vinted, fais ta recherche avec tous les filtres voulus (catégorie, marque, taille, état…). <a href="https://www.vinted.fr/catalog" target="_blank" rel="noopener">Ouvrir Vinted ↗</a></li>
           <li>Copie l'adresse de la page dans la barre du haut du navigateur (Ctrl+L puis Ctrl+C).</li>
@@ -369,6 +380,12 @@ select { border-radius: 10px; }
           <label class="field"><span>Prix maximum (€)</span><input type="number" name="max_price" min="0" step="0.5" placeholder="sans limite"></label>
           <label class="field"><span>Mots interdits dans le titre</span><input type="text" name="exclude" placeholder="lot, enfant, abîmé, copie">
             <small>Séparés par des virgules. « abîmé » bloque aussi « abîmée ».</small></label>
+          <label class="field"><span>Mots obligatoires dans le titre (au moins un)</span><input type="text" name="include_any" placeholder="vide = aucun (ex. digital, numérique)">
+            <small>L'annonce doit contenir au moins un de ces mots.</small></label>
+          <label class="field"><span>🚫 Mots interdits dans la description</span><input type="text" name="exclude_desc" placeholder="paypal, whatsapp, hors vinted">
+            <small>Vérifiés aussi dans le titre. Le bot lit la page de l'annonce avant de t'alerter (1 à 2 s de plus).</small></label>
+          <label class="field"><span>⭐ Avis minimum du vendeur</span><input type="number" name="min_reviews" min="0" step="1" placeholder="vide = peu importe">
+            <small>1 = écarte les comptes sans aucune évaluation (beaucoup d'arnaques).</small></label>
           <label class="field"><span>Priorité</span>
             <select name="weight"><option value="1">Normale</option><option value="2">Haute (2× plus souvent)</option><option value="3">Maximale (3× plus souvent)</option></select>
             <small>Une recherche prioritaire passe plus souvent, au détriment des autres.</small></label>
@@ -394,7 +411,7 @@ select { border-radius: 10px; }
 
       <div class="card stack">
         <div class="toolbar" style="margin:0"><div class="grow"><h2>📊 Ce que disent tes données</h2>
-          <p class="sub">Une annonce vendue en moins d'une heure était sous-évaluée. Plus cette part est élevée, plus la recherche laisse passer des affaires. Mesure fiable sur les recherches précises (peu d'annonces par heure). Aucune requête en plus vers Vinted.</p></div>
+          <p class="sub">Une vraie bonne affaire part en moins de 20 minutes. Pour chaque modèle (PS5 Pro, Digital, avec lecteur…), le bot mesure la part des annonces parties en moins de 20 min et le prix sous lequel ça part vite : « Achète sous ». Une nouvelle annonce est « 💎 Conseillée » quand la plupart des annonces du même modèle, à un prix voisin, sont parties en moins de 20 min. Les annonces que tu as réservées toi-même ne comptent pas. Aucune requête en plus vers Vinted.</p></div>
           <button id="anaBtn" class="btn small">Actualiser</button></div>
         <div id="anaBox" class="ana-wrap"><p class="sub">Chargement…</p></div>
       </div>
@@ -436,7 +453,7 @@ select { border-radius: 10px; }
 
       <div class="card stack">
         <div class="toolbar" style="margin:0"><div class="grow"><h2>🏆 Où est l'argent</h2>
-          <p class="sub"><strong>Argent sur la table</strong> : chaque jour, ce qu'aurait gagné l'acheteur des « pépites » (parties en moins d'une heure à 60 % ou moins du prix de vente habituel), en les revendant à ce prix habituel, frais d'achat et envoi déduits. C'est ce que le bot peut te faire attraper. « Vendu » = annonce disparue des résultats, puis vérifiée sur sa page : seules les vraies ventes comptent (beaucoup de disparitions sont des suppressions).</p></div>
+          <p class="sub"><strong>Argent sur la table</strong> : chaque jour, ce qu'aurait gagné l'acheteur des « pépites » (parties en moins de 20 minutes à 60 % ou moins du prix de vente habituel), en les revendant à ce prix habituel, frais d'achat et envoi déduits. C'est ce que le bot peut te faire attraper. « Vendu » = annonce disparue des résultats, puis vérifiée sur sa page : seules les vraies ventes comptent (beaucoup de disparitions sont des suppressions).</p></div>
           <button id="mkRefresh" class="btn small">Actualiser</button></div>
         <div id="mkTable" class="ana-wrap"><p class="sub">Chargement…</p></div>
       </div>
@@ -578,14 +595,16 @@ function ago(ts) {
 async function loadAnalysis() {
   const rows = await api("GET", "/api/analysis");
   const pct = (v) => v == null ? "—" : `${Math.round(v * 100)} %`;
-  $("#anaBox").innerHTML = rows.length ? `<table class="ana"><thead><tr>
-      <th>Recherche</th><th>Annonces / jour</th><th>Prix médian</th><th>Vendues en &lt; 1 h</th>
-      <th>Prix des ventes rapides</th><th>Délai de vente médian</th><th>Marge médiane</th><th>Verdict</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr><td><strong>${esc(r.name)}</strong><br><small>${r.alerts} annonce(s)</small></td>
+  const line = (r, sub) => `<tr${sub ? ' class="sub"' : ""}><td><strong>${esc(r.name)}</strong><br><small>${r.alerts} annonce(s)</small></td>
       <td>${r.per_day ?? "—"}</td><td>${r.median_price != null ? money(r.median_price) : "—"}</td>
       <td><strong>${pct(r.quick_rate)}</strong></td><td>${r.quick_price != null ? money(r.quick_price) : "—"}</td>
+      <td><strong>${r.buy_below != null ? money(r.buy_below) : "—"}</strong></td>
       <td>${r.median_sale_s != null ? duration(r.median_sale_s) : "—"}</td>
-      <td>${r.median_margin != null ? money(r.median_margin) : "—"}</td><td>${esc(r.verdict)}</td></tr>`).join("")}
+      <td>${r.median_margin != null ? money(r.median_margin) : "—"}</td><td>${esc(r.verdict)}</td></tr>`;
+  $("#anaBox").innerHTML = rows.length ? `<table class="ana"><thead><tr>
+      <th>Recherche</th><th>Annonces / jour</th><th>Prix médian</th><th>Parties en &lt; 20 min</th>
+      <th>Prix des ventes &lt; 20 min</th><th>Achète sous</th><th>Délai de vente médian</th><th>Marge médiane</th><th>Verdict</th></tr></thead><tbody>
+    ${rows.map((r) => line(r, false) + (r.models || []).map((m) => line(m, true)).join("")).join("")}
     </tbody></table>` : `<p class="sub">Ajoute une recherche pour commencer.</p>`;
 }
 $("#anaBtn").addEventListener("click", (e) => guarded(e.target, loadAnalysis));
@@ -805,6 +824,15 @@ function reserveHTML(a) {
   const auto = a.reserve_auto && a.reserve !== "fail" ? " (automatique)" : "";
   return `<div class="resv ${r[1]}">${r[0]}${auto}${a.reserve_msg ? ` : ${esc(a.reserve_msg)}` : ""}</div>`;
 }
+function sellerHTML(a) {
+  let out = "";
+  if (a.seller_reviews != null) {
+    const stars = a.seller_rating && a.seller_reviews ? `${(a.seller_rating * 5).toFixed(1).replace(".", ",")} ★ · ` : "";
+    out += `<div class="seller">👤 ${esc(a.seller || "vendeur")} · <b>${stars}${a.seller_reviews} avis</b></div>`;
+  }
+  if (a.checked === false) out += `<div class="warn-line">⚠️ Description ou avis non vérifiés : regarde avant d'acheter</div>`;
+  return out;
+}
 function likesHTML(a, spotted = "") {
   if (a.likes == null) return spotted ? `<div class="metrics"><span title="Repérée après sa mise en ligne">${spotted}</span></div>` : "";
   const gained = a.likes - (a.likes_start || 0);
@@ -836,6 +864,7 @@ function cardHTML(a) {
       ${a.reco && a.reco_reason ? `<div class="reco">${esc(a.reco_reason)}</div>` : ""}
       <div class="title"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a></div>
       ${meta ? `<div class="meta">${meta}</div>` : ""}
+      ${sellerHTML(a)}
       ${likesHTML(a, spotted)}
       ${a.margin != null ? `<div class="margin ${a.margin > 0 ? "pos" : "neg"}">💰 Marge estimée ${a.margin > 0 ? "+" : ""}${money(a.margin, a.currency)} <small>si revendue ${money(a.resale, a.currency)}</small></div>` : ""}
       ${a.median ? `<div class="meta">Prix habituel de la recherche : ${money(a.median, a.currency)}</div>` : ""}
@@ -975,9 +1004,13 @@ function renderSearches() {
     else if (st.last_error) line = `<span class="live err">⚠ ${esc(st.last_error)}</span>`;
     else if (!st.ready) line = `<span class="live">Préparation : mémorisation des annonces déjà en ligne…</span>`;
     else line = `<span class="live ok">✓ Vérifiée ${ago(st.last_ok)} · un passage toutes les ${String(st.cycle_s).replace(".", ",")} s environ</span>`;
+    if (st?.checked_out) line += `<div class="live">🚫 ${st.checked_out} écartée(s) après lecture de la page (dernière : ${esc(st.checked_out_last || "")})</div>`;
     const chips = [
       s.max_price != null ? `≤ ${money(s.max_price)}` : "",
       s.exclude?.length ? `sans : ${s.exclude.join(", ")}` : "",
+      s.include_any?.length ? `avec : ${s.include_any.join(" ou ")}` : "",
+      s.exclude_desc?.length ? `🚫 description : ${s.exclude_desc.join(", ")}` : "",
+      s.min_reviews ? `⭐ vendeur ≥ ${s.min_reviews} avis` : "",
       weightLabel[s.weight] || "",
       s.only_deals ? "🔥 seulement" : "",
       s.auto_reserve_max != null ? `⚡ réserve tout seul ≤ ${money(s.auto_reserve_max)}` : "",
@@ -1020,12 +1053,29 @@ function openForm(s = null) {
   if (s) {
     f.url.value = s.url; f.name.value = s.name; f.max_price.value = s.max_price ?? "";
     f.exclude.value = (s.exclude || []).join(", "); f.weight.value = s.weight || 1; f.only_deals.checked = !!s.only_deals;
+    f.include_any.value = (s.include_any || []).join(", "); f.exclude_desc.value = (s.exclude_desc || []).join(", ");
+    f.min_reviews.value = s.min_reviews ?? "";
     f.auto_reserve_max.value = s.auto_reserve_max ?? "";
     f.resale_price.value = s.resale_price ?? ""; f.min_margin.value = s.min_margin ?? "";
   }
   f.hidden = false; f.url.focus(); f.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 $("#addBtn").addEventListener("click", () => openForm());
+// Préréglages PS5 : le texte « ps5 » + un prix plancher écartent jeux et manettes ; les mots du
+// titre séparent les 3 modèles ; la description et les avis écartent les arnaques classiques.
+const PS5_TITLE_OUT = "boîte vide, boîte seule, carton vide, portal, vr2, psvr, dualsense edge, lecteur seul";
+const PS5_DESC_OUT = "paypal, whatsapp, virement, lydia, wero, western union, hors vinted, boîte vide, pour pièces, ne fonctionne pas, ne s'allume pas";
+const PRESETS = {
+  pro: { name: "PS5 Pro", url: "https://www.vinted.fr/catalog?search_text=ps5%20pro&price_from=200", include_any: "pro", exclude: PS5_TITLE_OUT },
+  digital: { name: "PS5 Digital", url: "https://www.vinted.fr/catalog?search_text=ps5&price_from=120", include_any: "digital, numérique, sans lecteur", exclude: "pro, " + PS5_TITLE_OUT },
+  disc: { name: "PS5 avec lecteur", url: "https://www.vinted.fr/catalog?search_text=ps5&price_from=150", include_any: "", exclude: "pro, digital, numérique, sans lecteur, " + PS5_TITLE_OUT },
+};
+document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => {
+  const p = PRESETS[b.dataset.preset], f = $("#searchForm");
+  f.url.value = p.url; f.name.value = p.name; f.include_any.value = p.include_any;
+  f.exclude.value = p.exclude; f.exclude_desc.value = PS5_DESC_OUT; f.min_reviews.value = 1;
+  toast(`Formulaire rempli pour « ${p.name} » : choisis ton prix maximum, puis Enregistrer`);
+}));
 $("#cancelForm").addEventListener("click", () => ($("#searchForm").hidden = true));
 $("#previewBtn").addEventListener("click", (e) => guarded(e.target, async () => {
   const box = $("#previewBox"), url = $("#searchForm").url.value.trim();
@@ -1048,6 +1098,7 @@ $("#searchForm").addEventListener("submit", (e) => {
   const body = {
     url: f.url.value.trim(), name: f.name.value.trim(), max_price: f.max_price.value,
     exclude: f.exclude.value, weight: +f.weight.value, only_deals: f.only_deals.checked,
+    include_any: f.include_any.value, exclude_desc: f.exclude_desc.value, min_reviews: f.min_reviews.value,
     auto_reserve_max: f.auto_reserve_max.value,
     resale_price: f.resale_price.value, min_margin: f.min_margin.value,
   };

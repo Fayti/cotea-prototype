@@ -41,6 +41,13 @@ max_price = 60
 weight = 2   # recherche prioritaire
 
 [[search]]
+name = "PS5 Pro"
+url = "https://www.vinted.fr/catalog?search_text=ps5%20pro&price_from=200"
+include_any = ["pro"]
+exclude_desc = ["paypal", "whatsapp", "virement", "hors vinted", "pour pièces"]   # lu sur la page
+min_reviews = 1   # écarte les vendeurs sans aucune évaluation
+
+[[search]]
 name = "Carhartt Detroit — bonnes affaires seulement"
 search_text = "carhartt detroit jacket"
 include_any = ["detroit"]   # au moins un de ces mots dans le titre

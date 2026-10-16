@@ -17,7 +17,8 @@ from .client import RateLimited, VintedClient
 from .config import Config, Search
 from .models import Item
 from .store import Store
-from .tracking import AVAILABLE, DELETED, GONE, SOLD, TRACK_FOR, Tracker, extract_photos, page_status
+from .tracking import (AVAILABLE, DELETED, GONE, RESERVED, SOLD, TRACK_FOR, Tracker, extract_facts, extract_photos,
+                       page_status)
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,11 @@ def likes_interval(age: float) -> float:
     quand tu décides d'acheter ou non, plus lâche ensuite."""
     return 90.0 if age < 1800 else 300.0
 PHOTOS_WAIT = 5.0  # attente maximale des photos avant d'envoyer l'alerte quand même
+# Recherche avec mots interdits dans la description ou avis minimum : la page de l'annonce est
+# lue avant d'alerter. Si d'autres lectures de page passent avant, l'alerte attend son tour
+# jusqu'à CHECK_WAIT ; au-delà (ou si Vinted freine les pages), elle part « non vérifiée ».
+CHECK_WAIT = 60.0
+CHECK_TIMEOUT = 10.0
 
 
 class IdClock:
@@ -149,9 +155,11 @@ class Monitor:
         self._page_busy = False
         self._next_page_at = 0.0
         self._page_pause_until = 0.0
+        self._check_line: deque = deque()  # lectures de page immédiates en attente, dans l'ordre
         self.on_auto_reserve = None  # rappel (annonce, recherche) pour la réservation automatique
         self.on_confirm = None       # rappel (annonce, état lu sur sa page) pour la veille
         self.page_domains: set[str] = set()  # domaines où lire des pages même sans recherche
+        self.recommender = None      # rappel (annonce, recherche) -> raison de la conseiller, ou None
         # État par recherche, lu par l'interface.
         self.state: dict[str, dict] = {
             s.key: {"last_ok": None, "last_error": None, "polls": 0, "ready": False}
@@ -348,23 +356,11 @@ class Monitor:
             self._alerted[item.id] = None
             if len(self._alerted) > 10000:
                 self._alerted.popitem(last=False)
-            notified.append(item)
-            self.stats.alerts += 1
-            if age is not None:
-                self.stats.ages.append(age)
-            if (self.on_auto_reserve and search.auto_reserve_max is not None and item.price is not None
-                    and item.price <= search.auto_reserve_max):
-                self.on_auto_reserve(item, search)  # avant tout le reste : chaque seconde compte
-            t = self.tracker.add(item.id, search.key, item.url)
-            t.likes, t.views = item.favourites, item.views
-            t.domain, t.params, t.price = search.domain, dict(search.params), item.price
-            self.store.save_tracked(t)
-            if self.cfg.extra_photos and len(item.photo_urls) < self.cfg.photos_per_alert:
-                self._spawn(self._alert_with_photos(item, deal, search), "alerte")
+            if search.needs_check:
+                self._spawn(self._check_then_alert(item, deal, search, age), "vérification")
             else:
-                self._dispatch(item, deal, search)
-            log.info("[%s] %s — %s%s", search.name, item.title, item.url,
-                     f" (publiée il y a ~{age:.0f} s)" if age is not None else "")
+                notified.append(item)
+                self._alert(item, deal, search, age)
         if not warmup:
             self._update_likes(items)
         if not warmup and seq is not None and self.cfg.track_status:
@@ -382,6 +378,66 @@ class Monitor:
                         "(augmenter la priorité ou affiner la recherche)", search.name)
         return notified
 
+    def _alert(self, item, deal, search, age, page_read: bool = False) -> None:
+        self.stats.alerts += 1
+        if age is not None:
+            self.stats.ages.append(age)
+        if (self.on_auto_reserve and search.auto_reserve_max is not None and item.price is not None
+                and item.price <= search.auto_reserve_max):
+            self.on_auto_reserve(item, search)  # avant tout le reste : chaque seconde compte
+        t = self.tracker.add(item.id, search.key, item.url)
+        t.likes, t.views = item.favourites, item.views
+        t.domain, t.params, t.price = search.domain, dict(search.params), item.price
+        self.store.save_tracked(t)
+        if not page_read and self.cfg.extra_photos and len(item.photo_urls) < self.cfg.photos_per_alert:
+            self._spawn(self._alert_with_photos(item, deal, search), "alerte")
+        else:
+            self._dispatch(item, deal, search)
+        log.info("[%s] %s — %s%s", search.name, item.title, item.url,
+                 f" (publiée il y a ~{age:.0f} s)" if age is not None else "")
+
+    async def _check_then_alert(self, item, deal, search, age) -> None:
+        """Mots interdits dans la description, avis minimum du vendeur : vérifiés sur la page de
+        l'annonce AVANT l'alerte (et avant la réservation automatique). La même lecture donne
+        les photos. Ce qui n'a pas pu être lu ne fait pas rater l'annonce : elle part avec la
+        mention « non vérifiée »."""
+        page = await self._read_page_now(item, search.domain, CHECK_WAIT, CHECK_TIMEOUT)
+        if page is not None:
+            facts = extract_facts(page, item.id)
+            item.description = facts["description"]
+            item.seller_reviews, item.seller_rating = facts["reviews"], facts["rating"]
+            photos = extract_photos(page, self.cfg.photos_per_alert)
+            if len(photos) > len(item.photo_urls):
+                item.photo_urls = photos
+        if search.min_reviews and item.seller_reviews is None and item.seller_id:
+            await self._seller_from_api(item, search.domain)  # secours : profil du vendeur, 2 Ko
+        item.checked = ((not search.exclude_desc or item.description is not None)
+                        and (not search.min_reviews or item.seller_reviews is not None))
+        ok, reason = filters.accept_details(item, search)
+        if not ok:
+            state = self.state.setdefault(search.key, {"last_ok": None, "last_error": None, "polls": 0, "ready": False})
+            state["checked_out"] = state.get("checked_out", 0) + 1
+            state["checked_out_last"] = reason
+            log.info("[%s] écartée après lecture de la page (%s) : %s", search.name, reason, item.url)
+            return
+        self._alert(item, deal, search, age, page_read=page is not None)
+
+    async def _seller_from_api(self, item, domain: str) -> None:
+        try:
+            user = await asyncio.wait_for(self.client(domain).user(item.seller_id), CHECK_TIMEOUT)
+            self.stats.request_times.append(time.monotonic())
+            if user.get("feedback_count") is not None:
+                item.seller_reviews = int(user["feedback_count"])
+            if user.get("feedback_reputation") is not None:
+                item.seller_rating = float(user["feedback_reputation"])
+        except asyncio.CancelledError:
+            raise
+        except RateLimited as e:
+            self.stats.block_times.append(time.monotonic())
+            log.warning("Avis du vendeur de l'annonce %s illisibles : %s", item.id, e)
+        except Exception as e:
+            log.debug("Avis du vendeur de l'annonce %s illisibles : %s", item.id, e)
+
     def _spawn(self, coro, what: str) -> None:
         async def guarded():
             try:
@@ -393,6 +449,11 @@ class Monitor:
         task.add_done_callback(self._pending.discard)
 
     def _dispatch(self, item, deal, search) -> None:
+        if self.recommender and item.reco is None:
+            try:
+                item.reco = self.recommender(item, search)
+            except Exception as e:  # une recommandation ratée ne doit pas bloquer l'alerte
+                log.debug("Recommandation impossible pour %s : %s", item.id, e)
         # Les envois ne bloquent jamais le polling.
         for notifier in self.notifiers:
             self._spawn(self._send(notifier, item, deal, search), type(notifier).__name__)
@@ -417,26 +478,46 @@ class Monitor:
         self._dispatch(item, deal, search)
 
     async def _photos_now(self, item, domain: str) -> list[str]:
-        now = time.monotonic()
-        if self._page_busy or now < self._next_page_at or now < self._page_pause_until:
-            return []
-        self._page_busy, self._next_page_at = True, now + self.cfg.page_gap
+        page = await self._read_page_now(item, domain)
+        return extract_photos(page, self.cfg.photos_per_alert) if page else []
+
+    async def _read_page_now(self, item, domain: str, wait: float = 0.0, timeout: float = PHOTOS_WAIT) -> str | None:
+        """Page de l'annonce, lue tout de suite ou après au plus `wait` s d'attente de son tour
+        (les lectures de page restent espacées de page_gap). None si impossible."""
+        deadline = time.monotonic() + wait
+        # Passe devant la file des pages (photos en retard, confirmations), et premier arrivé,
+        # premier servi : une annonce plus ancienne n'attend pas indéfiniment son tour.
+        ticket = object()
+        self._check_line.append(ticket)
+        try:
+            while True:
+                now = time.monotonic()
+                if now < self._page_pause_until:
+                    return None
+                if self._check_line[0] is ticket and not self._page_busy and now >= self._next_page_at:
+                    break
+                if now >= deadline:
+                    return None
+                await asyncio.sleep(0.2)
+            self._page_busy, self._next_page_at = True, now + self.cfg.page_gap
+        finally:
+            self._check_line.remove(ticket)
         try:
             async def read():
                 client = self.client(domain)
                 return await client.get_page(item.url, await client.acquire())
-            code, final_url, page = await asyncio.wait_for(read(), PHOTOS_WAIT)
+            code, final_url, page = await asyncio.wait_for(read(), timeout)
             self.stats.request_times.append(time.monotonic())
-            return extract_photos(page, self.cfg.photos_per_alert) if code == 200 else []
+            return page if code == 200 else None
         except RateLimited as e:
             self._page_pause_until = time.monotonic() + PAGE_PAUSE
             self.stats.block_times.append(time.monotonic())
             log.warning("Lecture des pages d'annonce suspendue %d min : %s", PAGE_PAUSE // 60, e)
         except Exception as e:
-            log.debug("Photos de l'annonce %s indisponibles : %s", item.id, e)
+            log.debug("Page de l'annonce %s indisponible : %s", item.id, e)
         finally:
             self._page_busy = False
-        return []
+        return None
 
     def _update_likes(self, items) -> None:
         """Favoris et vues des annonces déjà signalées, relevés gratuitement à chaque passage."""
@@ -471,7 +552,8 @@ class Monitor:
     def _pop_page(self, domain: str):
         """Prochaine page à lire sur ce domaine, ou None. Une seule à la fois, espacées."""
         now = time.monotonic()
-        if self._page_busy or now < self._next_page_at or now < self._page_pause_until:
+        if (self._page_busy or self._check_line or now < self._next_page_at
+                or now < self._page_pause_until):
             return None
         for iid in list(self._page_queue):
             entry = self._page_queue[iid]
@@ -532,7 +614,12 @@ class Monitor:
                     # Encore en vente mais sortie de la recherche (prix modifié…) : on cesse de
                     # la juger sur sa présence jusqu'à ce qu'elle réapparaisse.
                     t.anchors, t.missing = (), 0
-                t.status, t.status_ts = status, time.time()
+                if t.status == GONE and status in (SOLD, RESERVED, DELETED) and t.status_ts:
+                    # Motif confirmé : le moment de la vente reste celui de la disparition, pas
+                    # celui de la lecture (qui a pu attendre son tour plusieurs minutes).
+                    t.status = status
+                else:
+                    t.status, t.status_ts = status, time.time()
                 self._status_changed(t)
             elif t is not None and status is None and "status" in entry["reasons"]:
                 log.info("Annonce %s : page illisible, motif non confirmé (reste « plus disponible »)", item_id)

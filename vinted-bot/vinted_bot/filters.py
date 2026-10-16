@@ -9,13 +9,17 @@ from .models import Deal, Item
 
 
 def _norm(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text.lower())
+    text = unicodedata.normalize("NFKD", text.lower().replace("’", "'"))
     return "".join(c for c in text if not unicodedata.combining(c))
 
 
 def _contains_word(haystack: str, needle: str) -> bool:
     # Début de mot : « abimé » attrape « abîmée », « lot » attrape « lots » mais pas « pilot ».
-    return re.search(rf"(?<!\w){re.escape(_norm(needle))}", haystack) is not None
+    # Mot court (3 lettres ou moins) : mot entier, pluriel admis : « pro » attrape « pros »
+    # mais pas « propre », « jeu » attrape « jeux ».
+    word = _norm(needle).strip()
+    tail = r"[sx]?(?!\w)" if len(word) <= 3 else ""
+    return re.search(rf"(?<!\w){re.escape(word)}{tail}", haystack) is not None
 
 
 RESALE_FEES = 0.20   # commission de la plateforme de revente (Vestiaire Collective : ~17 % + 3 %)
@@ -39,6 +43,9 @@ def accept(item: Item, search: Search) -> tuple[bool, str]:
     for word in search.exclude:
         if _contains_word(title, word):
             return False, f"mot exclu « {word} »"
+    for word in search.exclude_desc:  # interdit dans la description : a fortiori dans le titre
+        if _contains_word(title, word):
+            return False, f"mot interdit « {word} » dans le titre"
     if search.include_any and not any(_contains_word(title, w) for w in search.include_any):
         return False, "aucun mot requis"
     if item.price is not None:
@@ -52,6 +59,19 @@ def accept(item: Item, search: Search) -> tuple[bool, str]:
         gain = margin(item, search)
         if gain is not None and gain < search.min_margin:
             return False, f"marge estimée trop faible ({gain:.0f} €)"
+    return True, ""
+
+
+def accept_details(item: Item, search: Search) -> tuple[bool, str]:
+    """Après lecture de la page : description et avis du vendeur. Ce qui n'a pas pu être lu
+    (None) ne fait pas rejeter l'annonce : elle part avec la mention « non vérifiée »."""
+    if item.description is not None:
+        text = _norm(item.description)
+        for word in search.exclude_desc:
+            if _contains_word(text, word):
+                return False, f"mot interdit « {word} » dans la description"
+    if search.min_reviews and item.seller_reviews is not None and item.seller_reviews < search.min_reviews:
+        return False, f"vendeur avec {item.seller_reviews} avis (minimum {search.min_reviews})"
     return True, ""
 
 

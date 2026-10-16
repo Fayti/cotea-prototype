@@ -74,12 +74,14 @@ def test_parse_rejects_other_sites():
 
 def test_load_example_config():
     cfg = load_config("config.example.toml")
-    assert len(cfg.searches) == 2
-    s = cfg.searches[0]
+    assert len(cfg.searches) == 3
+    s, ps5, carhartt = cfg.searches
     assert s.domain == "vinted.fr" and s.params["attribute_ids[brand]"] == "53"
     assert s.api_params(20)["order"] == "newest_first"
-    assert cfg.searches[1].params == {"search_text": "carhartt detroit jacket"}
-    assert s.weight == 2 and cfg.searches[1].weight == 1 and cfg.searches[1].only_deals
+    assert carhartt.params == {"search_text": "carhartt detroit jacket"}
+    assert s.weight == 2 and carhartt.weight == 1 and carhartt.only_deals
+    assert ps5.params == {"search_text": "ps5 pro", "price_from": "200"}
+    assert ps5.min_reviews == 1 and "paypal" in ps5.exclude_desc and ps5.needs_check and not s.needs_check
     assert cfg.request_gap == 1.0 and cfg.use_direct
     assert cfg.max_age == 3600
 
@@ -100,6 +102,10 @@ def test_filters_accent_and_word_boundary():
     assert filters.accept(mk("Lot de 3 t-shirts"), s)[0] is False
     assert filters.accept(mk("Pilot jacket"), s)[0] is True  # "lot" dans "pilot" n'exclut pas
     assert filters.accept(mk("Veste", 31), s)[0] is False
+    short = Search(name="s", exclude=["pro"], exclude_desc=["paypal"])   # mot court : mot entier
+    assert filters.accept(mk("PS5 digital très propre"), short)[0] is True
+    assert filters.accept(mk("PS5 Pro 2 To"), short)[0] is False
+    assert filters.accept(mk("PS5 paiement PayPal"), short)[0] is False  # interdit en description = en titre
 
 
 def test_evaluate_deal():
@@ -1151,31 +1157,131 @@ def test_likes_are_refreshed_after_the_listing_left_the_first_page(tmp_path):
     assert mon._likes_candidate(time.time()) is None or mon._likes_candidate(time.time()).item_id != B + 50
 
 
-def test_recommendations_are_separated_and_explained(tmp_path):
+def test_recommended_only_when_same_model_sells_within_20_minutes(tmp_path):
     from vinted_bot.app import Engine
+    from vinted_bot.analysis import product_model
+    assert product_model("Sony PS5 Pro 2 To + manette") == "PS5 Pro"
+    assert product_model("PlayStation 5 édition numérique") == "PS5 Digital"
+    assert product_model("PS5 slim digital") == "PS5 Digital"
+    assert product_model("ps5 standard avec lecteur, 2 jeux") == "PS5 avec lecteur"
+    assert product_model("Nike Air Max") is None
+    (tmp_path / "settings.json").write_text(json.dumps({"search": [
+        {"id": "s1", "name": "PS5", "url": "https://www.vinted.fr/catalog?search_text=ps5"}]}), "utf-8")
     e = Engine(tmp_path)
-    now = time.time()
+    old = time.time() - 3 * 3600
 
-    def payload(i, **kw):
-        base = {"id": i, "title": "Doudoune Herno", "price": 60.0, "search_key": "s1", "search": "Herno",
-                "detected_ts": now, "deal": False, "discount": None, "margin": None, "likes": 0, "likes_start": 0}
-        return {**base, **kw}
+    def past(i, title, price, sold_after=None, **kw):
+        e.store.add_alert({"id": i, "title": title, "price": price, "search_key": "s1", "detected_ts": old,
+                           "availability": "sold" if sold_after else "available",
+                           "availability_after_s": sold_after, **kw})
 
-    e.push_alert(payload(1, margin=45.0))
-    e.push_alert(payload(2, deal=True, discount=0.55))
-    e.push_alert(payload(3))
-    e.push_alert(payload(4, title="Boîte Loro Piana", margin=80.0))            # emballage : jamais conseillé
+    # PS5 Pro entre 400 et 460 € : 5 sur 7 parties en moins de 20 min (une 6e, c'est toi qui l'as prise)
+    for i, (p, after) in enumerate([(400, 300), (410, 600), (420, 900), (430, 1100), (440, 400),
+                                    (450, None), (460, 7200)]):
+        past(i, "PS5 Pro", p, after)
+    past(20, "PS5 Pro", 415, 60, reserve="ok")
+    # PS5 Digital au même prix : rien ne part vite (autre modèle, ne compte pas pour la Pro)
+    for i in range(30, 36):
+        past(i, "PS5 Digital", 420 + i, None)
+    reco = e.recommend("PS5 Pro 1 To", 425.0, "s1", 99)
+    assert reco and reco.startswith("⚡") and "5 PS5 Pro sur 7" in reco and "moins de 20 min" in reco
+    assert e.recommend("PS5 Digital", 425.0, "s1", 98) is None          # même prix, autre modèle
+    assert e.recommend("PS5 Pro", 900.0, "s1", 97) is None              # aucun comparable à ce prix
+    assert e.recommend("Boîte vide PS5 Pro", 425.0, "s1", 96) is None   # emballage seul
+    assert e.recommend("PS5 Pro avec boîte et facture", 425.0, "s1", 95)
+    # La raison arrive avec l'alerte ; une pépite de la veille garde la sienne
+    e.push_alert({"id": 99, "title": "PS5 Pro", "search_key": "s1", "detected_ts": time.time(), "reco_reason": reco})
     e.reco_marks[5] = {"reco": True, "veille": True, "reco_reason": "💎 Veille : se vend ~120 €"}
-    e.push_alert(payload(5))
-    got = {a["id"]: a.get("reco_reason") for a in e.alerts}
-    assert got[1].startswith("💰 Marge estimée +45") and "55 %" in got[2]
-    assert got[3] is None and got[4] is None and got[5].startswith("💎 Veille")
-    # Une alerte ordinaire qui gagne 4 likes en quelques minutes devient recommandée
-    e.update_alert(3, {"likes": 4})
-    asyncio.run(e.reco_from_likes(3))
-    a3 = next(a for a in e.alerts if a["id"] == 3)
-    assert a3["reco"] and a3["reco_reason"].startswith("❤️ +4 likes")
+    e.push_alert({"id": 5, "title": "Herno", "search_key": "veille-x", "detected_ts": time.time()})
+    e.push_alert({"id": 6, "title": "PS5 Digital", "search_key": "s1", "detected_ts": time.time(), "reco_reason": None})
+    got = {a["id"]: (a.get("reco"), a.get("reco_reason")) for a in e.alerts}
+    assert got[99] == (True, reco) and got[5][1].startswith("💎 Veille") and not got[6][0]
+    # Analyse : une ligne par modèle, avec le prix sous lequel acheter
+    rows = analyze_rows = __import__("vinted_bot.analysis", fromlist=["analyze"]).analyze(
+        e.store.alerts_since(0), e.settings["search"])
+    models = {m["name"]: m for m in rows[0]["models"]}
+    assert set(models) == {"PS5 Pro", "PS5 Digital"}
+    assert models["PS5 Pro"]["quick_rate"] == round(5 / 7, 3) and models["PS5 Pro"]["buy_below"] >= 420
+    assert models["PS5 Digital"]["quick_rate"] == 0 and models["PS5 Digital"]["buy_below"] is None
     e.store.close()
+
+
+async def drain(mon):
+    """Attend toutes les tâches lancées par le moniteur (vérifications, puis envois)."""
+    while pending := [t for t in mon._pending if t is not asyncio.current_task() and not t.done()]:
+        await asyncio.gather(*pending)
+
+
+def test_description_words_and_seller_reviews_are_checked_before_the_alert(tmp_path):
+    search = Search(name="PS5", exclude_desc=["paypal", "hors vinted"], min_reviews=1, auto_reserve_max=500.0)
+    cfg = Config(searches=[search], page_gap=0)
+    fake, rec = PageClient(), TrackRecorder()
+    mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [rec], client_factory=lambda d: fake)
+    reserved = []
+    mon.on_auto_reserve = lambda item, s: reserved.append(item.id)
+
+    def page(item_id, description, reviews):
+        flight = (f'{{\\"data\\":{{\\"badges\\":[],\\"business\\":false,\\"feedback_count\\":{reviews},'
+                  f'\\"feedback_reputation\\":0.96,\\"item_id\\":\\"{item_id}\\",\\"name\\":\\"bob\\"}}}}')
+        ld = json.dumps({"@type": "Product", "name": "PS5", "description": description})
+        return (f'<html><script type="application/ld+json">{ld}</script>'
+                f'<img data-testid="item-photo-1--img" src="https://images1.vinted.net/t/a/f800/1.webp">'
+                f'<img data-testid="item-photo-2--img" src="https://images1.vinted.net/t/b/f800/2.webp">'
+                f'<script>self.__next_f.push([1,"{flight}"])</script></html>')
+
+    def url(i):
+        return f"https://www.vinted.fr/items/{i}-nike-air-max-90"
+
+    fake.pages_html[url(B + 51)] = (200, url(B + 51), page(B + 51, "Paiement par PayPal uniquement", 12))
+    fake.pages_html[url(B + 52)] = (200, url(B + 52), page(B + 52, "Console parfaite", 0))
+    fake.pages_html[url(B + 53)] = (200, url(B + 53), page(B + 53, "Console parfaite, envoi soigné", 7))
+    older = [svc_item(B + i, title="PS5") for i in (40, 30, 20, 10)]
+    new = [svc_item(B + 54, title="PS5 paiement paypal"), svc_item(B + 53, title="PS5"),
+           svc_item(B + 52, title="PS5"), svc_item(B + 51, title="PS5")]
+
+    async def scenario():
+        fake.pages = [older, [*new, *older]]
+        await mon.poll(search)
+        assert await mon.poll(search) == []          # rien ne part avant la lecture de la page
+        await drain(mon)
+
+    asyncio.run(scenario())
+    assert url(B + 54) not in fake.page_calls          # « paypal » dans le titre : écartée sans lecture
+    sent = {item.id: item for item, *_ in rec.sent}
+    assert list(sent) == [B + 53] and reserved == [B + 53]
+    ok = sent[B + 53]
+    assert ok.seller_reviews == 7 and ok.checked is True and len(ok.photo_urls) == 2
+    assert mon.state[search.key]["checked_out"] == 2  # PayPal dans la description, vendeur sans avis
+    assert "(4,8 ★, 7 avis)" in format_text(ok, filters.evaluate_deal(20, None, 0.3), search)
+
+
+def test_unreadable_page_falls_back_to_seller_profile_and_says_unchecked(tmp_path):
+    search = Search(name="PS5", exclude_desc=["paypal"], min_reviews=1)
+    cfg = Config(searches=[search], page_gap=0)
+    fake, rec = PageClient(), TrackRecorder()
+    mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [rec], client_factory=lambda d: fake)
+    profiles = {}
+
+    async def blocked_page(url, lane):
+        raise RateLimited("HTTP 403")
+
+    async def user(uid, lane=None):
+        profiles[uid] = True
+        return {"feedback_count": 3, "feedback_reputation": 1.0}
+
+    fake.get_page, fake.user = blocked_page, user
+    older = [svc_item(B + i, title="PS5") for i in (40, 30, 20, 10)]
+
+    async def scenario():
+        fake.pages = [older, [svc_item(B + 50, title="PS5"), *older]]
+        await mon.poll(search)
+        await mon.poll(search)
+        await drain(mon)
+
+    asyncio.run(scenario())
+    (item, *_), = rec.sent
+    assert profiles and item.seller_reviews == 3 and item.checked is False   # avis lus, description non
+    assert "non vérifiés" in format_text(item, filters.evaluate_deal(20, None, 0.3), search)
 
 
 def test_my_searches_stay_mine_and_bot_finds_are_apart(tmp_path):
@@ -1191,3 +1297,24 @@ def test_my_searches_stay_mine_and_bot_finds_are_apart(tmp_path):
     e.push_alert({"id": 2, "title": "Herno", "search_key": "veille-x", "detected_ts": time.time(), "price": 10.0})
     assert [a["source"] for a in e.alerts] == ["mine", "bot"]
     e.store.close()
+
+
+def test_page_checks_are_served_first_come_first_served(tmp_path):
+    cfg = Config(searches=[Search(name="s")], page_gap=0)
+    fake = PageClient()
+    mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [], client_factory=lambda d: fake)
+    old, new = Item.from_api(svc_item(B + 1), "vinted.fr"), Item.from_api(svc_item(B + 2), "vinted.fr")
+
+    async def scenario():
+        mon._page_busy = True                                   # une autre page est en cours de lecture
+        first = asyncio.create_task(mon._read_page_now(old, "vinted.fr", wait=5))
+        await asyncio.sleep(0.05)
+        second = asyncio.create_task(mon._read_page_now(new, "vinted.fr", wait=5))
+        await asyncio.sleep(0.05)
+        assert mon._pop_page("vinted.fr") is None               # la file ordinaire attend les vérifications
+        assert await mon._read_page_now(new, "vinted.fr") is None   # une lecture « tout de suite » ne double pas
+        mon._page_busy = False
+        await asyncio.gather(first, second)
+
+    asyncio.run(scenario())
+    assert fake.page_calls == [old.url, new.url]

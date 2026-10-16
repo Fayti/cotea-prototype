@@ -9,7 +9,7 @@ vente. Mesuré sur le vrai Vinted, beaucoup de disparitions sont des suppression
 ventes confirmées comptent. Une annonce qui sort simplement de la fenêtre (trop de nouveautés
 derrière elle) n'est pas comptée.
 
-Une « pépite » est une annonce partie en moins d'une heure à un prix bien inférieur au prix
+Une « pépite » est une annonce partie en moins de 20 minutes à un prix bien inférieur au prix
 de vente habituel de son segment : quelqu'un a acheté sous le marché. Leur somme par jour
 mesure l'argent qu'un acheteur rapide peut gagner sur ce segment.
 
@@ -37,7 +37,7 @@ PER_PAGE = 96
 NEIGHBOURS = 20         # annonces plus anciennes retenues comme repères (une fenêtre ne perd
                         # que ses dernières annonces : une absence au milieu est un départ)
 MISSING_POLLS = 2       # absences consécutives avant de la dire partie
-FAST = 3600.0           # « partie vite » : en moins d'une heure
+FAST = 20 * 60.0        # « partie vite » : en moins de 20 minutes (une vraie affaire ne traîne pas)
 PEPITE_RATIO = 0.6      # prix ≤ 60 % du prix de vente habituel
 PEPITE_FLOOR = 0.25     # … mais ≥ 25 % : en dessous, c'est un accessoire, un emballage ou un faux
 # Emballages et à-côtés vendus sous le nom d'une grande marque (« boîte Loro Piana », « sac
@@ -51,6 +51,17 @@ JUNK = re.compile(
 
 def is_junk(title: str) -> bool:
     return bool(JUNK.search(_norm(title)))
+
+
+_EMPTY = re.compile(r"\b(boite|box|carton|emballage)\s+(vide|seule?|only)\b|\bempty box\b")
+
+
+def looks_like_packaging(title: str) -> bool:
+    """Plus strict que is_junk, pour tes recherches : « PS5 avec boîte et facture » est une
+    console (l'emballage n'est qu'un plus), « Boîte PS5 » ou « PS5 boîte vide » n'en est pas une."""
+    t = _norm(title).strip()
+    m = JUNK.search(t)
+    return bool(m and m.start() == 0) or bool(_EMPTY.search(t))
 MIN_SOLD = 8            # ventes minimum pour estimer un prix de vente habituel
 KEEP_DAYS = 14
 SOLD_STATES = ("sold", "reserved")   # vente confirmée par la page de l'annonce

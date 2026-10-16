@@ -38,6 +38,13 @@ class Item:
     age_estimated: bool = False
     photo_urls: list[str] = field(default_factory=list)  # photo principale d'abord
     views: int = 0
+    seller_id: int | None = None
+    # Lus sur la page de l'annonce quand la recherche l'exige (mots interdits, avis minimum).
+    description: str | None = None
+    seller_reviews: int | None = None   # nombre d'évaluations du vendeur
+    seller_rating: float | None = None  # note de 0 à 1 (1 = 5 étoiles)
+    checked: bool | None = None         # None : rien à vérifier ; False : vérification impossible
+    reco: str | None = None             # pourquoi le bot la conseille
 
     @classmethod
     def from_api(cls, raw: dict, domain: str) -> "Item":
@@ -80,6 +87,7 @@ class Item:
             url=url,
             photo_url=photo.get("url") or "",
             seller=(raw.get("user") or {}).get("login") or "",
+            seller_id=(raw.get("user") or {}).get("id"),
             created_ts=hires.get("timestamp"),  # absent depuis septembre 2026 : estimé par IdClock
             favourites=int(raw.get("favourite_count") or 0),
             views=int(raw.get("view_count") or 0),

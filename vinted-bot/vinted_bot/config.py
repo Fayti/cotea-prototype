@@ -56,11 +56,18 @@ class Search:
     auto_reserve_max: float | None = None  # réserver tout seul les annonces à ce prix ou moins
     resale_price: float | None = None      # prix de revente visé (ex. sur Vestiaire) : calcul de marge
     min_margin: float | None = None        # ne signaler que si la marge estimée atteint ce montant
+    exclude_desc: list[str] = field(default_factory=list)  # mots interdits dans la description (et le titre)
+    min_reviews: int | None = None         # nombre minimum d'évaluations du vendeur
     weight: int = 1
     key: str = ""  # identifiant stable pour la base (filigrane, prix) ; le nom par défaut
 
     def __post_init__(self):
         self.key = self.key or self.name
+
+    @property
+    def needs_check(self) -> bool:
+        """La page de l'annonce doit être lue avant d'alerter (description, avis du vendeur)."""
+        return bool(self.exclude_desc) or bool(self.min_reviews)
 
     def api_params(self, per_page: int) -> dict[str, str]:
         p = dict(self.params)
@@ -127,6 +134,8 @@ def _build_search(raw: dict) -> Search:
         auto_reserve_max=raw.get("auto_reserve_max"),
         resale_price=raw.get("resale_price"),
         min_margin=raw.get("min_margin"),
+        exclude_desc=[w.lower() for w in raw.get("exclude_desc", [])],
+        min_reviews=int(raw["min_reviews"]) if raw.get("min_reviews") else None,
         weight=max(1, int(raw.get("weight", 1))),
         key=str(raw.get("id") or ""),
     )

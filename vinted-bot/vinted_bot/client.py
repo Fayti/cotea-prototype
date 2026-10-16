@@ -180,6 +180,31 @@ class VintedClient:
             lane.delay(5.0)  # erreur réseau : on laisse respirer cette voie
             raise
 
+    async def user(self, user_id: int, lane: Lane | None = None) -> dict:
+        """Profil public d'un vendeur (2 Ko) : `feedback_count`, `feedback_reputation`…
+
+        Relevé le 16/10/2026 : `/api/v2/users/<id>` répond avec le jeton anonyme du site.
+        """
+        lane = lane or await self.acquire()
+        session = await self._session(lane)
+        headers = {"Accept": "application/json, text/plain, */*", "Referer": self.base + "/catalog"}
+        if lane.token:
+            headers["Authorization"] = f"Bearer {lane.token}"
+        try:
+            resp = await session.get(f"{self.base}/api/v2/users/{user_id}", headers=headers)
+        except Exception:
+            lane.delay(5.0)
+            raise
+        if resp.status_code in (403, 429):
+            cooldown = lane.blocked()
+            await self._reset(lane)
+            raise RateLimited(f"profil vendeur via {lane.label} : HTTP {resp.status_code} — voie en pause "
+                              f"{cooldown:.0f} s")
+        if resp.status_code >= 400:
+            raise VintedError(f"profil vendeur : HTTP {resp.status_code}")
+        lane.succeeded()
+        return (resp.json() or {}).get("user") or {}
+
     async def get_page(self, url: str, lane: Lane) -> tuple[int, str, str]:
         """Page web d'une annonce : (code HTTP, URL finale après redirections, HTML).
 
