@@ -44,12 +44,15 @@ weight = 2   # recherche prioritaire
 name = "PS5 Pro"
 url = "https://www.vinted.fr/catalog?search_text=ps5%20pro&price_from=200"
 include_any = ["pro"]
-exclude_desc = ["paypal", "whatsapp", "virement", "hors vinted", "pour pièces"]   # lu sur la page
+exclude_desc = ["boîte vide"]   # mots interdits dans la description (lue sur la page)
 min_reviews = 1   # écarte les vendeurs sans aucune évaluation
+# anti_scam = true (par défaut) : WhatsApp, numéro, PayPal, « ne pas commander avant message »,
+# consoles en panne… sont écartés, même déguisés (« W.h.a.t.s.a.p.p », « p@ypal »).
 
 [[search]]
 name = "Carhartt Detroit — bonnes affaires seulement"
 search_text = "carhartt detroit jacket"
 include_any = ["detroit"]   # au moins un de ces mots dans le titre
 only_deals = true           # n'alerte que si le prix est sous la médiane de la recherche
+anti_scam = false           # pas de lecture de page pour cette recherche
 weight = 1                  # 2 = interrogée deux fois plus souvent que les autres

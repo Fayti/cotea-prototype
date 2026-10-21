@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import bisect
 import heapq
-import re
 import statistics
 import time
-import unicodedata
+
+from .products import product_model
 
 QUICK = 20 * 60      # « partie vite » : en moins de 20 minutes après l'alerte
 MIN_ALERTS = 5       # en dessous, pas de verdict
@@ -33,26 +33,11 @@ PRICE_BELOW = 0.85   # comparables : de 15 % moins cher…
 PRICE_ABOVE = 1.25   # … à 25 % plus cher (si plus cher part vite, moins cher partira aussi)
 
 
-def _norm(text: str) -> str:
-    text = unicodedata.normalize("NFKD", (text or "").lower())
-    return "".join(c for c in text if not unicodedata.combining(c))
-
-
-_PS5 = re.compile(r"\bps\s?5\b|playstation\s?5\b")
-_PRO = re.compile(r"\bpro\b")
-_DIGITAL = re.compile(r"digital|numerique|sans lecteur|discless|disc\s?less")
-
-
-def product_model(title: str) -> str | None:
-    """Modèle lu dans le titre, pour comparer ce qui est comparable (None : pas reconnu)."""
-    t = _norm(title)
-    if _PS5.search(t):
-        if _PRO.search(t):
-            return "PS5 Pro"
-        if _DIGITAL.search(t):
-            return "PS5 Digital"
-        return "PS5 avec lecteur"
-    return None
+def model_of(alert: dict) -> str | None:
+    """Modèle enregistré avec l'alerte (titre + description), sinon déduit du titre."""
+    if "model" in alert:
+        return alert["model"]
+    return product_model(alert.get("title") or "", None, alert.get("price"))
 
 
 def outcome(alert: dict, now: float) -> bool | None:
@@ -79,22 +64,21 @@ def samples(alerts: list[dict], now: float | None = None) -> list[dict]:
     now = now or time.time()
     out = []
     for a in alerts:
-        if a.get("price") is None:
-            continue
+        if a.get("price") is None or a.get("flag") or a.get("defect"):
+            continue  # arnaque repérée après coup, console en panne : ne disent rien du marché
         o = outcome(a, now)
         if o is not None:
-            out.append({"id": a.get("id"), "key": a.get("search_key"), "model": product_model(a.get("title") or ""),
+            out.append({"id": a.get("id"), "key": a.get("search_key"), "model": model_of(a),
                         "price": float(a["price"]), "quick": o})
     return out
 
 
-def quick_evidence(pool: list[dict], key: str | None, title: str, price: float | None,
+def quick_evidence(pool: list[dict], key: str | None, model: str | None, price: float | None,
                    exclude_id=None) -> dict | None:
     """Parmi les annonces comparables (même modèle, prix voisin), combien sont parties en moins
     de 20 min. None si pas assez de données."""
     if price is None or price <= 0:
         return None
-    model = product_model(title)
     same = [s for s in pool if s["id"] != exclude_id
             and (s["model"] == model if model else s["key"] == key and s["model"] is None)
             and PRICE_BELOW * price <= s["price"] <= PRICE_ABOVE * price]
@@ -106,14 +90,32 @@ def quick_evidence(pool: list[dict], key: str | None, title: str, price: float |
             "lo": min(s["price"] for s in near), "hi": max(s["price"] for s in near)}
 
 
-def recommend_reason(pool: list[dict], key: str | None, title: str, price: float | None,
+def recommend_reason(pool: list[dict], key: str | None, model: str | None, price: float | None,
                      exclude_id=None) -> str | None:
-    ev = quick_evidence(pool, key, title, price, exclude_id)
+    ev = quick_evidence(pool, key, model, price, exclude_id)
     if not ev or ev["share"] < QUICK_SHARE:
         return None
     what = ev["model"] or "annonces de ta recherche"
     return (f"⚡ Part vite à ce prix : {ev['quick']} {what} sur {ev['n']} entre {ev['lo']:.0f} et "
             f"{ev['hi']:.0f} € sont parties en moins de 20 min")
+
+
+WARN_RATIO = 0.6     # sous 60 % du prix habituel du modèle : trop beau pour être vrai
+WARN_MIN = 8         # prix habituel connu à partir de 8 annonces du modèle
+
+
+def typical_price(pool: list[dict], model: str | None) -> float | None:
+    prices = [s["price"] for s in pool if model and s["model"] == model]
+    return statistics.median(prices) if len(prices) >= WARN_MIN else None
+
+
+def price_warning(pool: list[dict], model: str | None, price: float | None) -> str | None:
+    """Une PS5 Pro à 150 € : arnaque, panne cachée ou erreur. Jamais conseillée ni réservée seule."""
+    typical = typical_price(pool, model)
+    if price is None or typical is None or price >= WARN_RATIO * typical:
+        return None
+    return (f"💸 Prix anormalement bas pour une {model} (d'habitude ~{typical:.0f} €) : arnaque ou panne ? "
+            "Vérifie avant d'acheter")
 
 
 def buy_below(pool: list[dict], key: str | None, model: str | None) -> float | None:
@@ -181,7 +183,7 @@ def analyze(alerts: list[dict], searches: list[dict], now: float | None = None) 
         # Une ligne par modèle reconnu (PS5 Pro, Digital, avec lecteur) : prix et vitesse diffèrent.
         by_model: dict[str, list[dict]] = {}
         for a in items:
-            if m := product_model(a.get("title") or ""):
+            if m := model_of(a):
                 by_model.setdefault(m, []).append(a)
         row["models"] = [_row(s["id"], m, group, now, pool, s["id"], m)
                          for m, group in sorted(by_model.items(), key=lambda kv: -len(kv[1]))]

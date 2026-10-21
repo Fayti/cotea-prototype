@@ -58,6 +58,9 @@ class Search:
     min_margin: float | None = None        # ne signaler que si la marge estimée atteint ce montant
     exclude_desc: list[str] = field(default_factory=list)  # mots interdits dans la description (et le titre)
     min_reviews: int | None = None         # nombre minimum d'évaluations du vendeur
+    # Écarter arnaques (WhatsApp, PayPal, « ne pas commander avant message »…) et consoles en
+    # panne. Activé par défaut pour toute recherche lue dans les réglages (voir _build_search).
+    anti_scam: bool = False
     weight: int = 1
     key: str = ""  # identifiant stable pour la base (filigrane, prix) ; le nom par défaut
 
@@ -67,7 +70,7 @@ class Search:
     @property
     def needs_check(self) -> bool:
         """La page de l'annonce doit être lue avant d'alerter (description, avis du vendeur)."""
-        return bool(self.exclude_desc) or bool(self.min_reviews)
+        return bool(self.exclude_desc) or bool(self.min_reviews) or self.anti_scam
 
     def api_params(self, per_page: int) -> dict[str, str]:
         p = dict(self.params)
@@ -136,6 +139,7 @@ def _build_search(raw: dict) -> Search:
         min_margin=raw.get("min_margin"),
         exclude_desc=[w.lower() for w in raw.get("exclude_desc", [])],
         min_reviews=int(raw["min_reviews"]) if raw.get("min_reviews") else None,
+        anti_scam=bool(raw.get("anti_scam", True)),
         weight=max(1, int(raw.get("weight", 1))),
         key=str(raw.get("id") or ""),
     )

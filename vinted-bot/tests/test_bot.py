@@ -81,7 +81,9 @@ def test_load_example_config():
     assert carhartt.params == {"search_text": "carhartt detroit jacket"}
     assert s.weight == 2 and carhartt.weight == 1 and carhartt.only_deals
     assert ps5.params == {"search_text": "ps5 pro", "price_from": "200"}
-    assert ps5.min_reviews == 1 and "paypal" in ps5.exclude_desc and ps5.needs_check and not s.needs_check
+    assert ps5.min_reviews == 1 and "boîte vide" in ps5.exclude_desc and ps5.needs_check
+    assert s.anti_scam and s.needs_check            # anti-arnaque actif par défaut
+    assert not cfg.searches[2].anti_scam            # sauf si désactivé
     assert cfg.request_gap == 1.0 and cfg.use_direct
     assert cfg.max_age == 3600
 
@@ -1251,7 +1253,8 @@ def test_description_words_and_seller_reviews_are_checked_before_the_alert(tmp_p
     assert list(sent) == [B + 53] and reserved == [B + 53]
     ok = sent[B + 53]
     assert ok.seller_reviews == 7 and ok.checked is True and len(ok.photo_urls) == 2
-    assert mon.state[search.key]["checked_out"] == 2  # PayPal dans la description, vendeur sans avis
+    # PayPal dans le titre (sans lecture), PayPal dans la description, vendeur sans avis
+    assert mon.state[search.key]["checked_out"] == 3
     assert "(4,8 ★, 7 avis)" in format_text(ok, filters.evaluate_deal(20, None, 0.3), search)
 
 
@@ -1318,3 +1321,138 @@ def test_page_checks_are_served_first_come_first_served(tmp_path):
 
     asyncio.run(scenario())
     assert fake.page_calls == [old.url, new.url]
+
+
+SCAM_TEXTS = [
+    "Contactez moi sur WhatsApp pour plus d'infos", "W.h.a.t.s.a.p.p uniquement", "Écris moi sur wtsp",
+    "Console parfait état, me contacter au 06 12 34 56 78", "Dispo de suite, mon numéro : 0712345678",
+    "Numéro dans mes photos", "mail : vendeur.ps5@gmail.com", "Contact par telegram",
+    "Paiement par PayPal entre amis uniquement", "p@ypal accepté", "Paiement P.A.Y.P.A.L ou virement",
+    "Lydia ou virement bancaire", "Envoi rapide, achat hors vinted moins cher",
+    "Ne pas commander avant message svp", "NE PAS ACHETER directement", "Merci de me contacter avant tout achat",
+    "Envoyez-moi un message avant d'acheter", "N'achetez pas directement, je dois vérifier le stock",
+    "pas d'achat direct, message obligatoire",
+]
+HONEST_TEXTS = [
+    "PS5 slim 1 To, vendue avec sa boîte et la facture. Numéro de série visible.",
+    "Paiement uniquement via Vinted, pas de PayPal ni de virement.", "Je ne donne pas mon numéro, tout passe par Vinted.",
+    "PayPal non accepté. Remise en main propre possible sur Paris.", "Pas de whatsapp, merci de passer par Vinted.",
+    "Réf CFI-2016, numéro de facture disponible.", "Facture envoyée par mail après l'achat.",
+    "N'hésitez pas à me contacter pour toute question.", "Contactez-moi en privé pour un lot de jeux.",
+    "Vendue au prix de 350 €, 06/2024 date d'achat.",
+]
+
+
+def test_anti_scam_catches_disguised_contacts_and_spares_honest_sellers():
+    from vinted_bot.scam import defect_reason, scam_reason
+    missed = [t for t in SCAM_TEXTS if not scam_reason(t)]
+    wrong = {t: scam_reason(t) for t in HONEST_TEXTS if scam_reason(t)}
+    assert not missed and not wrong
+    assert "contact hors Vinted" in scam_reason("W.h.a.t.s.a.p.p uniquement")
+    assert defect_reason("PS5 HS pour pièces") and defect_reason("Ne s'allume plus") and defect_reason("Console bannie")
+    for ok in ("Jamais tombée en panne", "Console non bannie", "Aucune surchauffe", "Ventilateur nettoyé pour éviter la surchauffe"):
+        assert defect_reason(ok) is None, ok
+
+
+def test_ps5_console_or_accessory_and_model_from_title_then_description():
+    from vinted_bot.products import product_kind, product_model
+    assert product_kind("Manette PS5 DualSense", 45) == "accessoire"
+    assert product_kind("Spider-Man 2 PS5", 30) == "accessoire"
+    assert product_kind("Coque PS5 slim", 20) == "accessoire"
+    assert product_kind("Pack PS5 + 3 jeux", 380) == "console"
+    assert product_kind("Nike Air Max", 50) is None
+    assert product_model("PS5Pro neuve") == "PS5 Pro"
+    assert product_model("PS5 + manette pro", None, 350) == "PS5 avec lecteur"   # la manette est « pro »
+    assert product_model("PlayStation 5 édition numérique") == "PS5 Digital"
+    assert product_model("PS5 slim 1 To", "Console édition numérique, très bon état", 280) == "PS5 Digital"
+    assert product_model("PS5 slim 1 To", "Vendue avec sa boîte.", 280) == "PS5 avec lecteur"
+    assert product_model("Manette PS5 pro", None, 150) is None
+
+
+def test_scam_found_after_an_unverified_alert_marks_it(tmp_path):
+    search = Search(name="PS5", anti_scam=True)
+    cfg = Config(searches=[search], page_gap=0)
+    fake, rec = PageClient(), TrackRecorder()
+    rec.rechecks = []
+
+    async def recheck(t, facts, reason, handle):
+        rec.rechecks.append((t.item_id, reason))
+    rec.recheck = recheck
+    mon = Monitor(cfg, Store(str(tmp_path / "db.sqlite3")), [rec], client_factory=lambda d: fake)
+    blocked = []
+    mon.on_blocked = lambda item, s, reason: blocked.append((item.id, reason))
+    url = f"https://www.vinted.fr/items/{B + 50}-nike-air-max-90"
+    scam_page = '<script type="application/ld+json">' + json.dumps(
+        {"@type": "Product", "description": "Ne pas commander avant message, paiement p@ypal"}) + "</script>"
+    older = [svc_item(B + i, title="PS5 slim") for i in (40, 30, 20, 10)]
+
+    async def scenario():
+        fake.pages = [older, [svc_item(B + 51, title="PS5 contactez moi au 06 12 34 56 78"),
+                              svc_item(B + 50, title="PS5 slim"), *older]]
+        await mon.poll(search)
+        mon._page_pause_until = time.monotonic() + 600     # Vinted freine les pages
+        await mon.poll(search)
+        await drain(mon)
+        assert [i.id for i, *_ in rec.sent] == [B + 50] and rec.sent[0][0].checked is False
+        mon._page_pause_until = 0                           # les pages se lisent de nouveau
+        fake.pages_html[url] = (200, url, scam_page)
+        entry = mon._pop_page("vinted.fr")
+        await mon._fetch_page("vinted.fr", None, asyncio.Semaphore(0), *entry)
+        await drain(mon)
+
+    asyncio.run(scenario())
+    assert blocked and blocked[0][0] == B + 51 and "numéro de téléphone" in blocked[0][1]   # titre : sans lecture
+    assert [i for i, _ in rec.rechecks] == [B + 50] and rec.rechecks[0][1].startswith("arnaque probable")
+
+
+def test_auto_reserve_only_proven_verified_deals_one_at_a_time_with_daily_limit(tmp_path):
+    from vinted_bot.app import Engine
+    (tmp_path / "settings.json").write_text(json.dumps({"search": [
+        {"id": "s1", "name": "PS5 Pro", "url": "https://www.vinted.fr/catalog?search_text=ps5%20pro",
+         "auto_reserve_max": 500}], "auto_reserve": {"per_day": 2}}), "utf-8")
+    e = Engine(tmp_path)
+    old = time.time() - 3 * 3600
+    for i, (p, after) in enumerate([(400, 300), (410, 600), (420, 900), (430, 1100), (440, 400), (450, None),
+                                    (460, 7200), (405, 500), (415, 700)]):
+        e.store.add_alert({"id": i, "title": "PS5 Pro", "price": p, "search_key": "s1", "detected_ts": old,
+                           "availability": "sold" if after else "available", "availability_after_s": after})
+    search = e.config().searches[0]
+    reserved = []
+
+    async def fake_reserve(item_id, url, auto=False, notify=False):
+        reserved.append(item_id)
+        return {"ok": True}
+    e.reserve = fake_reserve
+    e.window.proc = type("P", (), {"poll": lambda self: None})()   # fenêtre Vinted ouverte
+
+    def item(i, price=425.0, title="PS5 Pro 2 To", checked=True, reviews=5):
+        it = Item.from_api(svc_item(i, price=f"{price:.2f}", title=title), "vinted.fr")
+        it.checked, it.seller_reviews = checked, reviews
+        it.kind, it.model = "console", "PS5 Pro"
+        it.reco = e.assess(it, search)
+        return it
+
+    async def scenario():
+        for it in (item(100, checked=False), item(101, reviews=0), item(102, price=150.0),
+                   item(103, price=900.0)):
+            e.auto_reserve(it, search)
+        await asyncio.sleep(0)
+        assert reserved == []
+        e.auto_reserve(item(104), search)                 # vérifiée, 💎 conseillée, vendeur noté
+        await asyncio.sleep(0)
+        e.auto_reserve(item(105), search)                 # la précédente attend ton paiement
+        await asyncio.sleep(0)
+        assert reserved == [104]
+        e.settings["auto_reserve"]["history"][-1] -= 3600  # payée depuis
+        e.auto_reserve(item(106), search)
+        await asyncio.sleep(0)
+        e.settings["auto_reserve"]["history"][-1] -= 3600
+        e.auto_reserve(item(107), search)                 # limite de 2 par 24 h
+        await asyncio.sleep(0)
+
+    asyncio.run(scenario())
+    assert reserved == [104, 106]
+    why = {i: e.reservations[i]["reserve_msg"] for i in (100, 101, 102, 103, 105, 107)}
+    assert "non vérifiée" in why[100] and "sans avis" in why[101] and "anormalement bas" in why[102]
+    assert "pas 💎" in why[103] and "attend déjà ton paiement" in why[105] and "limite de 2" in why[107]
+    e.store.close()

@@ -73,6 +73,25 @@ contre la médiane des prix récents de la même recherche.
   sur le profil du vendeur (`/api/v2/users/<id>`, 2 Ko) et l'annonce part quand même, marquée
   « non vérifiée » : mieux vaut un coup d'œil de trop qu'une affaire ratée. Un mot de 3 lettres
   ou moins est cherché en mot entier (« pro » n'écarte pas « propre »).
+- **Anti-arnaque** (actif par défaut sur chaque recherche) : la description est lue avant
+  l'alerte et l'annonce est écartée si elle fait sortir de Vinted (WhatsApp, Telegram, Snap,
+  numéro de téléphone, e-mail, « mon numéro »), paie hors de Vinted (PayPal, amis et famille,
+  virement, Lydia, Wero…), refuse l'achat direct (« ne pas commander avant message », « me
+  contacter avant tout achat ») ou décrit une console en panne, bannie ou pour pièces. Les mots
+  déguisés sont reconnus (« W.h.a.t.s.a.p.p », « wtsp », « p@ypal », « 06.12.34.56.78 ») et
+  une mention niée ne compte pas (« pas de PayPal », « non bannie », « numéro de série »).
+  Chaque annonce écartée est listée avec la phrase en cause (onglet Recherches, « Annonces
+  écartées »). Une alerte partie « non vérifiée » (pages freinées par Vinted) est relue dès que
+  possible ; une arnaque repérée après coup est marquée « 🚫 À éviter » dans le fil et sur
+  Telegram.
+- **PS5 reconnues** : console ou accessoire/jeu (« Manette PS5 », « Spider-Man 2 PS5 » à 30 €), et
+  modèle (PS5 Pro, PS5 Digital, PS5 avec lecteur) d'après le titre, sinon la description
+  (« PS5 slim 1 To » + « édition numérique »). Une console très en dessous du prix habituel de
+  son modèle (moins de 60 %) est signalée « 💸 Prix anormalement bas » et n'est jamais conseillée.
+- **Réservation automatique stricte** : seulement si l'annonce est vérifiée (anti-arnaque,
+  vendeur avec au moins 1 avis), que c'est une console au prix normal pour son modèle, et
+  qu'elle est 💎 conseillée. Une seule à la fois (10 min pour payer), au plus 2 par 24 h
+  (réglable), une réservation ratée ne compte pas. Chaque annonce non réservée dit pourquoi.
 - **Préréglages PS5** (formulaire de recherche) : PS5 Pro, PS5 Digital, PS5 avec lecteur. Ils
   remplissent le lien (texte « ps5 » et prix plancher contre jeux et manettes), les mots du
   titre qui séparent les modèles, les mots interdits dans la description (paypal, whatsapp,

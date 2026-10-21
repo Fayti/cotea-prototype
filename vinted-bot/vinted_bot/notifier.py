@@ -75,6 +75,10 @@ def format_text(item: Item, deal: Deal, search: Search) -> str:
     gain = margin(item, search)
     if gain is not None:
         lines.append(f"💰 Marge estimée {gain:+.0f} € si revendue {search.resale_price:.0f} €")
+    if item.model:
+        lines.append(f"🎮 {item.model}")
+    if item.warning:
+        lines.append(item.warning)
     details = " · ".join(x for x in (item.brand, item.size, item.status) if x)
     if details:
         lines.append(f"🏷 {details}")
@@ -214,14 +218,29 @@ class TelegramNotifier:
             await self._call("editMessageText", {"message_id": handle["message_id"], **self._message(
                 text, handle["url"], handle.get("photo", ""), handle.get("item_id"), still_on_sale)})
 
+    async def recheck(self, t, facts: dict, reason: str | None, handle: dict | None) -> None:
+        """Alerte partie « non vérifiée », relue ensuite : arnaque ou panne repérée après coup."""
+        if not reason or not handle or not handle.get("message_id"):
+            return
+        text = f"<b>🚫 À ÉVITER : {html.escape(reason)}</b>\n{handle['text']}"
+        if handle.get("caption"):
+            await self._call("editMessageCaption", {
+                "message_id": handle["message_id"], "caption": text, "parse_mode": "HTML",
+                "reply_markup": self._keyboard(handle.get("item_id"), handle["url"], False)})
+        elif not handle.get("album"):
+            await self._call("editMessageText", {"message_id": handle["message_id"], **self._message(
+                text, handle["url"], handle.get("photo", ""), handle.get("item_id"), False)})
+
     async def reserved(self, item_id: int, result: dict, handle: dict | None, auto: bool) -> None:
         """Résultat d'une réservation, en réponse au message d'alerte. Sonne : il faut payer vite."""
         if result.get("ok"):
             took = f" en {result['seconds']} s" if result.get("seconds") else ""
             text = (f"✅ <b>Réservée pour toi{' automatiquement' if auto else ''}</b>{took}.\n"
-                    "Paie vite : sans validation, la réservation expire. Le paiement est aussi ouvert "
-                    "sur ton ordinateur, dans la fenêtre Vinted.")
-            markup = {"inline_keyboard": [[{"text": "💳 Payer maintenant", "url": result["checkout_url"]}]]} \
+                    "Paie dans la fenêtre Vinted de ton ordinateur : la commande y est déjà ouverte. "
+                    "Sur le téléphone, n'appuie PAS sur « Acheter » dans l'appli : Vinted refuserait "
+                    "(« another purchase in progress »), l'achat étant déjà en cours. Sans paiement, "
+                    "la réservation expire d'elle-même.")
+            markup = {"inline_keyboard": [[{"text": "💳 Ouvrir ce paiement", "url": result["checkout_url"]}]]} \
                 if result.get("checkout_url") else None
         else:
             text = f"❌ <b>Pas réservée</b> : {html.escape(result.get('reason') or 'erreur inconnue')}"

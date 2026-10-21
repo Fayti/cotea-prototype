@@ -21,7 +21,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-from .analysis import analyze, recommend_reason, samples
+from .analysis import analyze, price_warning, recommend_reason, samples
 from .market import looks_like_packaging
 from .buyer import VintedWindow
 from .market import DEFAULT_SEGMENTS, MarketWatch, radar_bands, radar_report, report as market_report, segment_params
@@ -30,6 +30,7 @@ from .config import Search, config_from_dict, parse_vinted_url
 from .filters import margin
 from .models import Deal, Item
 from .monitor import Monitor
+from .products import product_model
 from .notifier import TelegramNotifier, build_notifiers, sample_alert, telegram_detect
 from .store import Store
 
@@ -45,7 +46,10 @@ DEFAULT_SETTINGS = {
     "telegram": {"token": "", "chat_id": ""},
     "search": [],
     "watch": {"enabled": False, "segments": [], "radar": {"enabled": False, "min_price": 200}},
+    # Réservation automatique : au plus `per_day` par 24 h ; `history` = moments des dernières.
+    "auto_reserve": {"per_day": 2, "history": []},
 }
+AUTO_PAY_WAIT = 600.0  # après une réservation automatique, 10 min pour payer avant la suivante
 
 
 class LogBuffer(logging.Handler):
@@ -80,6 +84,7 @@ def alert_payload(item: Item, deal, search) -> dict:
         # Vendeur et vérification (recherches avec mots interdits dans la description / avis minimum).
         "seller_reviews": item.seller_reviews, "seller_rating": item.seller_rating, "checked": item.checked,
         "reco_reason": item.reco,
+        "model": item.model, "kind": item.kind, "warning": item.warning,
     }
 
 
@@ -95,6 +100,12 @@ class UiNotifier:
 
     async def likes(self, t) -> None:
         self.engine.update_alert(t.item_id, {"likes": t.likes, "views": t.views, "likes_ts": t.likes_ts or time.time()})
+
+    async def recheck(self, t, facts: dict, reason: str | None, handle) -> None:
+        patch = {"checked": True, "seller_reviews": facts["reviews"], "seller_rating": facts["rating"]}
+        if reason:
+            patch["flag"] = reason  # arnaque ou panne repérée après coup
+        self.engine.update_alert(t.item_id, patch)
 
     async def status(self, t, handle) -> None:
         self.engine.update_alert(t.item_id, {
@@ -134,6 +145,7 @@ def normalize_search(body: dict, existing: dict | None = None) -> dict:
         "include_any": _word_list(body.get("include_any")),
         "exclude_desc": _word_list(body.get("exclude_desc")),
         "min_reviews": max(0, int(_float_or_none(body.get("min_reviews")) or 0)) or None,
+        "anti_scam": bool(body.get("anti_scam", True)),
         "max_price": _float_or_none(body.get("max_price")),
         "only_deals": bool(body.get("only_deals")),
         "auto_reserve_max": _float_or_none(body.get("auto_reserve_max")),
@@ -215,10 +227,9 @@ class Engine:
             return
         self.notifiers = build_notifiers(cfg)
         self.monitor = Monitor(cfg, self.store, [UiNotifier(self), *self.notifiers])
-        self.monitor.on_auto_reserve = lambda item, search: asyncio.create_task(
-            self.reserve(item.id, item.url, auto=True))
-        self.monitor.recommender = lambda item, search: (
-            self.recommend(item.title, item.price, search.key, item.id) if self.source_of(search.key) == "mine" else None)
+        self.monitor.on_auto_reserve = self.auto_reserve
+        self.monitor.recommender = self.assess
+        self.monitor.on_blocked = self.blocked
         self.task = asyncio.create_task(self._run(self.monitor))
         if segments:  # veille du marché : mêmes connexions et même rythme que la surveillance
             monitor = self.monitor
@@ -337,11 +348,72 @@ class Engine:
             self._pool_cache = (time.time(), pool)
         return pool
 
-    def recommend(self, title: str, price, search_key, item_id=None) -> str | None:
+    def recommend(self, title: str, price, search_key, item_id=None, model: str | None = "?") -> str | None:
         """Conseillée = les annonces du même modèle, à ce prix, sont parties en moins de 20 min."""
         if looks_like_packaging(title or ""):
             return None
-        return recommend_reason(self.sample_pool(), search_key, title, price, item_id)
+        if model == "?":
+            model = product_model(title or "", None, price)
+        return recommend_reason(self.sample_pool(), search_key, model, price, item_id)
+
+    def assess(self, item, search) -> str | None:
+        """Pour une alerte de tes recherches : avertissement de prix, puis raison de la conseiller."""
+        if self.source_of(search.key) != "mine":
+            return None
+        item.warning = price_warning(self.sample_pool(), item.model, item.price)
+        if item.warning:
+            return None  # trop beau pour être vrai : jamais conseillée
+        return self.recommend(item.title, item.price, search.key, item.id, item.model)
+
+    def blocked(self, item, search, reason: str) -> None:
+        """Annonce écartée par l'anti-arnaque ou les vérifications : gardée pour que tu contrôles."""
+        row = {"id": item.id, "ts": time.time(), "search": search.name, "search_key": search.key,
+               "title": item.title, "price": item.price, "currency": item.currency, "url": item.url,
+               "photo": item.photo_url, "reason": reason}
+        self.store.add_blocked(row)
+        self._broadcast({"type": "blocked", "blocked": row})
+
+    def auto_refusal(self, item, search) -> str | None:
+        """Pourquoi NE PAS réserver cette annonce tout seul, ou None. Réserver bloque l'article et
+        ouvre un paiement : seules les affaires sûres et prouvées passent, une à la fois."""
+        if not self.window.is_open:
+            return "fenêtre Vinted fermée"
+        if item.checked is not True:
+            return "annonce non vérifiée (description ou avis illisibles)"
+        if item.kind == "accessoire":
+            return "accessoire ou jeu, pas une console"
+        if item.warning:
+            return "prix anormalement bas pour ce modèle"
+        if (item.seller_reviews or 0) < max(1, search.min_reviews or 0):
+            return "vendeur sans avis"
+        if not item.reco:
+            return "rien ne prouve qu'à ce prix ça part en moins de 20 min (pas 💎 conseillée)"
+        now = time.time()
+        auto = self.settings.setdefault("auto_reserve", {"per_day": 2, "history": []})
+        history = [t for t in auto.get("history", []) if now - t < 86400]
+        per_day = int(auto.get("per_day", 2))
+        if len(history) >= per_day:
+            return f"limite de {per_day} réservation(s) automatique(s) par 24 h atteinte"
+        if history and now - history[-1] < AUTO_PAY_WAIT:
+            return "une réservation automatique attend déjà ton paiement"
+        return None
+
+    def auto_reserve(self, item, search) -> None:
+        reason = self.auto_refusal(item, search)
+        if reason:
+            log.info("Réservation automatique de l'annonce %s : non (%s)", item.id, reason)
+            self._set_reservation(item.id, {"reserve": "skip", "reserve_auto": True, "reserve_msg": reason})
+            return
+        auto, ts = self.settings["auto_reserve"], time.time()
+        auto["history"] = [t for t in auto.get("history", []) if ts - t < 86400] + [ts]
+        self.save()
+
+        async def run():
+            result = await self.reserve(item.id, item.url, auto=True)
+            if not result.get("ok"):  # ratée (déjà prise…) : ne compte pas dans la limite
+                auto["history"] = [t for t in auto["history"] if t != ts]
+                self.save()
+        asyncio.create_task(run())
 
     def source_of(self, search_key) -> str:
         """« mine » : alerte d'une recherche que tu as enregistrée ; « bot » : trouvaille du bot."""
@@ -422,6 +494,9 @@ async def put_settings(request):
         for flag in ("use_direct", "extra_photos", "track_status"):
             if flag in g:
                 e.settings["general"][flag] = bool(g[flag])
+    if "auto_reserve" in body:
+        per_day = int(body["auto_reserve"].get("per_day", 2))
+        e.settings.setdefault("auto_reserve", {"per_day": 2, "history": []})["per_day"] = min(10, max(0, per_day))
     if "deals" in body:
         threshold = float(body["deals"].get("threshold", 0.3))
         e.settings["deals"]["threshold"] = min(0.9, max(0.05, threshold))
@@ -518,6 +593,11 @@ async def tg_test(request):
     finally:
         await notifier.close()
     return web.json_response({"ok": True})
+
+
+@routes.get("/api/blocked")
+async def get_blocked(request):
+    return web.json_response(engine_of(request).store.recent_blocked(100))
 
 
 @routes.get("/api/analysis")

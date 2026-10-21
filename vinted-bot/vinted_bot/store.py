@@ -37,6 +37,8 @@ class Store:
                 likes0 INTEGER NOT NULL, likes INTEGER NOT NULL, views INTEGER NOT NULL,
                 gone_ts REAL, state TEXT NOT NULL DEFAULT 'live');
             CREATE INDEX IF NOT EXISTS market_seen ON market(last_seen);
+            CREATE TABLE IF NOT EXISTS blocked (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, payload TEXT NOT NULL);
             """
         )
         market_cols = {row[1] for row in self.db.execute("PRAGMA table_info(market)")}
@@ -128,6 +130,15 @@ class Store:
         keys = ("item_id", "search", "url", "alerted_ts", "status", "status_ts", "handles")
         return [{**dict(zip(keys, r)), "handles": json.loads(r[6] or "{}")} for r in rows]
 
+    def add_blocked(self, payload: dict) -> None:
+        """Annonce écartée par l'anti-arnaque ou les vérifications (gardée pour contrôle)."""
+        self.db.execute("INSERT INTO blocked(ts, payload) VALUES(?, ?)", (time.time(), json.dumps(payload)))
+        self.db.commit()
+
+    def recent_blocked(self, limit: int = 100) -> list[dict]:
+        rows = self.db.execute("SELECT payload FROM blocked ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [json.loads(r[0]) for r in rows]
+
     def recent_alerts(self, limit: int = 150) -> list[dict]:
         rows = self.db.execute("SELECT payload FROM alerts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [json.loads(r[0]) for r in rows]
@@ -214,6 +225,8 @@ class Store:
         self.db.execute("DELETE FROM alerts WHERE ts < ? OR id NOT IN "
                         "(SELECT id FROM alerts ORDER BY id DESC LIMIT 5000)", (cutoff,))
         self.db.execute("DELETE FROM tracked WHERE alerted_ts < ?", (cutoff,))
+        self.db.execute("DELETE FROM blocked WHERE ts < ? OR id NOT IN "
+                        "(SELECT id FROM blocked ORDER BY id DESC LIMIT 2000)", (cutoff,))
         self.db.execute("DELETE FROM market WHERE last_seen < ?", (cutoff,))
         self.db.commit()
 

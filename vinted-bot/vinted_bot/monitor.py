@@ -13,6 +13,7 @@ import time
 from collections import OrderedDict, defaultdict, deque
 
 from . import filters
+from .products import product_kind, product_model
 from .client import RateLimited, VintedClient
 from .config import Config, Search
 from .models import Item
@@ -54,6 +55,7 @@ PHOTOS_WAIT = 5.0  # attente maximale des photos avant d'envoyer l'alerte quand 
 # jusqu'à CHECK_WAIT ; au-delà (ou si Vinted freine les pages), elle part « non vérifiée ».
 CHECK_WAIT = 60.0
 CHECK_TIMEOUT = 10.0
+RECHECK_TTL = 1800.0  # annonce partie « non vérifiée » : relue dès que possible, pendant 30 min
 
 
 class IdClock:
@@ -160,6 +162,7 @@ class Monitor:
         self.on_confirm = None       # rappel (annonce, état lu sur sa page) pour la veille
         self.page_domains: set[str] = set()  # domaines où lire des pages même sans recherche
         self.recommender = None      # rappel (annonce, recherche) -> raison de la conseiller, ou None
+        self.on_blocked = None       # rappel (annonce, recherche, raison) : écartée par l'anti-arnaque
         # État par recherche, lu par l'interface.
         self.state: dict[str, dict] = {
             s.key: {"last_ok": None, "last_error": None, "polls": 0, "ready": False}
@@ -340,6 +343,8 @@ class Monitor:
             ok, reason = filters.accept(item, search)
             if not ok:
                 log.debug("[%s] rejet %s : %s", search.name, item.id, reason)
+                if not warmup and not (age and age > self.cfg.max_age) and filters.is_vetting(reason):
+                    self._blocked(item, search, reason)
                 continue
             median = self.store.median_price(search.key, self.cfg.deal_window, self.cfg.deal_min_samples)
             if item.price is not None:
@@ -382,6 +387,11 @@ class Monitor:
         self.stats.alerts += 1
         if age is not None:
             self.stats.ages.append(age)
+        if item.kind is None:
+            item.kind = product_kind(item.title, item.price)
+        if item.model is None:
+            item.model = product_model(item.title, item.description, item.price)
+        self._assess(item, search)  # conseillée ? (décide aussi de la réservation automatique)
         if (self.on_auto_reserve and search.auto_reserve_max is not None and item.price is not None
                 and item.price <= search.auto_reserve_max):
             self.on_auto_reserve(item, search)  # avant tout le reste : chaque seconde compte
@@ -393,6 +403,8 @@ class Monitor:
             self._spawn(self._alert_with_photos(item, deal, search), "alerte")
         else:
             self._dispatch(item, deal, search)
+        if item.checked is False:  # relue dès que les pages se lisent de nouveau
+            self._enqueue_page(item.id, item.url, search.domain, "check")
         log.info("[%s] %s — %s%s", search.name, item.title, item.url,
                  f" (publiée il y a ~{age:.0f} s)" if age is not None else "")
 
@@ -411,16 +423,45 @@ class Monitor:
                 item.photo_urls = photos
         if search.min_reviews and item.seller_reviews is None and item.seller_id:
             await self._seller_from_api(item, search.domain)  # secours : profil du vendeur, 2 Ko
-        item.checked = ((not search.exclude_desc or item.description is not None)
+        item.checked = ((not (search.exclude_desc or search.anti_scam) or item.description is not None)
                         and (not search.min_reviews or item.seller_reviews is not None))
         ok, reason = filters.accept_details(item, search)
         if not ok:
-            state = self.state.setdefault(search.key, {"last_ok": None, "last_error": None, "polls": 0, "ready": False})
-            state["checked_out"] = state.get("checked_out", 0) + 1
-            state["checked_out_last"] = reason
-            log.info("[%s] écartée après lecture de la page (%s) : %s", search.name, reason, item.url)
+            self._blocked(item, search, reason)
             return
         self._alert(item, deal, search, age, page_read=page is not None)
+
+    def _blocked(self, item, search, reason: str) -> None:
+        state = self.state.setdefault(search.key, {"last_ok": None, "last_error": None, "polls": 0, "ready": False})
+        state["checked_out"] = state.get("checked_out", 0) + 1
+        state["checked_out_last"] = reason
+        log.info("[%s] écartée (%s) : %s", search.name, reason, item.url)
+        if self.on_blocked:
+            try:
+                self.on_blocked(item, search, reason)
+            except Exception as e:
+                log.debug("Annonce écartée non enregistrée : %s", e)
+
+    def _assess(self, item, search) -> None:
+        if self.recommender and item.reco is None:
+            try:
+                item.reco = self.recommender(item, search)
+            except Exception as e:  # une recommandation ratée ne doit pas bloquer l'alerte
+                log.debug("Recommandation impossible pour %s : %s", item.id, e)
+
+    def _recheck(self, t, page: str) -> None:
+        """Alerte partie « non vérifiée » : sa page est enfin lue. Arnaque ou panne repérée après
+        coup : l'alerte est marquée (fil et Telegram) ; sinon elle devient « vérifiée »."""
+        search = next((s for s in self.cfg.searches if s.key == t.search_key), None)
+        if search is None:
+            return
+        facts = extract_facts(page, t.item_id)
+        reason = filters.details_reason(search, facts["description"], facts["reviews"])
+        log.info("Annonce %s relue : %s", t.item_id, reason or "rien à signaler")
+        for notifier in self.notifiers:
+            if hasattr(notifier, "recheck"):
+                name = type(notifier).__name__
+                self._spawn(notifier.recheck(t, facts, reason, t.handles.get(name)), f"{name}.recheck")
 
     async def _seller_from_api(self, item, domain: str) -> None:
         try:
@@ -449,11 +490,7 @@ class Monitor:
         task.add_done_callback(self._pending.discard)
 
     def _dispatch(self, item, deal, search) -> None:
-        if self.recommender and item.reco is None:
-            try:
-                item.reco = self.recommender(item, search)
-            except Exception as e:  # une recommandation ratée ne doit pas bloquer l'alerte
-                log.debug("Recommandation impossible pour %s : %s", item.id, e)
+        self._assess(item, search)
         # Les envois ne bloquent jamais le polling.
         for notifier in self.notifiers:
             self._spawn(self._send(notifier, item, deal, search), type(notifier).__name__)
@@ -562,6 +599,8 @@ class Monitor:
                 log.info("Photos de l'annonce %s abandonnées (file d'attente trop longue)", iid)
             if "confirm" in entry["reasons"] and now - entry["since"] > CONFIRM_TTL:
                 entry["reasons"].discard("confirm")
+            if "check" in entry["reasons"] and now - entry["since"] > RECHECK_TTL:
+                entry["reasons"].discard("check")
             if not entry["reasons"]:
                 del self._page_queue[iid]
         # Photos d'abord, de la plus récente alerte à la plus ancienne : c'est sur la dernière
@@ -572,7 +611,7 @@ class Monitor:
             waited = now - e["since"]
             if "status" in e["reasons"] and waited > STATUS_WAIT:
                 return (0, e["since"])
-            if "photos" in e["reasons"]:
+            if "photos" in e["reasons"] or "check" in e["reasons"]:
                 return (1, -e["since"])
             if "status" in e["reasons"]:
                 return (2, e["since"])
@@ -598,6 +637,8 @@ class Monitor:
                 else:
                     self.on_confirm(item_id, verdict)
             t = self.tracker.items.get(item_id)
+            if "check" in entry["reasons"] and t is not None and code == 200:
+                self._recheck(t, page)
             if "photos" in entry["reasons"]:
                 photos = extract_photos(page, self.cfg.photos_per_alert)
                 if len(photos) >= 2:
@@ -671,6 +712,8 @@ class Monitor:
         return {
             **self.stats.snapshot(),
             "lanes": lanes,
+            # Vinted freine la lecture des pages : description et avis ne peuvent pas être vérifiés.
+            "pages_paused_s": max(0, round(self._page_pause_until - now)),
             "searches": {
                 s.key: {**self.state.get(s.key, {}), "cycle_s": round(self.cycle_seconds(s), 1)}
                 for s in self.cfg.searches

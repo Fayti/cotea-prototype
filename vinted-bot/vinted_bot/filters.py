@@ -6,6 +6,7 @@ import unicodedata
 
 from .config import Search
 from .models import Deal, Item
+from .scam import defect_reason, scam_reason
 
 
 def _norm(text: str) -> str:
@@ -48,6 +49,10 @@ def accept(item: Item, search: Search) -> tuple[bool, str]:
             return False, f"mot interdit « {word} » dans le titre"
     if search.include_any and not any(_contains_word(title, w) for w in search.include_any):
         return False, "aucun mot requis"
+    if search.anti_scam:  # le titre suffit parfois : inutile de lire la page
+        reason = scam_reason(item.title) or defect_reason(item.title)
+        if reason:
+            return False, reason
     if item.price is not None:
         if search.max_price is not None and item.price > search.max_price:
             return False, "prix trop haut"
@@ -62,17 +67,32 @@ def accept(item: Item, search: Search) -> tuple[bool, str]:
     return True, ""
 
 
-def accept_details(item: Item, search: Search) -> tuple[bool, str]:
-    """Après lecture de la page : description et avis du vendeur. Ce qui n'a pas pu être lu
+def details_reason(search: Search, description: str | None, reviews: int | None) -> str | None:
+    """Après lecture de la page : pourquoi écarter l'annonce, ou None. Ce qui n'a pas pu être lu
     (None) ne fait pas rejeter l'annonce : elle part avec la mention « non vérifiée »."""
-    if item.description is not None:
-        text = _norm(item.description)
+    if description is not None:
+        if search.anti_scam:
+            reason = scam_reason(description) or defect_reason(description)
+            if reason:
+                return reason
+        text = _norm(description)
         for word in search.exclude_desc:
             if _contains_word(text, word):
-                return False, f"mot interdit « {word} » dans la description"
-    if search.min_reviews and item.seller_reviews is not None and item.seller_reviews < search.min_reviews:
-        return False, f"vendeur avec {item.seller_reviews} avis (minimum {search.min_reviews})"
-    return True, ""
+                return f"mot interdit « {word} » dans la description"
+    if search.min_reviews and reviews is not None and reviews < search.min_reviews:
+        return f"vendeur avec {reviews} avis (minimum {search.min_reviews})"
+    return None
+
+
+def accept_details(item: Item, search: Search) -> tuple[bool, str]:
+    reason = details_reason(search, item.description, item.seller_reviews)
+    return reason is None, reason or ""
+
+
+def is_vetting(reason: str) -> bool:
+    """Rejet de l'anti-arnaque ou des vérifications (à montrer dans « Annonces écartées »),
+    par opposition aux filtres ordinaires (prix, mots du titre…)."""
+    return reason.startswith(("arnaque probable", "en panne", "mot interdit « ", "vendeur avec"))
 
 
 def evaluate_deal(price: float | None, median: float | None, threshold: float) -> Deal:

@@ -101,6 +101,11 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .margin { font-weight: 700; font-size: 14px; }
 .seller { font-size: 13px; color: var(--muted); }
 .seller b { color: var(--ok); font-weight: 600; }
+.flag-line { font-size: 13px; font-weight: 700; color: #fff; background: var(--err); border-radius: 8px; padding: 6px 8px; }
+.blk { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--border); }
+.blk:first-child { border-top: 0; }
+.blk img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
+.blk .why { color: var(--err); font-size: 13px; }
 .warn-line { font-size: 12.5px; font-weight: 600; color: var(--warn); background: var(--hot-soft); border-radius: 8px; padding: 5px 8px; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ana tr.sub td { background: var(--surface-2); font-size: 13px; }
@@ -324,6 +329,7 @@ select { border-radius: 10px; }
       <div class="row"><button class="btn small" data-goto="settings">Connecter Telegram</button>
         <button class="btn small ghost" id="tgHide" title="Masquer">✕</button></div>
     </div>
+    <div id="pagesBar" class="banner hot" hidden><div id="pagesText"></div></div>
     <div id="vwBar" class="banner">
       <div id="vwText"></div>
       <button id="vwBtn" class="btn primary small">Ouvrir la fenêtre Vinted</button>
@@ -386,12 +392,13 @@ select { border-radius: 10px; }
             <small>Vérifiés aussi dans le titre. Le bot lit la page de l'annonce avant de t'alerter (1 à 2 s de plus).</small></label>
           <label class="field"><span>⭐ Avis minimum du vendeur</span><input type="number" name="min_reviews" min="0" step="1" placeholder="vide = peu importe">
             <small>1 = écarte les comptes sans aucune évaluation (beaucoup d'arnaques).</small></label>
+          <label class="check full"><input type="checkbox" name="anti_scam" checked> 🛡️ <b>Anti-arnaque</b> : écarter les annonces qui demandent WhatsApp, un numéro, un e-mail, PayPal, un virement, « ne pas commander avant message »… (même déguisés : « W.h.a.t.s.a.p.p », « p@ypal ») et les consoles en panne, bloquées ou pour pièces. La description est lue avant l'alerte ; tout ce qui est écarté reste visible plus bas, dans « Annonces écartées ».</label>
           <label class="field"><span>Priorité</span>
             <select name="weight"><option value="1">Normale</option><option value="2">Haute (2× plus souvent)</option><option value="3">Maximale (3× plus souvent)</option></select>
             <small>Une recherche prioritaire passe plus souvent, au détriment des autres.</small></label>
           <label class="field full"><span>⚡ Réserver tout seul si le prix est de … € ou moins</span>
             <input type="number" name="auto_reserve_max" min="0" step="0.5" placeholder="vide = jamais (tu cliques « Réserver » toi-même)">
-            <small>Le bot réserve l'annonce dans la fenêtre Vinted dès qu'il la voit (au plus 10 par heure). Rien n'est payé : la page de paiement s'ouvre, et sans validation de ta part la réservation expire.</small></label>
+            <small>Seulement les vraies affaires : annonce vérifiée (anti-arnaque, vendeur avec au moins 1 avis), console et pas accessoire, prix normal pour le modèle, et 💎 conseillée (à ce prix, la plupart des annonces du même modèle sont parties en moins de 20 min). Une seule à la fois, au plus 2 par 24 h (réglable dans Réglages). Rien n'est payé : paie dans la fenêtre Vinted, sinon la réservation expire.</small></label>
           <label class="field"><span>💰 Prix de revente visé (€)</span>
             <input type="number" name="resale_price" min="0" step="1" placeholder="ex. 130">
             <small>Ce que tu penses en tirer (ex. sur Vestiaire Collective). Chaque annonce affiche alors sa marge estimée, frais de revente (20 %) et envoi (6 €) déduits.</small></label>
@@ -407,6 +414,13 @@ select { border-radius: 10px; }
       </form>
 
       <div id="searchList" class="stack"></div>
+
+      <div class="card stack">
+        <div class="toolbar" style="margin:0"><div class="grow"><h2>🛡️ Annonces écartées</h2>
+          <p class="sub">Ce que l'anti-arnaque et tes vérifications (mots interdits, avis minimum) ont écarté, avec la phrase en cause. Jette un œil de temps en temps : si une annonce honnête s'y trouve, note la phrase pour que la règle soit corrigée.</p></div>
+          <button id="blkBtn" class="btn small">Actualiser</button></div>
+        <div id="blkBox"><p class="sub">Chargement…</p></div>
+      </div>
 
 
       <div class="card stack">
@@ -520,6 +534,14 @@ select { border-radius: 10px; }
         <label class="check"><input type="checkbox" id="extraPhotos"> Afficher 3 photos par annonce</label>
         <label class="check"><input type="checkbox" id="trackStatus"> Indiquer quand une annonce est vendue, réservée ou supprimée</label>
         <div><button id="saveTrack" class="btn primary">Enregistrer</button></div>
+      </div>
+
+      <div class="card stack">
+        <div><h2>⚡ Réservation automatique</h2><p class="sub">Elle ne s'applique qu'aux recherches où tu as rempli « Réserver tout seul si le prix est de … € ou moins », et seulement aux vraies affaires : annonce vérifiée (anti-arnaque, vendeur avec au moins 1 avis), console, prix normal pour le modèle, et 💎 conseillée. Une seule à la fois : la suivante attend 10 min, le temps que tu paies. Une réservation ratée ne compte pas. Chaque annonce non réservée affiche pourquoi.</p></div>
+        <label class="field" style="max-width:320px"><span>Au plus, par 24 h</span>
+          <input id="autoPerDay" type="number" min="0" max="10" step="1"></label>
+        <p class="sub" id="autoCount"></p>
+        <div><button id="saveAuto" class="btn primary">Enregistrer</button></div>
       </div>
 
       <div class="card stack">
@@ -719,8 +741,19 @@ $("#mkPepites").addEventListener("click", (e) => {
   });
 });
 setInterval(() => { if ($("#tab-market").classList.contains("active") && !document.hidden) loadMarket().catch(() => {}); }, 60000);
+let BLK = null;
+function renderBlocked() {
+  if (!BLK) return;
+  $("#blkBox").innerHTML = BLK.length ? BLK.slice(0, 60).map((b) => `<div class="blk">
+      ${b.photo ? `<img loading="lazy" src="${esc(b.photo)}" alt="">` : "<span></span>"}
+      <div><a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.title)}</a> · <strong>${money(b.price, b.currency)}</strong>
+        <br><span class="why">${esc(b.reason)}</span><br><small class="sub">${esc(b.search)} · ${ago(b.ts)}</small></div></div>`).join("")
+    : `<p class="sub">Rien d'écarté pour l'instant.</p>`;
+}
+async function loadBlocked() { BLK = await api("GET", "/api/blocked"); renderBlocked(); }
+$("#blkBtn").addEventListener("click", (e) => guarded(e.target, loadBlocked));
 function showTab(name) {
-  if (name === "searches") loadAnalysis().catch(() => {});
+  if (name === "searches") { loadAnalysis().catch(() => {}); loadBlocked().catch(() => {}); }
   if (name === "market") loadMarket().catch(() => {});
   $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
@@ -767,6 +800,9 @@ function renderHeader() {
   }
   if (st.crash) parts.push(st.crash);
   $("#stats").textContent = parts.join(" · ");
+  const pp = st.running ? m?.pages_paused_s || 0 : 0;
+  $("#pagesBar").hidden = !pp;
+  if (pp) $("#pagesText").innerHTML = `🛡️ <strong>Vinted freine la lecture des pages</strong> (encore ~${Math.ceil(pp / 60)} min) : les nouvelles annonces partent « non vérifiées » (description et avis), puis sont relues dès que possible. Aucune réservation automatique pendant ce temps.`;
   $("#onboard").hidden = searches.length > 0;
   $("#tgHint").hidden = !searches.length || !!(S.settings?.telegram?.token && S.settings?.telegram?.chat_id) || pref.get("tgHintHidden", false);
 }
@@ -785,7 +821,7 @@ function visibleAlerts() {
   const f = $("#filterSearch").value, hot = $("#onlyHot").checked, hide = $("#hideGone").checked;
   const onlyReco = feedView === "mine" && $("#onlyReco").checked;
   return S.alerts.filter((a) => inView(a, feedView) && (feedView === "bot" || !f || a.search_key === f)
-    && (!hot || a.deal) && (!hide || isAvailable(a)) && (!onlyReco || a.reco));
+    && (!hot || a.deal) && (!hide || isAvailable(a)) && (!onlyReco || (a.reco && !a.flag)));
 }
 function renderViews() {
   $$("#feedViews button").forEach((b) => b.classList.toggle("on", b.dataset.view === feedView));
@@ -817,11 +853,12 @@ const RESERVE = {
   pending: ["⏳ Réservation en cours…", ""],
   ok: ["✅ Réservée pour toi : paie dans la fenêtre Vinted", "ok"],
   fail: ["❌ Pas réservée", "err"],
+  skip: ["ℹ️ Pas réservée automatiquement", ""],
 };
 function reserveHTML(a) {
   const r = RESERVE[a.reserve];
   if (!r) return "";
-  const auto = a.reserve_auto && a.reserve !== "fail" ? " (automatique)" : "";
+  const auto = a.reserve_auto && a.reserve !== "fail" && a.reserve !== "skip" ? " (automatique)" : "";
   return `<div class="resv ${r[1]}">${r[0]}${auto}${a.reserve_msg ? ` : ${esc(a.reserve_msg)}` : ""}</div>`;
 }
 function sellerHTML(a) {
@@ -861,14 +898,16 @@ function cardHTML(a) {
     ${pics.length > 1 ? `<div class="thumbs">${pics.map((u, i) =>
       `<img loading="lazy" src="${esc(u)}" alt="Photo ${i + 1}" data-act="thumb" data-i="${i}"${i === pick ? ' class="on"' : ""}>`).join("")}</div>` : ""}
     <div class="body">
-      ${a.reco && a.reco_reason ? `<div class="reco">${esc(a.reco_reason)}</div>` : ""}
+      ${a.flag ? `<div class="flag-line">🚫 À éviter : ${esc(a.flag)}</div>` : ""}
+      ${a.reco && a.reco_reason && !a.flag ? `<div class="reco">${esc(a.reco_reason)}</div>` : ""}
+      ${a.warning ? `<div class="warn-line">${esc(a.warning)}</div>` : ""}
       <div class="title"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a></div>
       ${meta ? `<div class="meta">${meta}</div>` : ""}
       ${sellerHTML(a)}
       ${likesHTML(a, spotted)}
       ${a.margin != null ? `<div class="margin ${a.margin > 0 ? "pos" : "neg"}">💰 Marge estimée ${a.margin > 0 ? "+" : ""}${money(a.margin, a.currency)} <small>si revendue ${money(a.resale, a.currency)}</small></div>` : ""}
       ${a.median ? `<div class="meta">Prix habituel de la recherche : ${money(a.median, a.currency)}</div>` : ""}
-      <div><span class="chip">${esc(a.search)}</span></div>
+      <div><span class="chip">${esc(a.search)}</span>${a.model ? ` <span class="chip">🎮 ${esc(a.model)}</span>` : a.kind === "accessoire" ? ` <span class="chip">accessoire / jeu</span>` : ""}</div>
       ${reserveHTML(a)}
       <div class="row2">
         ${isAvailable(a) ? `<button class="btn primary buy" data-act="reserve"${a.reserve === "pending" ? " disabled" : ""}>⚡ Réserver</button>` : `<span class="btn buy" style="opacity:.5">Partie</span>`}
@@ -961,7 +1000,7 @@ function onUpdate(id, patch) {
   Object.assign(a, patch);
   const card = document.querySelector(`.item[data-id="${id}"]`);
   if (!card || "availability" in patch) { renderFeed(); return; }
-  if ("reco" in patch) { renderFeed(); return; }
+  if ("reco" in patch || "flag" in patch) { renderFeed(); return; }
   card.outerHTML = cardHTML(a);  // likes ou photos : seule cette carte est redessinée
 }
 function onAlert(a) {
@@ -985,6 +1024,7 @@ function connectEvents() {
     const msg = JSON.parse(e.data);
     if (msg.type === "update") onUpdate(msg.id, msg.patch);
     else if (msg.type === "window") { S.window = msg.window; renderWindow(); }
+    else if (msg.type === "blocked") { if (BLK) { BLK.unshift(msg.blocked); renderBlocked(); } }
     else onAlert(msg.alert || msg);
   };
   es.onerror = () => { es.close(); setTimeout(connectEvents, 3000); };
@@ -1011,6 +1051,7 @@ function renderSearches() {
       s.include_any?.length ? `avec : ${s.include_any.join(" ou ")}` : "",
       s.exclude_desc?.length ? `🚫 description : ${s.exclude_desc.join(", ")}` : "",
       s.min_reviews ? `⭐ vendeur ≥ ${s.min_reviews} avis` : "",
+      s.anti_scam === false ? "⚠️ anti-arnaque désactivé" : "🛡️ anti-arnaque",
       weightLabel[s.weight] || "",
       s.only_deals ? "🔥 seulement" : "",
       s.auto_reserve_max != null ? `⚡ réserve tout seul ≤ ${money(s.auto_reserve_max)}` : "",
@@ -1054,7 +1095,7 @@ function openForm(s = null) {
     f.url.value = s.url; f.name.value = s.name; f.max_price.value = s.max_price ?? "";
     f.exclude.value = (s.exclude || []).join(", "); f.weight.value = s.weight || 1; f.only_deals.checked = !!s.only_deals;
     f.include_any.value = (s.include_any || []).join(", "); f.exclude_desc.value = (s.exclude_desc || []).join(", ");
-    f.min_reviews.value = s.min_reviews ?? "";
+    f.min_reviews.value = s.min_reviews ?? ""; f.anti_scam.checked = s.anti_scam !== false;
     f.auto_reserve_max.value = s.auto_reserve_max ?? "";
     f.resale_price.value = s.resale_price ?? ""; f.min_margin.value = s.min_margin ?? "";
   }
@@ -1064,7 +1105,7 @@ $("#addBtn").addEventListener("click", () => openForm());
 // Préréglages PS5 : le texte « ps5 » + un prix plancher écartent jeux et manettes ; les mots du
 // titre séparent les 3 modèles ; la description et les avis écartent les arnaques classiques.
 const PS5_TITLE_OUT = "boîte vide, boîte seule, carton vide, portal, vr2, psvr, dualsense edge, lecteur seul";
-const PS5_DESC_OUT = "paypal, whatsapp, virement, lydia, wero, western union, hors vinted, boîte vide, pour pièces, ne fonctionne pas, ne s'allume pas";
+const PS5_DESC_OUT = "boîte vide";  // le reste (WhatsApp, PayPal, panne…) : anti-arnaque intégré
 const PRESETS = {
   pro: { name: "PS5 Pro", url: "https://www.vinted.fr/catalog?search_text=ps5%20pro&price_from=200", include_any: "pro", exclude: PS5_TITLE_OUT },
   digital: { name: "PS5 Digital", url: "https://www.vinted.fr/catalog?search_text=ps5&price_from=120", include_any: "digital, numérique, sans lecteur", exclude: "pro, " + PS5_TITLE_OUT },
@@ -1073,7 +1114,7 @@ const PRESETS = {
 document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => {
   const p = PRESETS[b.dataset.preset], f = $("#searchForm");
   f.url.value = p.url; f.name.value = p.name; f.include_any.value = p.include_any;
-  f.exclude.value = p.exclude; f.exclude_desc.value = PS5_DESC_OUT; f.min_reviews.value = 1;
+  f.exclude.value = p.exclude; f.exclude_desc.value = PS5_DESC_OUT; f.min_reviews.value = 1; f.anti_scam.checked = true;
   toast(`Formulaire rempli pour « ${p.name} » : choisis ton prix maximum, puis Enregistrer`);
 }));
 $("#cancelForm").addEventListener("click", () => ($("#searchForm").hidden = true));
@@ -1099,6 +1140,7 @@ $("#searchForm").addEventListener("submit", (e) => {
     url: f.url.value.trim(), name: f.name.value.trim(), max_price: f.max_price.value,
     exclude: f.exclude.value, weight: +f.weight.value, only_deals: f.only_deals.checked,
     include_any: f.include_any.value, exclude_desc: f.exclude_desc.value, min_reviews: f.min_reviews.value,
+    anti_scam: f.anti_scam.checked,
     auto_reserve_max: f.auto_reserve_max.value,
     resale_price: f.resale_price.value, min_margin: f.min_margin.value,
   };
@@ -1125,6 +1167,10 @@ function renderSettings() {
   $("#thr").value = Math.round((st.deals.threshold ?? 0.3) * 100);
   $("#extraPhotos").checked = st.general.extra_photos !== false;
   $("#trackStatus").checked = st.general.track_status !== false;
+  const auto = st.auto_reserve || { per_day: 2, history: [] };
+  if (document.activeElement !== $("#autoPerDay")) $("#autoPerDay").value = auto.per_day ?? 2;
+  const used = (auto.history || []).filter((t) => Date.now() / 1000 - t < 86400).length;
+  $("#autoCount").textContent = `Ces dernières 24 h : ${used} réservation(s) automatique(s) sur ${auto.per_day ?? 2}. 0 = jamais.`;
   updateSliders();
 }
 function updateSliders() {
@@ -1145,6 +1191,10 @@ $("#saveSpeed").addEventListener("click", (e) => guarded(e.target, async () => {
 $("#saveTrack").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { general: { extra_photos: $("#extraPhotos").checked, track_status: $("#trackStatus").checked } });
   await refresh(); toast("Réglages enregistrés");
+}));
+$("#saveAuto").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("PUT", "/api/settings", { auto_reserve: { per_day: +$("#autoPerDay").value } });
+  await refresh(); toast("Réservation automatique enregistrée");
 }));
 $("#saveDeal").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { deals: { threshold: +$("#thr").value / 100 } });

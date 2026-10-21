@@ -34,7 +34,7 @@ class Recorder:
 async def check_pages(count: int = 3) -> int:
     """Description et avis du vendeur lus sur la page de vraies annonces PS5, comme le fait le bot
     avant d'alerter pour une recherche avec mots interdits ou avis minimum."""
-    search = Search(name="ps5 vérifiée", params={"search_text": "ps5"}, exclude_desc=["paypal"], min_reviews=1)
+    search = Search(name="ps5 vérifiée", params={"search_text": "ps5"}, min_reviews=1, anti_scam=True)
     rec = Recorder()
     with tempfile.TemporaryDirectory() as tmp:
         store = Store(os.path.join(tmp, "check.sqlite3"))
@@ -53,7 +53,7 @@ async def check_pages(count: int = 3) -> int:
           f"{st.get('checked_out', 0)} écartée(s) (dernière raison : {st.get('checked_out_last')})")
     for it in items:
         print(f"  avis={it.seller_reviews} note={it.seller_rating} vérifiée={it.checked} "
-              f"description={len(it.description or '')} car. | {it.title[:45]!r}")
+              f"description={len(it.description or '')} car. | {it.kind or '-'} {it.model or ''} | {it.title[:45]!r}")
     lus = sum(1 for it in items if it.seller_reviews is not None and it.description is not None)
     print(f"Avis et description lus : {lus}/{len(items)}")
     return lus

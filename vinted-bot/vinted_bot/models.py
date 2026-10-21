@@ -45,6 +45,9 @@ class Item:
     seller_rating: float | None = None  # note de 0 à 1 (1 = 5 étoiles)
     checked: bool | None = None         # None : rien à vérifier ; False : vérification impossible
     reco: str | None = None             # pourquoi le bot la conseille
+    kind: str | None = None             # PS5 : « console » ou « accessoire »
+    model: str | None = None            # PS5 : « PS5 Pro », « PS5 Digital », « PS5 avec lecteur »
+    warning: str | None = None          # ex. prix anormalement bas pour ce modèle
 
     @classmethod
     def from_api(cls, raw: dict, domain: str) -> "Item":
