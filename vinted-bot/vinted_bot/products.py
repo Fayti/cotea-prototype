@@ -21,10 +21,14 @@ _DESC_DIGITAL = re.compile(r"\b(edition|version)\s+(digitale?|numerique)\b|\bdig
 _CONSOLE = re.compile(r"\bconsoles?\b|\bslim\b|\bfat\b|\bpro\b|digital|numerique|standard|edition|\b(825|1|2)\s?(go|to|tb)\b"
                       r"|\bcfi-?\s?\d|\bpack\b|\bbundle\b|\bavec\s+(manette|jeu|jeux|boite)")
 # Placés AVANT « PS5 », ces mots désignent un accessoire ou un jeu (« Manette PS5 », « Jeu PS5 »).
-_ACCESSORY = re.compile(r"\b(manettes?|jeux?|games?|coques?|facades?|faceplates?|support|stand|station|casques?|"
+_ACCESSORY = re.compile(r"\b(manettes?|controllers?|headsets?|chargers?|covers?|cases?|"
+                        r"jeux?|games?|coques?|facades?|faceplates?|support|stand|station|casques?|"
                         r"cables?|chargeurs?|skins?|stickers?|housses?|sacoches?|lecteur|disque|ssd|volant|camera|"
                         r"telecommande|remote|portal|vr2?|dualsense|edge|pulse|boites?|cartons?|ventilateur|"
                         r"carte|abonnement|cle|figurine|affiche|poster|manuel|notice)\b")
+
+
+_BUNDLE = re.compile(r"\+|&|,|\b(avec|with|et|and|plus|inclus|offerts?)\b")  # « PS5 + 2 manettes » : une console
 
 
 def is_ps5(title: str) -> bool:
@@ -41,6 +45,9 @@ def product_kind(title: str, price: float | None = None) -> str | None:
         return "accessoire"   # « Manette PS5 », « Jeu PS5 Spider-Man », « Coque PS5 slim »
     if _CONSOLE.search(t):
         return "console"
+    after = _ACCESSORY.search(t, m.end())
+    if after and not _BUNDLE.search(t[m.end():after.start()]):
+        return "accessoire"   # « PS5 Controller custom », « PS5 manette blanche » (pas « PS5 + manette »)
     if price is not None and price < 100:
         return "accessoire"   # « Spider-Man 2 PS5 » à 30 € : un jeu
     return "console"

@@ -1363,6 +1363,9 @@ def test_ps5_console_or_accessory_and_model_from_title_then_description():
     assert product_kind("Spider-Man 2 PS5", 30) == "accessoire"
     assert product_kind("Coque PS5 slim", 20) == "accessoire"
     assert product_kind("Pack PS5 + 3 jeux", 380) == "console"
+    assert product_kind("HexGaming PS5 Controller custom with TMR joys", 150) == "accessoire"   # relevé réel
+    assert product_kind("PS5 manette DualSense blanche", 120) == "accessoire"
+    assert product_kind("PS5 + 2 manettes", 350) == "console" and product_kind("PS5 avec jeux", 330) == "console"
     assert product_kind("Nike Air Max", 50) is None
     assert product_model("PS5Pro neuve") == "PS5 Pro"
     assert product_model("PS5 + manette pro", None, 350) == "PS5 avec lecteur"   # la manette est « pro »
