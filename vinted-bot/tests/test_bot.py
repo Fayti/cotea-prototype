@@ -1601,3 +1601,159 @@ def test_profit_is_estimated_from_sales_and_small_profits_are_never_recommended(
     e.settings["profit"]["min"] = 30
     assert assess(425.0)[1].startswith("💰 +38 €")                  # minimum abaissé : conseillée
     e.store.close()
+
+
+def _photo_with_gps(orientation=6):
+    import io as _io
+    from PIL import Image
+    img = Image.new("RGB", (120, 80), (200, 40, 40))
+    exif = Image.Exif()
+    exif[0x0112] = orientation                      # photo d'iPhone tenue à la verticale
+    exif[0x8825] = {1: "N", 2: (48.0, 51.0, 24.0)}  # position GPS
+    exif[0x0110] = "iPhone 15"
+    out = _io.BytesIO()
+    img.save(out, "JPEG", exif=exif)
+    return out.getvalue()
+
+
+def test_listing_photos_are_straightened_and_stripped_and_text_is_written():
+    import io as _io
+    from PIL import Image
+    from vinted_bot import listing
+    clean = Image.open(_io.BytesIO(listing.clean_photo(_photo_with_gps())))
+    assert clean.size == (80, 120)                    # remise droite
+    assert not clean.getexif()                        # ni GPS, ni modèle de téléphone
+    hints = listing.parse_hints("PS5 slim digital 1 To, comme neuve, 2 manettes, boîte, sans facture, 330 euros")
+    assert hints == {"model": "PS5 Digital", "controllers": 2, "box": True, "invoice": False, "slim": True,
+                     "storage": "1 To", "condition": "comme_neuf", "price": 330.0}
+    built = listing.build({**hints, "games": "FIFA 25"})
+    assert built["title"] == "PS5 Digital Slim 1 To + 2 manettes + jeux, boîte"
+    assert "comme neuve" in built["description"] and "Jeux inclus : FIFA 25." in built["description"]
+    from vinted_bot.scam import scam_reason
+    assert scam_reason(built["description"]) is None  # le texte du bot ne déclenche jamais l'anti-arnaque
+
+
+def test_draft_is_prepared_edited_and_sent_to_vinted(tmp_path):
+    from vinted_bot.app import Engine
+    from vinted_bot.drafts import Drafts
+    (tmp_path / "settings.json").write_text(json.dumps({"search": [
+        {"id": "s1", "name": "PS5 Pro", "url": "https://www.vinted.fr/catalog?search_text=ps5%20pro",
+         "resale_price": 540}]}), "utf-8")
+    e = Engine(tmp_path)
+    d = e.new_draft([_photo_with_gps(), _photo_with_gps(1)], "ps5 pro boite facture")
+    assert d["price"] == 540 and "ton prix de revente" in d["price_src"]      # prix conseillé
+    assert d["title"] == "PS5 Pro, boîte et facture" and d["photos"] == ["01.jpg", "02.jpg"]
+    d = e.update_draft(d["id"], {"fields": {"controllers": 2}})
+    assert d["title"] == "PS5 Pro + 2 manettes, boîte et facture"           # réécrit tout seul
+    d = e.update_draft(d["id"], {"title": "Ma PS5 Pro", "photos": ["02.jpg", "01.jpg"]})
+    d = e.update_draft(d["id"], {"fields": {"games": "GTA V"}})
+    assert d["title"] == "Ma PS5 Pro" and "GTA V" in d["description"] and d["photos"] == ["02.jpg", "01.jpg"]
+    meta = Drafts.vinted_meta(d)
+    assert meta["catalog_id"] == 3025 and meta["brand_id"] == 113926 and meta["status_id"] == 2 and meta["price"] == 540
+    sent = []
+
+    async def create_draft(draft_id, meta, photos_b64):
+        sent.append((draft_id, meta["title"], len(photos_b64)))
+        return results.pop(0)
+    e.window.create_draft = create_draft
+    results = [{"ok": True, "draft_id": 777},
+               {"ok": False, "api": {"step": "draft", "status": 404}, "prefilled": {"ready": True, "photos": 2}},
+               {"ok": False, "reason": "connecte-toi à ton compte dans la fenêtre Vinted, puis réessaie"}]
+    ok = asyncio.run(e.send_draft(d["id"]))
+    assert sent[0] == (d["id"], "Ma PS5 Pro", 2) and ok["status"] == "sent" and ok["vinted_id"] == 777
+    assert "Brouillons" in ok["message"]
+    plan_b = asyncio.run(e.send_draft(d["id"]))
+    assert plan_b["status"] == "prefilled" and "pré-rempli" in plan_b["message"]
+    err = asyncio.run(e.send_draft(d["id"]))
+    assert err["status"] == "error" and "connecte-toi" in err["message"]
+    e.store.close()
+
+
+def test_vinted_window_creates_the_draft_or_prefills_the_sell_form():
+    from vinted_bot import window as w
+
+    class FakeWindow:
+        def __init__(self, api_result):
+            self.api_result, self.href, self.calls = api_result, "https://www.vinted.fr/", []
+
+        def evaluate_js(self, js, callback=None):
+            self.calls.append(js[:40])
+            if callback is not None:          # script d'envoi (promesse)
+                callback(self.api_result)
+                return None
+            if js == "location.href":
+                return self.href
+            if "querySelector('input[type=file]')" in js:
+                return True
+            if js.startswith("((meta)"):        # formulaire « Vendre »
+                return {"photos": 2, "title": True, "description": True, "price": True, "ready": True}
+            return None
+
+        def load_url(self, url):
+            self.href = url
+
+    good = FakeWindow({"ok": True, "draft_id": 5, "photos": 2})
+    assert w.create_draft(good, {"title": "PS5"}, ["AAAA", "BBBB"]) == {"ok": True, "draft_id": 5, "photos": 2}
+    assert sum(1 for c in good.calls if c.startswith("window.__vbPhotos.push")) == 2
+    refused = FakeWindow({"ok": False, "step": "draft", "status": 404, "body": "{}"})
+    out = w.create_draft(refused, {"title": "PS5"}, ["AAAA"])
+    assert not out["ok"] and out["prefilled"]["ready"] and refused.href.endswith("/items/new")
+
+
+def test_photos_sent_to_telegram_become_a_draft_preview_with_a_button(monkeypatch):
+    from vinted_bot import notifier as nt
+    monkeypatch.setattr(nt, "BATCH_WAIT", 0.05)
+    calls = []
+
+    class Resp:
+        status_code, text = 200, ""
+
+        def __init__(self, result=None, content=b""):
+            self.result, self.content = result, content
+
+        def json(self):
+            return {"ok": True, "result": self.result}
+
+    tg = nt.TelegramNotifier("T", "123")
+    updates = [[], [
+        {"update_id": 1, "message": {"chat": {"id": 123}, "media_group_id": "g", "caption": "ps5 pro 480 €",
+                                     "photo": [{"file_id": "small"}, {"file_id": "big1"}]}},
+        {"update_id": 2, "message": {"chat": {"id": 123}, "media_group_id": "g", "photo": [{"file_id": "big2"}]}},
+        {"update_id": 3, "message": {"chat": {"id": 999}, "photo": [{"file_id": "stranger"}]}}]]
+
+    async def post(url, json=None, data=None, multipart=None, timeout=None):
+        method = url.rsplit("/", 1)[1]
+        if method == "getUpdates":
+            if updates:
+                return Resp(updates.pop(0))
+            await asyncio.sleep(0.2)
+            raise asyncio.CancelledError
+        calls.append((method, json))
+        if method == "getFile":
+            return Resp({"file_path": f"photos/{json['file_id']}.jpg"})
+        return Resp({"message_id": 1})
+
+    async def get(url, timeout=None):
+        calls.append(("download", url))
+        return Resp(content=b"jpeg:" + url.rsplit("/", 1)[1].encode())
+    tg.http.post, tg.http.get = post, get
+    got = []
+
+    async def on_draft(photos, text, notifier):
+        got.append((photos, text))
+        await notifier.draft_preview({"id": "abc12", "title": "PS5 Pro", "description": "PlayStation 5 Pro.",
+                                      "photos": ["01.jpg", "02.jpg"], "price": 480, "price_src": "tes mots"})
+    tg.on_draft = on_draft
+
+    async def scenario():
+        with contextlib.suppress(asyncio.CancelledError):
+            await tg.listen(lambda i: None, None)
+        while tg._bg:
+            await asyncio.gather(*tg._bg)
+
+    asyncio.run(scenario())
+    assert got == [([b"jpeg:big1.jpg", b"jpeg:big2.jpg"], "ps5 pro 480 €")]     # la plus grande taille, ton compte seul
+    assert any(u.endswith("/file/botT/photos/big1.jpg") for m, u in calls if m == "download")
+    preview = next(j for m, j in calls if m == "sendMessage" and "Annonce prête" in (j or {}).get("text", ""))
+    assert preview["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "a:abc12" and "480 €" in preview["text"]
+    assert tg._last_draft[0] == "abc12"

@@ -111,6 +111,20 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .ana tr.sub td { background: var(--surface-2); font-size: 13px; }
 .ana tr.sub td:first-child { padding-left: 22px; }
 .margin.pos { color: #2b8a3e; } .margin.neg { color: #c92a2a; } .margin.low { color: var(--muted); font-weight: 600; }
+.drop { display: block; border: 2px dashed var(--border); border-radius: var(--radius); padding: 26px 16px; text-align: center; cursor: pointer; background: var(--surface); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop .big { font-size: 34px; }
+.sell-photos { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.sell-photos figure { margin: 0; flex: 0 0 110px; background: var(--surface-2); border-radius: 10px; overflow: hidden; }
+.sell-photos img { width: 110px; height: 140px; object-fit: cover; display: block; }
+.sell-photos figcaption { display: flex; justify-content: space-between; padding: 3px; }
+.sell-photos button { border: 0; background: none; cursor: pointer; font-size: 15px; padding: 2px 6px; color: var(--text); }
+.dlist .row2 { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); }
+.dlist .row2:first-child { border-top: 0; }
+.dlist img { width: 48px; height: 60px; object-fit: cover; border-radius: 8px; }
+.dmsg { font-size: 13.5px; border-radius: 8px; padding: 8px 10px; background: var(--surface-2); }
+.dmsg.sent { background: #d3f9d8; color: #1b5e20; } .dmsg.error { background: #ffe3e3; color: #a51111; }
+.dmsg.prefilled { background: var(--hot-soft); color: var(--hot); }
 .phgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .phgrid figure { margin: 0; background: var(--surface-2); border-radius: 10px; overflow: hidden; }
 .phgrid img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; }
@@ -316,6 +330,7 @@ select { border-radius: 10px; }
       <button data-tab="feed" class="active">🔔 Annonces<span id="unseen" class="badge" hidden></span></button>
       <button data-tab="searches">🔎 Mes recherches</button>
       <button data-tab="market">📈 Veille du bot</button>
+      <button data-tab="sell">📝 Vendre</button>
       <button data-tab="photos">📷 Photos</button>
       <button data-tab="settings">⚙️ Réglages</button>
     </nav>
@@ -499,6 +514,22 @@ select { border-radius: 10px; }
   </section>
 
   <!-- RÉGLAGES -->
+  <!-- VENDRE -->
+  <section id="tab-sell" class="tab">
+    <div class="stack">
+      <div class="card stack">
+        <div><h2>📝 Annonce automatique</h2>
+          <p class="sub">Glisse les photos de ton article (depuis le Mac, ou de l'iPhone par AirDrop) : le bot prépare le titre, la description et le prix, puis l'enregistre en <strong>brouillon</strong> sur ton compte Vinted, par la fenêtre Vinted (ouverte et connectée). Tu vérifies et tu publies toi-même. Depuis l'iPhone : envoie simplement les photos à ton bot Telegram, avec quelques mots si tu veux.</p></div>
+        <label id="dropZone" class="drop"><input type="file" id="sellFiles" accept="image/*,.heic,.heif" multiple hidden>
+          <div class="big">📸</div><div><strong>Glisse tes photos ici</strong> ou clique pour les choisir</div>
+          <small class="sub">JPEG, PNG, HEIC (iPhone) · 20 au plus · position GPS et infos du téléphone retirées</small></label>
+        <input type="text" id="sellText" style="width:100%;box-sizing:border-box" placeholder="Quelques mots (facultatif) : ps5 pro 2 manettes boîte facture 520 €">
+      </div>
+      <div id="sellEditor"></div>
+      <div class="card stack"><h2>Mes annonces préparées</h2><div id="sellList" class="dlist"><p class="sub">Aucune pour l'instant.</p></div></div>
+    </div>
+  </section>
+
   <!-- PHOTOS -->
   <section id="tab-photos" class="tab">
     <div class="card stack">
@@ -779,6 +810,137 @@ function renderBlocked() {
 }
 async function loadBlocked() { BLK = await api("GET", "/api/blocked"); renderBlocked(); }
 $("#blkBtn").addEventListener("click", (e) => guarded(e.target, loadBlocked));
+// ---------- annonce automatique ----------
+let DRAFTS = [], CUR = null;
+const DSTATUS = { local: "📝 À envoyer", sending: "⏳ Envoi en cours…", sent: "✅ Brouillon sur Vinted",
+  prefilled: "🟠 Formulaire pré-rempli", error: "❌ Pas envoyé" };
+const COND = [["neuf", "Neuf"], ["comme_neuf", "Comme neuf"], ["tres_bon", "Très bon état"], ["bon", "Bon état"]];
+function photoUrl(d, n) { return `/api/annonces/${d.id}/photo/${n}?v=${Math.round(d.updated || 0)}`; }
+function renderDrafts() {
+  $("#sellList").innerHTML = DRAFTS.length ? DRAFTS.map((d) => `<div class="row2" data-id="${d.id}">
+      <img src="${photoUrl(d, d.photos[0])}" alt="">
+      <div style="flex:1;min-width:0"><strong>${esc(d.title)}</strong><br>
+        <small class="sub">${d.price ? money(d.price) + " · " : ""}${d.photos.length} photo(s) · ${DSTATUS[d.status] || ""} · ${ago(d.created)}${d.source === "Telegram" ? " · 📱" : ""}</small></div>
+      <button class="btn small" data-act="open">Ouvrir</button>
+      <button class="btn small danger" data-act="del">✕</button></div>`).join("")
+    : `<p class="sub">Aucune pour l'instant.</p>`;
+}
+function fieldHTML(d) {
+  const f = d.fields, sel = (v, cur) => v === cur ? " selected" : "";
+  return `<div class="form">
+    <label class="field"><span>Modèle</span><select data-f="model">
+      ${["PS5 Pro", "PS5 Digital", "PS5 avec lecteur"].map((m) => `<option value="${m}"${sel(m, f.model)}>${m}</option>`).join("")}
+      <option value=""${f.model ? "" : " selected"}>Autre article</option></select></label>
+    <label class="field"><span>État</span><select data-f="condition">${COND.map(([k, l]) => `<option value="${k}"${sel(k, f.condition)}>${l}</option>`).join("")}</select></label>
+    ${f.model ? `<label class="field"><span>Manettes</span><input type="number" min="0" max="6" data-f="controllers" value="${f.controllers ?? 1}"></label>
+    <label class="field"><span>Stockage</span><select data-f="storage">${["", "825 Go", "1 To", "2 To"].map((v) => `<option value="${v}"${sel(v, f.storage || "")}>${v || "non précisé"}</option>`).join("")}</select></label>
+    <label class="check"><input type="checkbox" data-f="slim"${f.slim ? " checked" : ""}> Modèle Slim</label>
+    <label class="check"><input type="checkbox" data-f="box"${f.box ? " checked" : ""}> Boîte d'origine</label>
+    <label class="check"><input type="checkbox" data-f="invoice"${f.invoice ? " checked" : ""}> Facture</label>
+    <label class="field"><span>Jeux inclus</span><input type="text" data-f="games" value="${esc(f.games || "")}" placeholder="ex. FIFA 25, GTA V"></label>
+    <label class="field"><span>Garantie jusqu'en</span><input type="text" data-f="warranty" value="${esc(f.warranty || "")}" placeholder="ex. 06/2027"></label>`
+    : `<label class="field"><span>Ce que c'est</span><input type="text" data-f="title_hint" value="${esc(f.title_hint || "")}" placeholder="ex. Manette DualSense Edge"></label>`}
+    <label class="field full"><span>Remarques (ajoutées à la description)</span><input type="text" data-f="notes" value="${esc(f.notes || "")}" placeholder="ex. petite rayure sur le dessus, visible en photo 4"></label>
+  </div>`;
+}
+function renderEditor() {
+  const d = CUR;
+  if (!d) { $("#sellEditor").innerHTML = ""; return; }
+  const ready = S.window?.open && S.window?.user;
+  $("#sellEditor").innerHTML = `<div class="card stack" id="draftCard">
+    <div class="toolbar" style="margin:0"><div class="grow"><h2>Annonce · ${DSTATUS[d.status] || ""}</h2>
+      <p class="sub">Modifie ce que tu veux : titre et description se réécrivent tout seuls tant que tu ne les touches pas.</p></div>
+      <button class="btn small" data-act="close">Fermer</button></div>
+    <div class="sell-photos">${d.photos.map((n, i) => `<figure><img src="${photoUrl(d, n)}" alt="">
+      <figcaption><button data-act="left" data-i="${i}" title="Avancer">◀</button><button data-act="rm" data-i="${i}" title="Retirer">✕</button><button data-act="right" data-i="${i}" title="Reculer">▶</button></figcaption></figure>`).join("")}</div>
+    ${fieldHTML(d)}
+    <div class="form">
+      <label class="field"><span>Prix (€)</span><input type="number" min="1" step="1" id="dPrice" value="${d.price ?? ""}" placeholder="à indiquer">
+        <small>${d.price_src ? "Conseillé d'après " + esc(d.price_src) : "Pas encore de ventes de ce modèle pour conseiller un prix."}</small></label>
+      <label class="field full"><span>Titre</span><input type="text" id="dTitle" maxlength="100" value="${esc(d.title)}"></label>
+      <label class="field full"><span>Description</span><textarea id="dDesc" rows="7">${esc(d.description)}</textarea></label>
+    </div>
+    ${d.message ? `<div class="dmsg ${d.status}">${esc(d.message)}</div>` : ""}
+    <div class="row">
+      <button class="btn primary" data-act="send"${d.status === "sending" ? " disabled" : ""}>📤 Créer le brouillon sur Vinted</button>
+      <button class="btn" data-act="regen">↺ Réécrire titre et description</button>
+      <button class="btn" data-act="copyT">Copier le titre</button>
+      <button class="btn" data-act="copyD">Copier la description</button>
+      <a class="btn" href="/api/annonces/${d.id}/photos.zip">⬇️ Photos (.zip)</a>
+    </div>
+    ${ready ? "" : `<p class="sub">🔐 Pour créer le brouillon, ouvre la fenêtre Vinted (onglet Annonces) et connecte-toi dedans, une seule fois.</p>`}
+  </div>`;
+}
+async function patchDraft(patch, rerender = false) {
+  CUR = await api("PUT", `/api/annonces/${CUR.id}`, patch);
+  const i = DRAFTS.findIndex((x) => x.id === CUR.id); if (i >= 0) DRAFTS[i] = CUR;
+  if (rerender) { renderEditor(); renderDrafts(); return; }
+  if (document.activeElement !== $("#dTitle")) $("#dTitle").value = CUR.title;
+  if (document.activeElement !== $("#dDesc")) $("#dDesc").value = CUR.description;
+  if (document.activeElement !== $("#dPrice")) $("#dPrice").value = CUR.price ?? "";
+  renderDrafts();
+}
+async function uploadPhotos(files) {
+  files = [...files].filter((f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
+  if (!files.length) return toast("Glisse des photos (JPEG, PNG ou HEIC)", true);
+  const fd = new FormData();
+  files.slice(0, 20).forEach((f) => fd.append("photos", f, f.name));
+  fd.append("text", $("#sellText").value);
+  $("#dropZone").querySelector("strong").textContent = `Préparation de l'annonce (${files.length} photo(s))…`;
+  try {
+    const res = await fetch("/api/annonces", { method: "POST", headers: { "X-VB": "1" }, body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+    CUR = data; DRAFTS = [data, ...DRAFTS.filter((x) => x.id !== data.id)];
+    $("#sellText").value = ""; renderEditor(); renderDrafts();
+    $("#sellEditor").scrollIntoView({ behavior: "smooth" });
+  } catch (err) { toast(err.message, true); }
+  finally { $("#dropZone").querySelector("strong").textContent = "Glisse tes photos ici"; }
+}
+$("#sellFiles").addEventListener("change", (e) => { uploadPhotos(e.target.files); e.target.value = ""; });
+["dragenter", "dragover"].forEach((ev) => $("#dropZone").addEventListener(ev, (e) => { e.preventDefault(); $("#dropZone").classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => $("#dropZone").addEventListener(ev, (e) => { e.preventDefault(); $("#dropZone").classList.remove("over"); }));
+$("#dropZone").addEventListener("drop", (e) => uploadPhotos(e.dataTransfer.files));
+$("#sellList").addEventListener("click", (e) => {
+  const act = e.target.dataset.act; if (!act) return;
+  const d = DRAFTS.find((x) => x.id === e.target.closest("[data-id]").dataset.id); if (!d) return;
+  if (act === "open") { CUR = d; renderEditor(); $("#sellEditor").scrollIntoView({ behavior: "smooth" }); }
+  if (act === "del") guarded(e.target, async () => {
+    if (!confirm(`Supprimer « ${d.title} » (sur ton ordinateur seulement) ?`)) return;
+    await api("DELETE", `/api/annonces/${d.id}`);
+    DRAFTS = DRAFTS.filter((x) => x.id !== d.id); if (CUR?.id === d.id) CUR = null;
+    renderDrafts(); renderEditor();
+  });
+});
+$("#sellEditor").addEventListener("change", (e) => {
+  const el = e.target, key = el.dataset.f;
+  if (key) {
+    const v = el.type === "checkbox" ? el.checked : el.type === "number" ? (el.value === "" ? null : +el.value) : (el.value || null);
+    return guarded(null, () => patchDraft({ fields: { [key]: key === "model" ? v : (v ?? "") } }, key === "model"));
+  }
+  if (el.id === "dTitle") guarded(null, () => patchDraft({ title: el.value }));
+  if (el.id === "dDesc") guarded(null, () => patchDraft({ description: el.value }));
+  if (el.id === "dPrice") guarded(null, () => patchDraft({ price: el.value }));
+});
+$("#sellEditor").addEventListener("click", (e) => {
+  const act = e.target.dataset.act; if (!act || !CUR) return;
+  const i = +e.target.dataset.i, photos = [...CUR.photos];
+  if (act === "close") { CUR = null; renderEditor(); }
+  if (act === "left" && i > 0) { [photos[i - 1], photos[i]] = [photos[i], photos[i - 1]]; guarded(null, () => patchDraft({ photos }, true)); }
+  if (act === "right" && i < photos.length - 1) { [photos[i + 1], photos[i]] = [photos[i], photos[i + 1]]; guarded(null, () => patchDraft({ photos }, true)); }
+  if (act === "rm") { photos.splice(i, 1); guarded(null, () => patchDraft({ photos }, true)); }
+  if (act === "regen") guarded(e.target, () => patchDraft({ regenerate: true }, true));
+  if (act === "copyT") navigator.clipboard.writeText(CUR.title).then(() => toast("Titre copié"));
+  if (act === "copyD") navigator.clipboard.writeText(CUR.description).then(() => toast("Description copiée"));
+  if (act === "send") guarded(e.target, async () => {
+    if (!CUR.price) { $("#dPrice").focus(); throw new Error("Indique d'abord un prix"); }
+    if (!S.window?.open) toast("Ouverture de la fenêtre Vinted… Si tu n'es pas connecté, connecte-toi dedans puis reclique.");
+    CUR = await api("POST", `/api/annonces/${CUR.id}/vinted`);
+    renderEditor(); toast(CUR.status === "sent" ? "Brouillon créé sur Vinted" : DSTATUS[CUR.status], CUR.status === "error");
+  });
+});
+async function loadDrafts() { DRAFTS = await api("GET", "/api/annonces"); renderDrafts(); }
+
 let PH = null;
 function photoLink(u, i) {
   return `/api/photo.jpg?u=${encodeURIComponent(u)}&n=${i}&title=${encodeURIComponent(PH.title)}`;
@@ -800,6 +962,7 @@ async function fetchPhotos(url) {
 }
 $("#phForm").addEventListener("submit", (e) => { e.preventDefault(); fetchPhotos($("#phUrl").value.trim()); });
 function showTab(name) {
+  if (name === "sell") loadDrafts().catch(() => {});
   if (name === "searches") { loadAnalysis().catch(() => {}); loadBlocked().catch(() => {}); }
   if (name === "market") loadMarket().catch(() => {});
   $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
@@ -1083,6 +1246,12 @@ function connectEvents() {
     const msg = JSON.parse(e.data);
     if (msg.type === "update") onUpdate(msg.id, msg.patch);
     else if (msg.type === "window") { S.window = msg.window; renderWindow(); }
+    else if (msg.type === "draft") {
+      const d = msg.draft, i = DRAFTS.findIndex((x) => x.id === d.id);
+      if (i >= 0) DRAFTS[i] = d; else DRAFTS.unshift(d);
+      renderDrafts();
+      if (CUR?.id === d.id && (CUR.status !== d.status || CUR.message !== d.message)) { CUR = d; renderEditor(); }
+    }
     else if (msg.type === "blocked") { if (BLK) { BLK.unshift(msg.blocked); renderBlocked(); } }
     else onAlert(msg.alert || msg);
   };

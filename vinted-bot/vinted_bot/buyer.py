@@ -17,6 +17,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 RESERVE_WAIT = 40.0      # au-delà, la réservation est considérée comme ratée
+DRAFT_WAIT = 150.0       # envoi des photos + brouillon (ou formulaire pré-rempli)
 AUTO_MAX_PER_HOUR = 10   # garde-fou : réservations automatiques par heure au plus
 
 
@@ -83,10 +84,10 @@ class VintedWindow:
             self._loop.create_task(self._watch_user(self.proc))
         elif event == "user":
             self.user = msg.get("login")
-        elif event in ("reserve", "error") and msg.get("id") is not None:
+        elif event in ("reserve", "draft", "error") and msg.get("id") is not None:
             future = self._waiting.pop(str(msg["id"]), None)
             if future and not future.done():
-                future.set_result(msg if event == "reserve"
+                future.set_result(msg if event != "error"
                                   else {"ok": False, "reason": msg.get("message", "erreur de la fenêtre")})
         elif event == "closed":
             self.user = None
@@ -130,6 +131,24 @@ class VintedWindow:
             # Laisse le temps de payer avant qu'une réservation automatique ne change de page.
             self.busy_until = time.monotonic() + 120
         return result
+
+    async def create_draft(self, draft_id: str, meta: dict, photos_b64: list[str]) -> dict:
+        """Brouillon sur ton compte Vinted, depuis la fenêtre connectée (voir window.create_draft)."""
+        if not self.is_open:
+            await self.open()
+            return {"ok": False, "reason": "fenêtre Vinted ouverte à l'instant : connecte-toi dedans, puis réessaie"}
+        if not self.user:
+            return {"ok": False, "reason": "connecte-toi à ton compte dans la fenêtre Vinted, puis réessaie"}
+        async with self._lock:
+            key = f"d:{draft_id}"
+            future = asyncio.get_running_loop().create_future()
+            self._waiting[key] = future
+            self._send({"cmd": "draft", "id": key, "meta": meta, "photos": photos_b64})
+            try:
+                return await asyncio.wait_for(future, DRAFT_WAIT)
+            except asyncio.TimeoutError:
+                self._waiting.pop(key, None)
+                return {"ok": False, "reason": "pas de réponse de la fenêtre Vinted"}
 
     def close(self) -> None:
         if self.is_open:

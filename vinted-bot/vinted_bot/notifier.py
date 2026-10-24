@@ -19,6 +19,9 @@ from .tracking import AVAILABLE, DELETED, GONE, RESERVED, SOLD, STATUS_LABELS
 
 log = logging.getLogger(__name__)
 
+BATCH_WAIT = 6.0          # photos d'un même envoi : on attend 6 s sans nouvelle photo
+DRAFT_EDIT_FOR = 900.0    # quelques mots dans les 15 min qui suivent l'aperçu : corrections
+
 
 def _money(value: float | None, currency: str) -> str:
     if value is None:
@@ -143,6 +146,10 @@ class TelegramNotifier:
         # pas envoyée (elle reste dans l'appli). Bénéfice inconnu : envoyée quand même.
         self.min_profit: float | None = None
         self._bg: set[asyncio.Task] = set()   # tâches lancées depuis les messages (gardées en vie)
+        # Annonce automatique depuis le téléphone : photos reçues, puis aperçu à valider.
+        self.on_draft = self.on_draft_edit = self.on_draft_send = None
+        self._batch: dict | None = None       # photos en cours de réception {"files", "text", "timer"}
+        self._last_draft: tuple[str, float] | None = None
 
     @staticmethod
     def _keyboard(item_id: int | None, url: str, reserve: bool = True) -> dict:
@@ -319,10 +326,16 @@ class TelegramNotifier:
                     query = update.get("callback_query") or {}
                     message = query.get("message") or {}
                     data = query.get("data") or ""
-                    if not data.startswith("r:"):
-                        continue
                     if str((message.get("chat") or {}).get("id")) != self.chat_id:
                         continue  # seul ton propre compte Telegram peut réserver
+                    if data.startswith("a:") and self.on_draft_send:
+                        with contextlib.suppress(Exception):
+                            await self._call("answerCallbackQuery", {
+                                "callback_query_id": query["id"], "text": "⏳ Brouillon en cours sur ton ordinateur…"})
+                        self._spawn(self.on_draft_send(data[2:], self))
+                        continue
+                    if not data.startswith("r:"):
+                        continue
                     with contextlib.suppress(Exception):
                         await self._call("answerCallbackQuery", {
                             "callback_query_id": query["id"], "text": "⏳ Réservation sur ton ordinateur…"})
@@ -339,17 +352,70 @@ class TelegramNotifier:
         task.add_done_callback(self._bg.discard)
 
     def _on_message(self, message: dict, on_link) -> None:
-        if str((message.get("chat") or {}).get("id")) != self.chat_id or on_link is None:
+        if str((message.get("chat") or {}).get("id")) != self.chat_id:
             return  # seul ton propre compte Telegram est écouté
         from .photos import parse_item_url
         text = message.get("text") or message.get("caption") or ""
+        doc = message.get("document") or {}
+        file_id = ((message.get("photo") or [{}])[-1].get("file_id")
+                   or (doc.get("file_id") if (doc.get("mime_type") or "").startswith("image/") else None))
+        if file_id and self.on_draft:   # photos pour une annonce : on attend la fin de l'envoi
+            batch = self._batch or {"files": [], "text": ""}
+            batch["files"].append(file_id)
+            if text:
+                batch["text"] = (batch["text"] + "\n" + text).strip()
+            if batch.get("timer"):
+                batch["timer"].cancel()
+            batch["timer"] = asyncio.get_running_loop().call_later(
+                BATCH_WAIT, lambda: self._spawn(self._finish_batch()))
+            self._batch = batch
+            return
         found = parse_item_url(text)
+        if found and on_link is None:
+            return
+        if not found and text.strip() and self._batch:   # quelques mots juste après les photos
+            self._batch["text"] = (self._batch["text"] + "\n" + text).strip()
+            return
+        recent = self._last_draft and time.time() - self._last_draft[1] < DRAFT_EDIT_FOR
+        if not found and text.strip() and recent and self.on_draft_edit and not text.startswith("/"):
+            self._spawn(self.on_draft_edit(self._last_draft[0], text, self))
+            return
         if found:
             self._spawn(self.send_text("📷 Je récupère les photos…"))
             self._spawn(on_link(found[1], self))
         elif text.strip():
-            self._spawn(self.send_text("📷 Envoie-moi le lien d'une annonce Vinted : je te renvoie toutes ses "
-                                            "photos en JPEG (à enregistrer depuis Telegram)."))
+            self._spawn(self.send_text(
+                "📝 Envoie-moi les photos d'un article (+ quelques mots : modèle, état, manettes, boîte, prix) : "
+                "je prépare l'annonce et je la mets en brouillon sur ton Vinted, tu n'as plus qu'à publier.\n"
+                "📷 Envoie-moi le lien d'une annonce Vinted : je te renvoie toutes ses photos en JPEG."))
+
+    async def _finish_batch(self) -> None:
+        batch, self._batch = self._batch, None
+        if not batch:
+            return
+        await self.send_text(f"⏳ {len(batch['files'])} photo(s) reçue(s), je prépare l'annonce…")
+        photos = []
+        for file_id in batch["files"][:20]:
+            try:
+                info = await self._call("getFile", {"file_id": file_id})
+                resp = await self.http.get(self.api.replace("/bot", "/file/bot", 1) + "/" + info["file_path"],
+                                           timeout=60)
+                if resp.status_code == 200:
+                    photos.append(resp.content)
+            except Exception as e:
+                log.warning("Photo Telegram non téléchargée : %s", e)
+        await self.on_draft(photos, batch["text"], self)
+
+    async def draft_preview(self, d: dict) -> None:
+        """Aperçu de l'annonce préparée, avec le bouton qui crée le brouillon sur Vinted."""
+        self._last_draft = (d["id"], time.time())
+        price = (f"{d['price']:.0f} €" + (f" ({d['price_src']})" if d.get("price_src") else "")) if d.get("price") \
+            else "à indiquer : réponds par ex. « 450 € »"
+        text = (f"📝 <b>Annonce prête</b> · {len(d['photos'])} photo(s)\n\n<b>{html.escape(d['title'])}</b>\n\n"
+                f"{html.escape(d['description'])}\n\n💶 Prix : {html.escape(price)}\n\n"
+                "✏️ Pour corriger, réponds avec quelques mots (ex. « 2 manettes, boîte, 480 € »).")
+        await self._call("sendMessage", {"text": text, "parse_mode": "HTML", "reply_markup": {"inline_keyboard": [[
+            {"text": "📤 Créer le brouillon sur Vinted", "callback_data": f"a:{d['id']}"}]]}})
 
     async def close(self) -> None:
         await self.http.close()

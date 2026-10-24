@@ -31,6 +31,7 @@ from .config import Search, config_from_dict, parse_vinted_url
 from .filters import margin, profit
 from .models import Deal, Item
 from .monitor import Monitor
+from .drafts import Drafts
 from .photos import download_jpegs, is_photo_url, item_photos, make_zip, safe_name
 from .products import product_model
 from .notifier import TelegramNotifier, build_notifiers, sample_alert, telegram_detect
@@ -178,6 +179,7 @@ class Engine:
         self.notifiers: list = []
         self.crash: str | None = None
         self.window = VintedWindow(data_dir, on_change=self._window_changed)
+        self.drafts = Drafts(data_dir / "annonces")
         self.side_tasks: list[asyncio.Task] = []
         self.market: MarketWatch | None = None
         self.market_memory: dict = {}  # garde le suivi de la veille d'un redémarrage du moteur à l'autre
@@ -253,6 +255,8 @@ class Engine:
             self.side_tasks.append(asyncio.create_task(self.market.run()))
         for n in self.notifiers:
             if hasattr(n, "listen"):  # boutons « ⚡ Réserver » de Telegram
+                n.on_draft, n.on_draft_edit, n.on_draft_send = (
+                    self._draft_from_phone, self._draft_edit_from_phone, self._draft_send_from_phone)
                 self.side_tasks.append(asyncio.create_task(n.listen(self._reserve_from_phone, self._photos_to_phone)))
 
     async def _run(self, monitor: Monitor) -> None:
@@ -415,6 +419,104 @@ class Engine:
         if not reason or item.profit is None or item.profit < self.min_profit():
             return None
         return f"💰 +{item.profit:.0f} € estimés · {reason}"
+
+    # --- annonce automatique -------------------------------------------------------------
+
+    def price_suggestion(self, model: str | None) -> tuple[float | None, str | None]:
+        """Prix conseillé pour vendre : médiane des ventes normales du modèle, sinon ton prix de
+        revente d'une recherche du même modèle."""
+        if not model:
+            return None, None
+        est = resale_estimate(self._pools()[1], None, model)
+        if est:
+            return float(round(est[0] / 5) * 5), f"médiane de {est[1]} ventes de {model}"
+        for s in self.settings.get("search", []):
+            if s.get("resale_price") and product_model(s.get("name") or "", None, 300) == model:
+                return float(s["resale_price"]), f"ton prix de revente (recherche « {s['name']} »)"
+        return None, None
+
+    def new_draft(self, photos: list[bytes], text: str = "", source: str = "ordinateur") -> dict:
+        d = self.drafts.create(photos, text, source)
+        if d["price"] is None:
+            price, src = self.price_suggestion(d["fields"].get("model"))
+            if price:
+                d = self.drafts.save({**d, "price": price, "price_src": src})
+        self._broadcast({"type": "draft", "draft": d})
+        log.info("Annonce préparée (%s) : %s, %d photo(s)", source, d["title"], len(d["photos"]))
+        return d
+
+    def update_draft(self, draft_id: str, patch: dict) -> dict:
+        d = self.drafts.update(draft_id, patch)
+        if "fields" in patch and "model" in patch["fields"] and d.get("price_src") not in ("ton prix", "tes mots"):
+            price, src = self.price_suggestion(d["fields"].get("model"))
+            d = self.drafts.save({**d, "price": price, "price_src": src})
+        self._broadcast({"type": "draft", "draft": d})
+        return d
+
+    async def send_draft(self, draft_id: str) -> dict:
+        """Brouillon sur ton compte Vinted, depuis la fenêtre Vinted connectée. Tu publies toi-même."""
+        d = self.drafts.get(draft_id)
+        if not d.get("price"):
+            raise ValueError("Indique un prix avant d'envoyer le brouillon")
+        self._broadcast({"type": "draft", "draft": self.drafts.save({**d, "status": "sending", "message": None})})
+        result = await self.window.create_draft(draft_id, Drafts.vinted_meta(d), self.drafts.photos_b64(d))
+        api = result.get("api") or {}
+        if api:
+            log.info("Brouillon Vinted, envoi direct refusé : étape %s, HTTP %s, %s", api.get("step"),
+                     api.get("status"), api.get("body"))
+        if result.get("ok"):
+            status, msg = "sent", ("✅ Brouillon enregistré sur ton compte Vinted : ouvre l'appli Vinted → ton profil "
+                                   "→ Brouillons, vérifie et publie.")
+        elif (result.get("prefilled") or {}).get("ready"):
+            status, msg = "prefilled", ("Vinted n'a pas accepté l'envoi direct du brouillon. Le formulaire « Vendre » "
+                                        "est ouvert et pré-rempli dans la fenêtre Vinted (photos, titre, description, "
+                                        "prix) : choisis la catégorie, l'état et le colis, puis enregistre en brouillon "
+                                        "ou publie.")
+        elif result.get("login"):
+            status, msg = "error", "Connecte-toi à ton compte dans la fenêtre Vinted, puis réessaie."
+        else:
+            status, msg = "error", f"Brouillon non créé : {result.get('reason') or 'Vinted a refusé'}"
+            if api:
+                msg += f" (étape {api.get('step')}, HTTP {api.get('status')})"
+        d = self.drafts.save({**self.drafts.get(draft_id), "status": status, "message": msg,
+                              "vinted_id": result.get("draft_id")})
+        self._broadcast({"type": "draft", "draft": d})
+        return d
+
+    async def _draft_from_phone(self, photos: list[bytes], text: str, notifier) -> None:
+        """Photos envoyées au bot Telegram : annonce préparée, aperçu renvoyé avec le bouton
+        « Créer le brouillon »."""
+        try:
+            d = self.new_draft(photos, text, "Telegram")
+            await notifier.draft_preview(d)
+        except Exception as e:
+            log.warning("Annonce depuis Telegram impossible : %s", e)
+            with contextlib.suppress(Exception):
+                await notifier.send_text(f"❌ Annonce non préparée : {e}")
+
+    async def _draft_edit_from_phone(self, draft_id: str, text: str, notifier) -> None:
+        """Quelques mots envoyés après les photos (« 2 manettes, 480 € ») : l'annonce est mise à jour."""
+        from .listing import parse_hints
+        hints = parse_hints(text)
+        patch: dict = {"fields": {k: v for k, v in hints.items() if k != "price"}}
+        if "price" in hints:
+            patch["price"] = hints["price"]
+        if not hints:
+            patch["fields"] = {"notes": text.strip()}
+        try:
+            d = self.update_draft(draft_id, patch)
+            await notifier.draft_preview(d)
+        except Exception as e:
+            with contextlib.suppress(Exception):
+                await notifier.send_text(f"❌ {e}")
+
+    async def _draft_send_from_phone(self, draft_id: str, notifier) -> None:
+        try:
+            d = await self.send_draft(draft_id)
+            await notifier.send_text(d["message"])
+        except Exception as e:
+            with contextlib.suppress(Exception):
+                await notifier.send_text(f"❌ {e}")
 
     def blocked(self, item, search, reason: str) -> None:
         """Annonce écartée par l'anti-arnaque ou les vérifications : gardée pour que tu contrôles."""
@@ -690,6 +792,61 @@ async def photo_jpg(request):
     return web.Response(body=jpegs[0], content_type="image/jpeg", headers={"Content-Disposition": _attachment(name)})
 
 
+@routes.get("/api/annonces")
+async def list_drafts(request):
+    return web.json_response(engine_of(request).drafts.list())
+
+
+@routes.post("/api/annonces")
+async def create_draft(request):
+    """Photos glissées dans l'interface (+ quelques mots facultatifs) : annonce préparée."""
+    reader = await request.multipart()
+    photos, text, total = [], "", 0
+    while (part := await reader.next()) is not None:
+        if part.name == "text":
+            text = (await part.text())[:2000]
+        elif part.name == "photos":
+            data = await part.read(decode=False)
+            total += len(data)
+            if total > 300 * 1024 * 1024:
+                raise ValueError("Trop lourd : 20 photos au plus")
+            photos.append(bytes(data))
+    return web.json_response(engine_of(request).new_draft(photos, text))
+
+
+@routes.put("/api/annonces/{id}")
+async def update_draft(request):
+    return web.json_response(engine_of(request).update_draft(request.match_info["id"], await request.json()))
+
+
+@routes.delete("/api/annonces/{id}")
+async def delete_draft(request):
+    engine_of(request).drafts.delete(request.match_info["id"])
+    return web.json_response({"ok": True})
+
+
+@routes.get("/api/annonces/{id}/photo/{name}")
+async def draft_photo(request):
+    path = engine_of(request).drafts.photo_path(request.match_info["id"], request.match_info["name"])
+    if not path.exists():
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers={"Cache-Control": "no-store"})
+
+
+@routes.get("/api/annonces/{id}/photos.zip")
+async def draft_zip(request):
+    e = engine_of(request)
+    d = e.drafts.get(request.match_info["id"])
+    jpegs = [e.drafts.photo_path(d["id"], n).read_bytes() for n in d["photos"]]
+    return web.Response(body=make_zip(d["title"], jpegs), content_type="application/zip",
+                        headers={"Content-Disposition": _attachment(f"{safe_name(d['title'])}.zip")})
+
+
+@routes.post("/api/annonces/{id}/vinted")
+async def send_draft(request):
+    return web.json_response(await engine_of(request).send_draft(request.match_info["id"]))
+
+
 @routes.get("/api/blocked")
 async def get_blocked(request):
     return web.json_response(engine_of(request).store.recent_blocked(100))
@@ -961,6 +1118,19 @@ async def selftest() -> None:
                 async with http.get(url + "/api/state") as r:
                     data = await r.json()
                     assert data["settings"]["search"][0]["name"] == "test", "état"
+                # Annonce automatique : une photo HEIC d'iPhone glissée dans l'interface.
+                import io
+                from PIL import Image
+                from . import listing
+                assert listing.pillow_heif is not None, "lecture des photos HEIC (iPhone) absente"
+                heic = io.BytesIO()
+                Image.new("RGB", (40, 30), (9, 9, 9)).save(heic, "HEIF")
+                form = aiohttp.FormData()
+                form.add_field("photos", heic.getvalue(), filename="IMG_0001.HEIC", content_type="image/heic")
+                form.add_field("text", "ps5 pro 2 manettes 480 €")
+                async with http.post(url + "/api/annonces", headers={"X-VB": "1"}, data=form) as r:
+                    d = await r.json()
+                    assert r.status == 200 and d["fields"]["model"] == "PS5 Pro" and d["price"] == 480, f"annonce : {d}"
         finally:
             await engine.stop()
             engine.store.close()

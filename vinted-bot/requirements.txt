@@ -2,3 +2,4 @@ curl_cffi>=0.7
 aiohttp>=3.9
 Pillow>=10
 pywebview>=5
+pillow-heif>=0.18

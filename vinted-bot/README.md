@@ -102,6 +102,18 @@ contre la médiane des prix récents de la même recherche.
   (jusqu'à 20) à la plus grande taille que Vinted affiche (800 px ; la page ne donne pas d'original
   plus grand, relevé du 24/10/2026), converties en JPEG, en .zip ou une par une. Sur Telegram, le
   bot répond par des fichiers (qualité intacte), seulement à ton propre compte.
+- **Annonce automatique** (onglet 📝 Vendre, ou photos envoyées au bot Telegram depuis l'iPhone) :
+  les photos sont remises droites, réduites à 2000 px et nettoyées de leurs métadonnées (position
+  GPS, modèle du téléphone) ; les photos HEIC de l'iPhone sont acceptées. Le bot devine le modèle,
+  l'état, les manettes, la boîte, la facture, la garantie et le prix à partir de quelques mots
+  (« ps5 pro 2 manettes boîte facture 520 € »), écrit le titre et la description, et propose un
+  prix (médiane des ventes du modèle, sinon ton prix de revente). Tout reste modifiable. « Créer le
+  brouillon » l'enregistre en brouillon sur ton compte, par la fenêtre Vinted connectée (les appels
+  du site lui-même : envoi des photos puis du brouillon, catégorie Consoles et marque Sony pour une
+  PS5) ; tu publies toi-même depuis l'appli. Si Vinted refuse l'envoi direct, le formulaire
+  « Vendre » s'ouvre pré-rempli dans la fenêtre (photos, titre, description, prix) et tu termines.
+  Sur Telegram : photos (+ quelques mots) → aperçu avec le bouton « Créer le brouillon sur
+  Vinted » ; une réponse comme « 2 manettes, 480 € » corrige l'annonce.
 - **Réservation automatique stricte** : seulement si l'annonce est vérifiée (anti-arnaque,
   vendeur avec au moins 1 avis), que c'est une console au prix normal pour son modèle, et
   qu'elle est 💎 conseillée. Une seule à la fois (10 min pour payer), au plus 2 par 24 h
