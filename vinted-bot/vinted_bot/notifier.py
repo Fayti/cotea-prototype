@@ -72,9 +72,11 @@ def format_text(item: Item, deal: Deal, search: Search) -> str:
     if deal.median is not None:
         price += f" · médiane {_money(deal.median, item.currency)}"
     lines.append(f"💶 {price}")
-    gain = margin(item, search)
-    if gain is not None:
-        lines.append(f"💰 Marge estimée {gain:+.0f} € si revendue {search.resale_price:.0f} €")
+    gain = item.profit if item.profit is not None else margin(item, search)
+    resale = item.resale or search.resale_price
+    if gain is not None and resale:
+        src = f", {item.resale_src}" if item.resale_src else ""
+        lines.append(f"💰 Bénéfice estimé {gain:+.0f} € (revente ~{resale:.0f} €{src})")
     if item.model:
         lines.append(f"🎮 {item.model}")
     if item.warning:
@@ -137,6 +139,10 @@ class TelegramNotifier:
         self.api = f"https://api.telegram.org/bot{token}"
         self.chat_id = str(chat_id)
         self.http = AsyncSession(timeout=10)
+        # Bénéfice minimum : une annonce dont le bénéfice estimé est connu et inférieur n'est
+        # pas envoyée (elle reste dans l'appli). Bénéfice inconnu : envoyée quand même.
+        self.min_profit: float | None = None
+        self._bg: set[asyncio.Task] = set()   # tâches lancées depuis les messages (gardées en vie)
 
     @staticmethod
     def _keyboard(item_id: int | None, url: str, reserve: bool = True) -> dict:
@@ -177,7 +183,9 @@ class TelegramNotifier:
                     images.append(Image.open(io.BytesIO(raw)).convert("RGB"))
         return await asyncio.to_thread(collage, images) if len(images) >= 2 else None
 
-    async def send(self, item: Item, deal: Deal, search: Search) -> dict:
+    async def send(self, item: Item, deal: Deal, search: Search) -> dict | None:
+        if self.min_profit is not None and item.profit is not None and item.profit < self.min_profit:
+            return None
         text = html.escape(format_text(item, deal, search).rsplit("\n", 1)[0])
         handle = {"text": text, "url": item.url, "item_id": item.id}
         image = None
@@ -252,11 +260,40 @@ class TelegramNotifier:
             payload["reply_parameters"] = {"message_id": handle["message_id"], "allow_sending_without_reply": True}
         await self._call("sendMessage", payload)
 
-    async def listen(self, on_reserve) -> None:
-        """Boutons « ⚡ Réserver » : réception des appuis (long polling) depuis le téléphone.
+    async def send_text(self, text: str) -> None:
+        await self._call("sendMessage", {"text": text, "link_preview_options": {"is_disabled": True}})
 
-        Les appuis faits pendant que le bot était arrêté sont ignorés : réserver une annonce
-        vieille de plusieurs heures n'a plus de sens.
+    async def send_photos(self, title: str, url: str, jpegs: list[bytes]) -> None:
+        """Les photos d'une annonce, en fichiers JPEG (qualité d'origine, pas recompressées par
+        Telegram), par albums de 10 au plus."""
+        from .photos import safe_name
+        base = safe_name(title)
+        for start in range(0, len(jpegs), 10):
+            chunk = jpegs[start:start + 10]
+            caption = f"📷 {title} — {len(jpegs)} photo(s) en JPEG\n{url}" if start == 0 else ""
+            form = CurlMime()
+            if len(chunk) == 1:   # un album exige au moins 2 éléments
+                form.addpart(name="document", content_type="image/jpeg", filename=f"{base}-{start + 1:02d}.jpg",
+                             data=chunk[0])
+                resp = await self.http.post(f"{self.api}/sendDocument", multipart=form, timeout=60,
+                                            data={"chat_id": self.chat_id, "caption": caption})
+            else:
+                media = []
+                for i, data in enumerate(chunk, start + 1):
+                    form.addpart(name=f"p{i}", content_type="image/jpeg", filename=f"{base}-{i:02d}.jpg", data=data)
+                    media.append({"type": "document", "media": f"attach://p{i}"})
+                if caption:
+                    media[0]["caption"] = caption
+                resp = await self.http.post(f"{self.api}/sendMediaGroup", multipart=form, timeout=60,
+                                            data={"chat_id": self.chat_id, "media": json.dumps(media)})
+            if resp.status_code != 200:
+                raise RuntimeError(f"Telegram : envoi des photos HTTP {resp.status_code} {resp.text[:150]}")
+
+    async def listen(self, on_reserve, on_link=None) -> None:
+        """Boutons « ⚡ Réserver » et liens d'annonce envoyés au bot (long polling).
+
+        Un lien d'annonce Vinted envoyé au bot : il répond avec ses photos (on_link). Les appuis
+        et messages faits pendant que le bot était arrêté sont ignorés.
         """
         offset, warned = None, False
         with contextlib.suppress(Exception):
@@ -266,7 +303,7 @@ class TelegramNotifier:
         while True:
             try:
                 resp = await self.http.post(f"{self.api}/getUpdates", timeout=40, json={
-                    "offset": offset, "timeout": 25, "allowed_updates": ["callback_query"]})
+                    "offset": offset, "timeout": 25, "allowed_updates": ["callback_query", "message"]})
                 if resp.status_code == 409:
                     if not warned:
                         log.warning("Boutons Telegram inactifs : un autre programme lit déjà les messages de ce "
@@ -276,6 +313,9 @@ class TelegramNotifier:
                     continue
                 for update in resp.json().get("result") or []:
                     offset = update["update_id"] + 1
+                    if "message" in update:
+                        self._on_message(update["message"], on_link)
+                        continue
                     query = update.get("callback_query") or {}
                     message = query.get("message") or {}
                     data = query.get("data") or ""
@@ -286,12 +326,30 @@ class TelegramNotifier:
                     with contextlib.suppress(Exception):
                         await self._call("answerCallbackQuery", {
                             "callback_query_id": query["id"], "text": "⏳ Réservation sur ton ordinateur…"})
-                    asyncio.get_running_loop().create_task(on_reserve(int(data[2:])))
+                    self._spawn(on_reserve(int(data[2:])))
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 log.debug("Lecture des boutons Telegram : %s", e)
                 await asyncio.sleep(5)
+
+    def _spawn(self, coro) -> None:
+        task = asyncio.get_running_loop().create_task(coro)
+        self._bg.add(task)
+        task.add_done_callback(self._bg.discard)
+
+    def _on_message(self, message: dict, on_link) -> None:
+        if str((message.get("chat") or {}).get("id")) != self.chat_id or on_link is None:
+            return  # seul ton propre compte Telegram est écouté
+        from .photos import parse_item_url
+        text = message.get("text") or message.get("caption") or ""
+        found = parse_item_url(text)
+        if found:
+            self._spawn(self.send_text("📷 Je récupère les photos…"))
+            self._spawn(on_link(found[1], self))
+        elif text.strip():
+            self._spawn(self.send_text("📷 Envoie-moi le lien d'une annonce Vinted : je te renvoie toutes ses "
+                                            "photos en JPEG (à enregistrer depuis Telegram)."))
 
     async def close(self) -> None:
         await self.http.close()

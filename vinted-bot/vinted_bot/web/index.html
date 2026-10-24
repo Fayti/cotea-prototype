@@ -110,7 +110,11 @@ label.check { display: inline-flex; gap: 6px; align-items: center; cursor: point
 .presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ana tr.sub td { background: var(--surface-2); font-size: 13px; }
 .ana tr.sub td:first-child { padding-left: 22px; }
-.margin.pos { color: #2b8a3e; } .margin.neg { color: #c92a2a; }
+.margin.pos { color: #2b8a3e; } .margin.neg { color: #c92a2a; } .margin.low { color: var(--muted); font-weight: 600; }
+.phgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.phgrid figure { margin: 0; background: var(--surface-2); border-radius: 10px; overflow: hidden; }
+.phgrid img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; }
+.phgrid figcaption { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; font-size: 13px; }
 .margin small { font-weight: 400; color: var(--muted); }
 .ana { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ana th, .ana td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -312,6 +316,7 @@ select { border-radius: 10px; }
       <button data-tab="feed" class="active">🔔 Annonces<span id="unseen" class="badge" hidden></span></button>
       <button data-tab="searches">🔎 Mes recherches</button>
       <button data-tab="market">📈 Veille du bot</button>
+      <button data-tab="photos">📷 Photos</button>
       <button data-tab="settings">⚙️ Réglages</button>
     </nav>
   </div>
@@ -343,6 +348,7 @@ select { border-radius: 10px; }
       <select id="filterSearch"><option value="">Toutes les recherches</option></select>
       <label class="check" title="Seulement les bonnes affaires (prix bien sous le prix habituel)"><input type="checkbox" id="onlyHot"> 🔥 Bonnes affaires</label>
       <label class="check" id="onlyRecoWrap" title="Seulement celles que le bot te conseille (raison écrite sur la carte)"><input type="checkbox" id="onlyReco"> 💎 Conseillées</label>
+      <label class="check" id="bigOnlyWrap" title="Masquer les annonces dont le bénéfice estimé est connu et sous ton minimum (réglable dans Réglages)"><input type="checkbox" id="bigOnly"> <span id="bigOnlyText">💰 Gros bénéfices</span></label>
       <label class="check" title="Masquer les annonces vendues, réservées ou supprimées"><input type="checkbox" id="hideGone"> Masquer les parties</label>
       <span class="grow"></span>
       <button id="soundBtn" class="btn small" title="Son à chaque alerte">🔔</button>
@@ -400,11 +406,11 @@ select { border-radius: 10px; }
             <input type="number" name="auto_reserve_max" min="0" step="0.5" placeholder="vide = jamais (tu cliques « Réserver » toi-même)">
             <small>Seulement les vraies affaires : annonce vérifiée (anti-arnaque, vendeur avec au moins 1 avis), console et pas accessoire, prix normal pour le modèle, et 💎 conseillée (à ce prix, la plupart des annonces du même modèle sont parties en moins de 20 min). Une seule à la fois, au plus 2 par 24 h (réglable dans Réglages). Rien n'est payé : paie dans la fenêtre Vinted, sinon la réservation expire.</small></label>
           <label class="field"><span>💰 Prix de revente visé (€)</span>
-            <input type="number" name="resale_price" min="0" step="1" placeholder="ex. 130">
-            <small>Ce que tu penses en tirer (ex. sur Vestiaire Collective). Chaque annonce affiche alors sa marge estimée, frais de revente (20 %) et envoi (6 €) déduits.</small></label>
-          <label class="field"><span>Marge minimale (€)</span>
+            <input type="number" name="resale_price" min="0" step="1" placeholder="vide = estimé par le bot">
+            <small>Le prix auquel tu revends (sur Vinted, sans frais vendeur ; ailleurs, ce que tu touches net). Vide : le bot prend la médiane des ventes du même modèle qu'il a vues.</small></label>
+          <label class="field"><span>Bénéfice minimum pour cette recherche (€)</span>
             <input type="number" name="min_margin" step="1" placeholder="vide = toutes les annonces">
-            <small>Avec un prix de revente : ne m'alerter que si la marge estimée atteint ce montant.</small></label>
+            <small>Avec un prix de revente : ne m'alerter du tout que si le bénéfice estimé atteint ce montant. Le minimum général (Réglages) masque déjà les petits bénéfices.</small></label>
           <label class="check full"><input type="checkbox" name="only_deals"> M'alerter seulement pour les bonnes affaires 🔥 (prix bien en dessous des autres annonces de cette recherche)</label>
         </div>
         <div class="row">
@@ -425,7 +431,7 @@ select { border-radius: 10px; }
 
       <div class="card stack">
         <div class="toolbar" style="margin:0"><div class="grow"><h2>📊 Ce que disent tes données</h2>
-          <p class="sub">Une vraie bonne affaire part en moins de 20 minutes. Pour chaque modèle (PS5 Pro, Digital, avec lecteur…), le bot mesure la part des annonces parties en moins de 20 min et le prix sous lequel ça part vite : « Achète sous ». Une nouvelle annonce est « 💎 Conseillée » quand la plupart des annonces du même modèle, à un prix voisin, sont parties en moins de 20 min. Les annonces que tu as réservées toi-même ne comptent pas. Aucune requête en plus vers Vinted.</p></div>
+          <p class="sub">Une vraie bonne affaire part en moins de 20 minutes. Pour chaque modèle (PS5 Pro, Digital, avec lecteur…), le bot mesure la part des annonces parties en moins de 20 min et le prix sous lequel ça part vite : « Achète sous ». Une nouvelle annonce est « 💎 Conseillée » quand la plupart des annonces du même modèle, à un prix voisin, sont parties en moins de 20 min ET que son bénéfice estimé atteint ton minimum (Réglages). « Revente » = médiane des ventes du modèle ; « Achète sous » = prix qui laisse ce bénéfice et auquel ça part vite. Les annonces que tu as réservées toi-même ne comptent pas. Aucune requête en plus vers Vinted.</p></div>
           <button id="anaBtn" class="btn small">Actualiser</button></div>
         <div id="anaBox" class="ana-wrap"><p class="sub">Chargement…</p></div>
       </div>
@@ -493,6 +499,19 @@ select { border-radius: 10px; }
   </section>
 
   <!-- RÉGLAGES -->
+  <!-- PHOTOS -->
+  <section id="tab-photos" class="tab">
+    <div class="card stack">
+      <div><h2>📷 Photos d'une annonce</h2>
+        <p class="sub">Colle le lien d'une annonce Vinted : le bot récupère toutes ses photos (jusqu'à 20), à la plus grande taille que Vinted affiche (800 px), converties en JPEG. Depuis ton téléphone : envoie simplement le lien à ton bot Telegram, il te renvoie les photos en fichiers.</p></div>
+      <form id="phForm" class="row" autocomplete="off">
+        <input type="url" id="phUrl" required placeholder="https://www.vinted.fr/items/…" style="flex:1;min-width:220px">
+        <button type="submit" class="btn primary">Récupérer les photos</button>
+      </form>
+      <div id="phBox"></div>
+    </div>
+  </section>
+
   <section id="tab-settings" class="tab">
     <div class="settings">
       <div class="card stack">
@@ -534,6 +553,14 @@ select { border-radius: 10px; }
         <label class="check"><input type="checkbox" id="extraPhotos"> Afficher 3 photos par annonce</label>
         <label class="check"><input type="checkbox" id="trackStatus"> Indiquer quand une annonce est vendue, réservée ou supprimée</label>
         <div><button id="saveTrack" class="btn primary">Enregistrer</button></div>
+      </div>
+
+      <div class="card stack">
+        <div><h2>💰 Bénéfice minimum</h2><p class="sub">Le bénéfice estimé = prix de revente − (prix + protection acheteurs + 6 € d'envoi). Revente sur Vinted : le vendeur ne paie pas de frais. Prix de revente : celui de ta recherche si tu l'as rempli, sinon la médiane des ventes du même modèle (au moins 5 ventes vues par le bot). En dessous de ce minimum, une annonce n'est jamais conseillée ni réservée seule, et elle est masquée par le filtre « 💰 » du fil.</p></div>
+        <label class="field" style="max-width:320px"><span>Bénéfice minimum (€)</span>
+          <input id="minProfit" type="number" min="0" max="500" step="5"></label>
+        <label class="check"><input type="checkbox" id="tgBigOnly"> Sur Telegram, ne m'envoyer que les annonces qui l'atteignent (bénéfice inconnu : envoyée quand même)</label>
+        <div><button id="saveProfit" class="btn primary">Enregistrer</button></div>
       </div>
 
       <div class="card stack">
@@ -620,12 +647,12 @@ async function loadAnalysis() {
   const line = (r, sub) => `<tr${sub ? ' class="sub"' : ""}><td><strong>${esc(r.name)}</strong><br><small>${r.alerts} annonce(s)</small></td>
       <td>${r.per_day ?? "—"}</td><td>${r.median_price != null ? money(r.median_price) : "—"}</td>
       <td><strong>${pct(r.quick_rate)}</strong></td><td>${r.quick_price != null ? money(r.quick_price) : "—"}</td>
+      <td>${r.resale != null ? money(r.resale) + (r.resale_n ? `<br><small>${r.resale_n} ventes</small>` : "<br><small>ton prix</small>") : "—"}</td>
       <td><strong>${r.buy_below != null ? money(r.buy_below) : "—"}</strong></td>
-      <td>${r.median_sale_s != null ? duration(r.median_sale_s) : "—"}</td>
-      <td>${r.median_margin != null ? money(r.median_margin) : "—"}</td><td>${esc(r.verdict)}</td></tr>`;
+      <td>${r.median_sale_s != null ? duration(r.median_sale_s) : "—"}</td><td>${esc(r.verdict)}</td></tr>`;
   $("#anaBox").innerHTML = rows.length ? `<table class="ana"><thead><tr>
       <th>Recherche</th><th>Annonces / jour</th><th>Prix médian</th><th>Parties en &lt; 20 min</th>
-      <th>Prix des ventes &lt; 20 min</th><th>Achète sous</th><th>Délai de vente médian</th><th>Marge médiane</th><th>Verdict</th></tr></thead><tbody>
+      <th>Prix des ventes &lt; 20 min</th><th>Revente</th><th>Achète sous (≥ +${minProfit()} €)</th><th>Délai de vente médian</th><th>Verdict</th></tr></thead><tbody>
     ${rows.map((r) => line(r, false) + (r.models || []).map((m) => line(m, true)).join("")).join("")}
     </tbody></table>` : `<p class="sub">Ajoute une recherche pour commencer.</p>`;
 }
@@ -752,6 +779,26 @@ function renderBlocked() {
 }
 async function loadBlocked() { BLK = await api("GET", "/api/blocked"); renderBlocked(); }
 $("#blkBtn").addEventListener("click", (e) => guarded(e.target, loadBlocked));
+let PH = null;
+function photoLink(u, i) {
+  return `/api/photo.jpg?u=${encodeURIComponent(u)}&n=${i}&title=${encodeURIComponent(PH.title)}`;
+}
+function renderPhotos() {
+  if (!PH) return;
+  const zip = `/api/photos.zip?title=${encodeURIComponent(PH.title)}&` + PH.photos.map((u) => "u=" + encodeURIComponent(u)).join("&");
+  $("#phBox").innerHTML = `<div class="toolbar" style="margin:0"><div class="grow"><strong>${esc(PH.title)}</strong>
+      <br><small class="sub">${PH.photos.length} photo(s) · <a href="${esc(PH.url)}" target="_blank" rel="noopener">voir l'annonce ↗</a></small></div>
+      <a class="btn primary" href="${zip}">⬇️ Tout télécharger (.zip)</a></div>
+    <div class="phgrid">${PH.photos.map((u, i) => `<figure><img loading="lazy" src="${esc(u)}" alt="Photo ${i + 1}">
+      <figcaption>Photo ${i + 1}<a class="btn small" href="${photoLink(u, i + 1)}">⬇️ JPEG</a></figcaption></figure>`).join("")}</div>`;
+}
+async function fetchPhotos(url) {
+  $("#phUrl").value = url;
+  $("#phBox").innerHTML = `<p class="sub">Lecture de l'annonce sur Vinted…</p>`;
+  try { PH = await api("POST", "/api/photos", { url }); renderPhotos(); }
+  catch (err) { PH = null; $("#phBox").innerHTML = `<p class="errline">✗ ${esc(err.message)}</p>`; }
+}
+$("#phForm").addEventListener("submit", (e) => { e.preventDefault(); fetchPhotos($("#phUrl").value.trim()); });
 function showTab(name) {
   if (name === "searches") { loadAnalysis().catch(() => {}); loadBlocked().catch(() => {}); }
   if (name === "market") loadMarket().catch(() => {});
@@ -817,11 +864,14 @@ if (feedView !== "bot") feedView = "mine";
 // Source d'une alerte : une de TES recherches enregistrées, sinon une trouvaille du bot.
 function isMine(a) { return (S.settings?.search || []).some((s) => s.id === a.search_key); }
 function inView(a, view) { return view === "bot" ? !isMine(a) : isMine(a); }
+function minProfit() { return S.settings?.profit?.min ?? 40; }
+function isSmall(a) { return a.margin != null && a.margin < minProfit(); }  // bénéfice connu, trop petit
 function visibleAlerts() {
   const f = $("#filterSearch").value, hot = $("#onlyHot").checked, hide = $("#hideGone").checked;
   const onlyReco = feedView === "mine" && $("#onlyReco").checked;
+  const big = feedView === "mine" && $("#bigOnly").checked;
   return S.alerts.filter((a) => inView(a, feedView) && (feedView === "bot" || !f || a.search_key === f)
-    && (!hot || a.deal) && (!hide || isAvailable(a)) && (!onlyReco || (a.reco && !a.flag)));
+    && (!hot || a.deal) && (!hide || isAvailable(a)) && (!onlyReco || (a.reco && !a.flag)) && (!big || !isSmall(a)));
 }
 function renderViews() {
   $$("#feedViews button").forEach((b) => b.classList.toggle("on", b.dataset.view === feedView));
@@ -830,8 +880,13 @@ function renderViews() {
   $("#botHelp").hidden = feedView !== "bot";
   $("#filterSearch").hidden = feedView === "bot";
   $("#onlyRecoWrap").hidden = feedView === "bot";
+  $("#bigOnlyWrap").hidden = feedView === "bot";
+  const small = S.alerts.filter((a) => inView(a, "mine") && isSmall(a)).length;
+  $("#bigOnlyText").textContent = `💰 ≥ ${minProfit()} €` + (small && $("#bigOnly").checked ? ` (${small} masquée${small > 1 ? "s" : ""})` : "");
 }
 $("#onlyReco").checked = pref.get("onlyReco", false);
+$("#bigOnly").checked = pref.get("bigOnly", true);
+$("#bigOnly").addEventListener("change", (e) => { pref.set("bigOnly", e.target.checked); renderFeed(); });
 $("#onlyReco").addEventListener("change", (e) => { pref.set("onlyReco", e.target.checked); renderFeed(); });
 $("#feedViews").addEventListener("click", (e) => {
   const b = e.target.closest("[data-view]"); if (!b) return;
@@ -905,7 +960,8 @@ function cardHTML(a) {
       ${meta ? `<div class="meta">${meta}</div>` : ""}
       ${sellerHTML(a)}
       ${likesHTML(a, spotted)}
-      ${a.margin != null ? `<div class="margin ${a.margin > 0 ? "pos" : "neg"}">💰 Marge estimée ${a.margin > 0 ? "+" : ""}${money(a.margin, a.currency)} <small>si revendue ${money(a.resale, a.currency)}</small></div>` : ""}
+      ${a.margin != null ? `<div class="margin ${a.margin >= minProfit() ? "pos" : a.margin > 0 ? "low" : "neg"}">💰 Bénéfice estimé ${a.margin > 0 ? "+" : ""}${money(a.margin, a.currency)}
+        <small>revente ~${money(a.resale, a.currency)}${a.resale_src ? " · " + esc(a.resale_src) : ""}</small></div>` : ""}
       ${a.median ? `<div class="meta">Prix habituel de la recherche : ${money(a.median, a.currency)}</div>` : ""}
       <div><span class="chip">${esc(a.search)}</span>${a.model ? ` <span class="chip">🎮 ${esc(a.model)}</span>` : a.kind === "accessoire" ? ` <span class="chip">accessoire / jeu</span>` : ""}</div>
       ${reserveHTML(a)}
@@ -920,11 +976,14 @@ function openLightbox(a) {
   lb.innerHTML = `<div class="pics">${photosOf(a).map((u) => `<img src="${esc(u)}" alt="">`).join("")}</div>
     <div class="bar"><strong>${money(a.price, a.currency)}</strong> · ${esc(a.title)}
       <a class="btn small primary" href="${esc(a.url)}" target="_blank" rel="noopener">🛒 Acheter sur Vinted</a>
+      <button class="btn small" data-act="photos" data-url="${esc(a.url)}">📷 Toutes les photos</button>
       <button class="btn small" data-act="close">Fermer</button></div>`;
   lb.hidden = false;
 }
 $("#lightbox").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
+  const ph = e.target.closest('[data-act="photos"]');
+  if (ph) { $("#lightbox").hidden = true; showTab("photos"); fetchPhotos(ph.dataset.url); return; }
   if (e.target.dataset.act === "close" || e.target.id === "lightbox" || e.target.classList.contains("pics")) $("#lightbox").hidden = true;
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#lightbox").hidden = true; });
@@ -1167,6 +1226,9 @@ function renderSettings() {
   $("#thr").value = Math.round((st.deals.threshold ?? 0.3) * 100);
   $("#extraPhotos").checked = st.general.extra_photos !== false;
   $("#trackStatus").checked = st.general.track_status !== false;
+  const prof = st.profit || { min: 40, telegram_big_only: true };
+  if (document.activeElement !== $("#minProfit")) $("#minProfit").value = prof.min ?? 40;
+  $("#tgBigOnly").checked = prof.telegram_big_only !== false;
   const auto = st.auto_reserve || { per_day: 2, history: [] };
   if (document.activeElement !== $("#autoPerDay")) $("#autoPerDay").value = auto.per_day ?? 2;
   const used = (auto.history || []).filter((t) => Date.now() / 1000 - t < 86400).length;
@@ -1191,6 +1253,10 @@ $("#saveSpeed").addEventListener("click", (e) => guarded(e.target, async () => {
 $("#saveTrack").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { general: { extra_photos: $("#extraPhotos").checked, track_status: $("#trackStatus").checked } });
   await refresh(); toast("Réglages enregistrés");
+}));
+$("#saveProfit").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("PUT", "/api/settings", { profit: { min: +$("#minProfit").value, telegram_big_only: $("#tgBigOnly").checked } });
+  await refresh(); toast("Bénéfice minimum enregistré");
 }));
 $("#saveAuto").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { auto_reserve: { per_day: +$("#autoPerDay").value } });

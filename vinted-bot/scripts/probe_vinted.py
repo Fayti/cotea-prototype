@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vinted_bot.config import Config, Search  # noqa: E402
 from vinted_bot.models import Deal, Item  # noqa: E402
 from vinted_bot.monitor import Monitor  # noqa: E402
+from vinted_bot.photos import download_jpegs, item_photos  # noqa: E402
 from vinted_bot.store import Store  # noqa: E402
 
 
@@ -56,6 +57,15 @@ async def check_pages(count: int = 3) -> int:
               f"description={len(it.description or '')} car. | {it.kind or '-'} {it.model or ''} | {it.title[:45]!r}")
     lus = sum(1 for it in items if it.seller_reviews is not None and it.description is not None)
     print(f"Avis et description lus : {lus}/{len(items)}")
+    if items:  # outil photos : toutes les photos d'une annonce, en JPEG
+        await asyncio.sleep(10)
+        try:
+            info = await item_photos(items[0].url)
+            jpegs = await download_jpegs(info["photos"][:3])
+            print(f"Outil photos : {len(info['photos'])} photo(s) trouvée(s) pour {info['title'][:40]!r}, "
+                  f"{len(jpegs)} téléchargée(s) en JPEG ({[len(j) // 1024 for j in jpegs]} Ko)")
+        except Exception as e:
+            print("Outil photos : ÉCHEC", type(e).__name__, e)
     return lus
 
 

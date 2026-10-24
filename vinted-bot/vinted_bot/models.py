@@ -48,6 +48,9 @@ class Item:
     kind: str | None = None             # PS5 : « console » ou « accessoire »
     model: str | None = None            # PS5 : « PS5 Pro », « PS5 Digital », « PS5 avec lecteur »
     warning: str | None = None          # ex. prix anormalement bas pour ce modèle
+    resale: float | None = None         # prix de revente retenu (le tien, ou médiane des ventes)
+    resale_src: str | None = None       # d'où vient ce prix de revente
+    profit: float | None = None         # bénéfice estimé à ce prix de revente
 
     @classmethod
     def from_api(cls, raw: dict, domain: str) -> "Item":

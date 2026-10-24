@@ -22,6 +22,7 @@ import heapq
 import statistics
 import time
 
+from .filters import max_buy_price
 from .products import product_model
 
 QUICK = 20 * 60      # « partie vite » : en moins de 20 minutes après l'alerte
@@ -100,6 +101,38 @@ def recommend_reason(pool: list[dict], key: str | None, model: str | None, price
             f"{ev['hi']:.0f} € sont parties en moins de 20 min")
 
 
+MIN_SALES = 5        # prix de revente estimé à partir de 5 ventes du modèle
+MIN_PROFIT = 40.0    # bénéfice minimum par défaut (réglable)
+
+
+def sales(alerts: list[dict], market_rows: list[dict] = ()) -> list[dict]:
+    """Ventes connues {key, model, price} : tes alertes vendues (sauf celles que tu as prises,
+    arnaques et pannes) et, si la veille ou le radar tournent, leurs ventes vérifiées."""
+    out = []
+    for a in alerts:
+        if (a.get("availability") in ("sold", "reserved") and a.get("price") is not None
+                and a.get("reserve") != "ok" and not a.get("flag") and not a.get("defect")):
+            after = a.get("availability_after_s")
+            out.append({"key": a.get("search_key"), "model": model_of(a), "price": float(a["price"]),
+                        "quick": after is not None and after <= QUICK})
+    for r in market_rows:
+        if r.get("state") in ("sold", "reserved") and r.get("price") is not None:
+            sold_in = (r["gone_ts"] - r["first_seen"]) if r.get("gone_ts") and r.get("first_seen") else None
+            out.append({"key": None, "model": product_model(r.get("title") or "", None, r["price"]),
+                        "price": float(r["price"]), "quick": sold_in is not None and sold_in <= QUICK})
+    return out
+
+
+def resale_estimate(sold: list[dict], key: str | None, model: str | None) -> tuple[float, int] | None:
+    """Prix de revente probable : médiane des ventes du même modèle (sinon de la recherche).
+    Les ventes en moins de 20 min sont des affaires (sous le prix du marché) : écartées dès qu'il
+    reste assez de ventes « normales », sinon le prix de revente serait sous-estimé."""
+    same = [s for s in sold if (s["model"] == model if model else s["key"] == key and s["model"] is None)]
+    normal = [s["price"] for s in same if not s.get("quick")]
+    prices = normal if len(normal) >= MIN_SALES else [s["price"] for s in same]
+    return (round(statistics.median(prices), 2), len(prices)) if len(prices) >= MIN_SALES else None
+
+
 WARN_RATIO = 0.6     # sous 60 % du prix habituel du modèle : trop beau pour être vrai
 WARN_MIN = 8         # prix habituel connu à partir de 8 annonces du modèle
 
@@ -134,7 +167,8 @@ def buy_below(pool: list[dict], key: str | None, model: str | None) -> float | N
 
 
 def _row(rid: str, name: str, items: list[dict], now: float, pool: list[dict], key: str,
-         model: str | None) -> dict:
+         model: str | None, sold_pool: list[dict] = (), min_profit: float = MIN_PROFIT,
+         resale_price: float | None = None) -> dict:
     first = min(a["detected_ts"] for a in items)
     hours = max(1.0, (now - first) / 3600)
     outcomes = [o for a in items if (o := outcome(a, now)) is not None]
@@ -153,9 +187,19 @@ def _row(rid: str, name: str, items: list[dict], now: float, pool: list[dict], k
         "quick_price": _median([a["price"] for a in quick if a.get("price") is not None]),
         "quick_count": len(quick),
         "buy_below": buy_below(pool, key, model),
+        "resale": None, "resale_n": None,
         "median_margin": _median(margins),
         "positive_margins": sum(1 for m in margins if m > 0) if margins else None,
     }
+    # Revente : ton prix de revente, sinon la médiane des ventes. « Achète sous » = le prix qui
+    # laisse au moins le bénéfice minimum ET auquel ça part vite (le plus bas des deux).
+    est = (resale_price, None) if resale_price else resale_estimate(sold_pool, key, model)
+    if est:
+        row["resale"], row["resale_n"] = est
+        for_profit = max_buy_price(est[0], min_profit)
+        row["buy_below"] = min(row["buy_below"], for_profit) if row["buy_below"] is not None else for_profit
+        if row["buy_below"] <= 0:
+            row["buy_below"] = None
     if len(items) < MIN_ALERTS or quick_rate is None:
         row["verdict"] = "Trop tôt pour conclure : laisse tourner quelques jours"
     elif quick_rate >= 0.2:
@@ -167,28 +211,31 @@ def _row(rid: str, name: str, items: list[dict], now: float, pool: list[dict], k
     return row
 
 
-def analyze(alerts: list[dict], searches: list[dict], now: float | None = None) -> list[dict]:
+def analyze(alerts: list[dict], searches: list[dict], now: float | None = None, min_profit: float = MIN_PROFIT,
+            market_rows: list[dict] = ()) -> list[dict]:
     now = now or time.time()
     by_key: dict[str, list[dict]] = {}
     for a in alerts:
         by_key.setdefault(a.get("search_key") or a.get("search"), []).append(a)
     pool = samples(alerts, now)
+    sold_pool = sales(alerts, market_rows)
     rows = []
     for s in searches:
         items = by_key.get(s["id"], [])
         if not items:
             rows.append({"id": s["id"], "name": s["name"], "alerts": 0, "verdict": "Pas encore de données"})
             continue
-        row = _row(s["id"], s["name"], items, now, pool, s["id"], None)
+        resale = s.get("resale_price")
+        row = _row(s["id"], s["name"], items, now, pool, s["id"], None, sold_pool, min_profit, resale)
         # Une ligne par modèle reconnu (PS5 Pro, Digital, avec lecteur) : prix et vitesse diffèrent.
         by_model: dict[str, list[dict]] = {}
         for a in items:
             if m := model_of(a):
                 by_model.setdefault(m, []).append(a)
-        row["models"] = [_row(s["id"], m, group, now, pool, s["id"], m)
+        row["models"] = [_row(s["id"], m, group, now, pool, s["id"], m, sold_pool, min_profit, resale)
                          for m, group in sorted(by_model.items(), key=lambda kv: -len(kv[1]))]
         if len(by_model) >= 2:  # prix de modèles différents mélangés : sans signification
-            row["median_price"] = row["quick_price"] = None
+            row["median_price"] = row["quick_price"] = row["resale"] = row["buy_below"] = None
         rows.append(row)
     rows.sort(key=lambda r: (r.get("quick_rate") is None, -(r.get("quick_rate") or 0)))
     return rows

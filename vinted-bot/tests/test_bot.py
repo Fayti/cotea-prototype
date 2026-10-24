@@ -866,15 +866,16 @@ def test_auto_reserve_triggers_under_price_before_photos(tmp_path):
 
 
 def test_margin_and_min_margin_filter():
-    search = Search(name="h", resale_price=130.0, min_margin=20.0)
+    search = Search(name="h", resale_price=130.0, min_margin=40.0)
     cheap = Item.from_api(svc_item(B, price="60.00"), "vinted.fr")   # 60,90 € avec protection
     dear = Item.from_api(svc_item(B + 1, price="90.00"), "vinted.fr")
-    assert filters.margin(cheap, search) == round(130 * 0.8 - 60.9 - 6, 2)   # 37,10 €
+    assert filters.margin(cheap, search) == round(130 - 60.9 - 6, 2)          # revente Vinted sans frais : 63,10 €
     assert filters.accept(cheap, search)[0]
-    ok, why = filters.accept(dear, search)                                   # 104 − 90,90 − 6 = 7,10 €
-    assert not ok and "marge" in why
+    ok, why = filters.accept(dear, search)                                   # 130 − 90,90 − 6 = 33,10 €
+    assert not ok and "bénéfice" in why
     assert filters.margin(cheap, Search(name="x")) is None
-    assert "💰 Marge estimée +37 € si revendue 130 €" in format_text(cheap, filters.evaluate_deal(60, None, 0.3), search)
+    assert "💰 Bénéfice estimé +63 € (revente ~130 €)" in format_text(cheap, filters.evaluate_deal(60, None, 0.3), search)
+    assert filters.max_buy_price(130, 40) == round((130 - 40 - 6 - 0.70) / 1.05, 2)   # 79,33 € au plus
 
 
 def test_analysis_finds_searches_where_items_sell_fast():
@@ -1203,7 +1204,9 @@ def test_recommended_only_when_same_model_sells_within_20_minutes(tmp_path):
         e.store.alerts_since(0), e.settings["search"])
     models = {m["name"]: m for m in rows[0]["models"]}
     assert set(models) == {"PS5 Pro", "PS5 Digital"}
-    assert models["PS5 Pro"]["quick_rate"] == round(5 / 7, 3) and models["PS5 Pro"]["buy_below"] >= 420
+    assert models["PS5 Pro"]["quick_rate"] == round(5 / 7, 3)
+    # Revente = médiane des 6 PS5 Pro vendues (425 €) ; « Achète sous » laisse au moins 40 € de bénéfice
+    assert models["PS5 Pro"]["resale"] == 425 and models["PS5 Pro"]["buy_below"] == filters.max_buy_price(425, 40)
     assert models["PS5 Digital"]["quick_rate"] == 0 and models["PS5 Digital"]["buy_below"] is None
     e.store.close()
 
@@ -1412,8 +1415,10 @@ def test_auto_reserve_only_proven_verified_deals_one_at_a_time_with_daily_limit(
          "auto_reserve_max": 500}], "auto_reserve": {"per_day": 2}}), "utf-8")
     e = Engine(tmp_path)
     old = time.time() - 3 * 3600
+    # Parties en moins de 20 min vers 400-440 € ; ventes normales vers 540-610 € (revente ~540 €)
     for i, (p, after) in enumerate([(400, 300), (410, 600), (420, 900), (430, 1100), (440, 400), (450, None),
-                                    (460, 7200), (405, 500), (415, 700)]):
+                                    (405, 500), (415, 700), (540, 7200), (550, 9000), (560, 8000), (570, 7300),
+                                    (580, 9900), (590, 8800), (600, 7700), (610, 9100)]):
         e.store.add_alert({"id": i, "title": "PS5 Pro", "price": p, "search_key": "s1", "detected_ts": old,
                            "availability": "sold" if after else "available", "availability_after_s": after})
     search = e.config().searches[0]
@@ -1434,7 +1439,7 @@ def test_auto_reserve_only_proven_verified_deals_one_at_a_time_with_daily_limit(
 
     async def scenario():
         for it in (item(100, checked=False), item(101, reviews=0), item(102, price=150.0),
-                   item(103, price=900.0)):
+                   item(103, price=560.0), item(108, price=320.0)):
             e.auto_reserve(it, search)
         await asyncio.sleep(0)
         assert reserved == []
@@ -1452,7 +1457,144 @@ def test_auto_reserve_only_proven_verified_deals_one_at_a_time_with_daily_limit(
 
     asyncio.run(scenario())
     assert reserved == [104, 106]
-    why = {i: e.reservations[i]["reserve_msg"] for i in (100, 101, 102, 103, 105, 107)}
+    why = {i: e.reservations[i]["reserve_msg"] for i in (100, 101, 102, 103, 105, 107, 108)}
     assert "non vérifiée" in why[100] and "sans avis" in why[101] and "anormalement bas" in why[102]
-    assert "pas 💎" in why[103] and "attend déjà ton paiement" in why[105] and "limite de 2" in why[107]
+    assert "sous ton minimum de 40 €" in why[103]                    # 560 € : +8 € à la revente (~575 €)
+    assert "pas 💎" in why[108]                                       # +197 € mais rien ne prouve que ça part vite
+    assert "attend déjà ton paiement" in why[105] and "limite de 2" in why[107]
+    e.store.close()
+
+
+def _image(fmt="WEBP", color=(30, 60, 200)):
+    import io as _io
+    from PIL import Image
+    out = _io.BytesIO()
+    Image.new("RGB", (80, 100), color).save(out, fmt)
+    return out.getvalue()
+
+
+def test_photos_of_a_listing_from_its_link_converted_to_jpeg_and_zipped(monkeypatch):
+    import io as _io
+    import zipfile
+    from vinted_bot import photos
+    assert photos.parse_item_url("regarde https://www.vinted.fr/items/123-ps5-pro?ref=catalog stp") == \
+        ("vinted.fr", "https://www.vinted.fr/items/123-ps5-pro")
+    assert photos.parse_item_url("https://www.vinted.fr/catalog?search_text=ps5") is None
+    assert photos.is_photo_url("https://images1.vinted.net/t/a/f800/1.webp") and not photos.is_photo_url("https://evil.com/x")
+    gallery = "".join(f'<img data-testid="item-photo-{i}--img" src="https://images1.vinted.net/t/p{i}/f800/{i}.webp?s=x">'
+                      for i in range(1, 13))
+    page = ('<script type="application/ld+json">{"@type":"Product","name":"PS5 Pro 2 To"}</script>' + gallery)
+
+    async def get_page(self, url, lane):
+        return 200, url, page
+
+    async def acquire(self):
+        return None
+    monkeypatch.setattr(photos.VintedClient, "get_page", get_page)
+    monkeypatch.setattr(photos.VintedClient, "acquire", acquire)
+    info = asyncio.run(photos.item_photos("https://www.vinted.fr/items/123-ps5-pro"))
+    assert info["title"] == "PS5 Pro 2 To" and len(info["photos"]) == 12 and info["photos"][0].endswith("1.webp?s=x")
+
+    class Session:
+        def __init__(self, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def get(self, url, headers=None):
+            if "p3" in url:
+                raise RuntimeError("photo absente")
+            return type("R", (), {"content": _image(), "raise_for_status": lambda self: None})()
+    monkeypatch.setattr(photos, "AsyncSession", Session)
+    jpegs = asyncio.run(photos.download_jpegs(info["photos"] + ["https://evil.com/x.jpg"]))
+    assert len(jpegs) == 11 and all(j[:2] == b"\xff\xd8" for j in jpegs)    # JPEG ; photo 3 sautée, adresse étrangère ignorée
+    names = zipfile.ZipFile(_io.BytesIO(photos.make_zip("PS5 Pro 2 To", jpegs))).namelist()
+    assert names[:2] == ["PS5-Pro-2-To-01.jpg", "PS5-Pro-2-To-02.jpg"] and len(names) == 11
+
+
+def test_link_sent_to_telegram_comes_back_as_photos_and_small_profits_stay_quiet():
+    from vinted_bot import notifier as nt
+    calls = []
+
+    class Resp:
+        status_code, text = 200, ""
+
+        def __init__(self, result):
+            self.result = result
+
+        def json(self):
+            return {"ok": True, "result": self.result}
+
+    tg = nt.TelegramNotifier("T", "123")
+    updates = [[], [{"update_id": 5, "message": {"chat": {"id": 999}, "text": "https://www.vinted.fr/items/1-x"}},
+                    {"update_id": 6, "message": {"chat": {"id": 123}, "text": "https://www.vinted.fr/items/42-ps5-pro"}},
+                    {"update_id": 7, "message": {"chat": {"id": 123}, "text": "salut"}}]]
+
+    async def post(url, json=None, data=None, multipart=None, timeout=None):
+        method = url.rsplit("/", 1)[1]
+        if method == "getUpdates":
+            if not updates:
+                raise asyncio.CancelledError
+            return Resp(updates.pop(0))
+        calls.append((method, json if json is not None else data))
+        return Resp({"message_id": 1})
+    tg.http.post = post
+    links = []
+
+    async def on_link(url, notifier):
+        links.append(url)
+        await notifier.send_photos("PS5 Pro", url, [b"jpg"] * 11)
+
+    async def scenario():
+        with contextlib.suppress(asyncio.CancelledError):
+            await tg.listen(lambda i: None, on_link)
+        while tg._bg:
+            await asyncio.gather(*tg._bg)
+        tg.min_profit = 40
+        small = Item.from_api(svc_item(B), "vinted.fr")
+        small.profit = 25
+        return await tg.send(small, filters.evaluate_deal(20, None, 0.3), Search(name="s"))
+
+    skipped = asyncio.run(scenario())
+    assert links == ["https://www.vinted.fr/items/42-ps5-pro"]          # seul ton compte est écouté
+    methods = [m for m, _ in calls]
+    assert methods.count("sendMediaGroup") == 1 and methods.count("sendDocument") == 1   # 10 + 1 photos
+    group = json.loads(next(d for m, d in calls if m == "sendMediaGroup")["media"])
+    assert len(group) == 10 and group[0]["type"] == "document" and "11 photo(s)" in group[0]["caption"]
+    assert any("Envoie-moi le lien" in (d or {}).get("text", "") for m, d in calls if m == "sendMessage")
+    assert skipped is None and not any(m == "sendPhoto" for m in methods)   # +25 € < 40 € : pas sur Telegram
+
+
+def test_profit_is_estimated_from_sales_and_small_profits_are_never_recommended(tmp_path):
+    from vinted_bot.app import Engine
+    (tmp_path / "settings.json").write_text(json.dumps({"search": [
+        {"id": "s1", "name": "PS5 Pro", "url": "https://www.vinted.fr/catalog?search_text=ps5%20pro"}]}), "utf-8")
+    e = Engine(tmp_path)
+    old = time.time() - 3 * 3600
+    for i, (p, after) in enumerate([(400, 300), (410, 600), (420, 900), (430, 1100), (440, 400), (405, 500),
+                                    (540, 7200), (550, 9000), (560, 8000), (570, 7300), (580, 9900)]):
+        e.store.add_alert({"id": i, "title": "PS5 Pro", "price": p, "search_key": "s1", "detected_ts": old,
+                           "availability": "sold", "availability_after_s": after})
+    search = e.config().searches[0]
+
+    def assess(price):
+        it = Item.from_api(svc_item(900 + int(price), price=f"{price:.2f}", title="PS5 Pro"), "vinted.fr")
+        it.kind, it.model = "console", "PS5 Pro"
+        return it, e.assess(it, search)
+
+    # Revente = médiane des 5 ventes « normales » (540-580 €) : les 6 parties en moins de 20 min,
+    # des affaires sous le prix du marché, ne tirent pas l'estimation vers le bas.
+    big, reason = assess(425.0)     # 560 − 425,90 (prix + protection affichés par Vinted) − 6 = 128 €
+    assert big.resale == 560 and big.resale_src == "médiane de 5 ventes de PS5 Pro"
+    assert big.profit == 128 and reason.startswith("💰 +128 € estimés · ⚡")
+    e.settings["search"][0]["resale_price"] = 470   # ton prix de revente : prioritaire
+    search = e.config().searches[0]
+    big, reason = assess(425.0)     # 470 − 425,90 − 6 = 38 € : sous les 40 € minimum
+    assert big.profit == 38 and big.resale_src == "ton prix de revente" and reason is None
+    e.settings["profit"]["min"] = 30
+    assert assess(425.0)[1].startswith("💰 +38 €")                  # minimum abaissé : conseillée
     e.store.close()

@@ -14,6 +14,7 @@ import os
 import secrets
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 import webbrowser
 from collections import deque
@@ -21,15 +22,16 @@ from pathlib import Path
 
 from aiohttp import web
 
-from .analysis import analyze, price_warning, recommend_reason, samples
+from .analysis import MIN_PROFIT, analyze, price_warning, recommend_reason, resale_estimate, sales, samples
 from .market import looks_like_packaging
 from .buyer import VintedWindow
 from .market import DEFAULT_SEGMENTS, MarketWatch, radar_bands, radar_report, report as market_report, segment_params
 from .client import VintedClient
 from .config import Search, config_from_dict, parse_vinted_url
-from .filters import margin
+from .filters import margin, profit
 from .models import Deal, Item
 from .monitor import Monitor
+from .photos import download_jpegs, is_photo_url, item_photos, make_zip, safe_name
 from .products import product_model
 from .notifier import TelegramNotifier, build_notifiers, sample_alert, telegram_detect
 from .store import Store
@@ -48,6 +50,8 @@ DEFAULT_SETTINGS = {
     "watch": {"enabled": False, "segments": [], "radar": {"enabled": False, "min_price": 200}},
     # Réservation automatique : au plus `per_day` par 24 h ; `history` = moments des dernières.
     "auto_reserve": {"per_day": 2, "history": []},
+    # Bénéfice minimum : en dessous, ni conseillée, ni réservée seule, ni envoyée sur Telegram.
+    "profit": {"min": MIN_PROFIT, "telegram_big_only": True},
 }
 AUTO_PAY_WAIT = 600.0  # après une réservation automatique, 10 min pour payer avant la suivante
 
@@ -74,7 +78,9 @@ def alert_payload(item: Item, deal, search) -> dict:
         "url": item.url, "photo": item.photo_url, "seller": item.seller,
         "created_ts": item.created_ts, "age_estimated": item.age_estimated, "detected_ts": time.time(),
         "deal": deal.is_deal, "discount": deal.discount, "median": deal.median,
-        "resale": search.resale_price, "margin": margin(item, search),
+        # Bénéfice estimé : prix de revente de la recherche, sinon médiane des ventes du modèle.
+        "resale": item.resale or search.resale_price,
+        "margin": item.profit if item.profit is not None else margin(item, search),
         # Photos : la recherche n'en donne qu'une ; les suivantes arrivent par mise à jour.
         "photos": item.photo_urls[:3] or ([item.photo_url] if item.photo_url else []),
         # Favoris et vues : valeur à l'alerte, puis mises à jour en direct.
@@ -85,6 +91,7 @@ def alert_payload(item: Item, deal, search) -> dict:
         "seller_reviews": item.seller_reviews, "seller_rating": item.seller_rating, "checked": item.checked,
         "reco_reason": item.reco,
         "model": item.model, "kind": item.kind, "warning": item.warning,
+        "resale_src": item.resale_src,
     }
 
 
@@ -176,7 +183,7 @@ class Engine:
         self.market_memory: dict = {}  # garde le suivi de la veille d'un redémarrage du moteur à l'autre
         self.reservations: dict[int, dict] = {}
         self.reco_marks: dict[int, dict] = {}      # annonce -> recommandation décidée avant son affichage
-        self._pool_cache: tuple[float, list] = (0.0, [])  # issues à 20 min des alertes passées
+        self._pool_cache: tuple[float, list, list] = (0.0, [], [])  # issues à 20 min, ventes connues
 
     def _load(self) -> dict:
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
@@ -226,6 +233,10 @@ class Engine:
         if not cfg.searches and not segments:
             return
         self.notifiers = build_notifiers(cfg)
+        prof = self.settings.get("profit") or {}
+        for n in self.notifiers:
+            if hasattr(n, "min_profit") and prof.get("telegram_big_only", True):
+                n.min_profit = self.min_profit()  # Telegram : seulement les gros bénéfices
         self.monitor = Monitor(cfg, self.store, [UiNotifier(self), *self.notifiers])
         self.monitor.on_auto_reserve = self.auto_reserve
         self.monitor.recommender = self.assess
@@ -235,13 +246,14 @@ class Engine:
             monitor = self.monitor
             self.market = MarketWatch(
                 self.store, monitor.client, segments, memory=self.market_memory, on_pepite=self._pepite,
+                min_gain=self.min_profit(),
                 on_gone=lambda iid, url, domain: monitor._enqueue_page(iid, url, domain, "confirm"))
             monitor.on_confirm = self.store.market_confirm
             monitor.page_domains = {segment_params(s)[0] for s in segments}
             self.side_tasks.append(asyncio.create_task(self.market.run()))
         for n in self.notifiers:
             if hasattr(n, "listen"):  # boutons « ⚡ Réserver » de Telegram
-                self.side_tasks.append(asyncio.create_task(n.listen(self._reserve_from_phone)))
+                self.side_tasks.append(asyncio.create_task(n.listen(self._reserve_from_phone, self._photos_to_phone)))
 
     async def _run(self, monitor: Monitor) -> None:
         try:
@@ -307,6 +319,24 @@ class Engine:
         tracked = self.monitor.tracker.items.get(item_id) if self.monitor else None
         return (alert or {}).get("url") or (tracked.url if tracked else None)
 
+    async def photos_of(self, url: str) -> dict:
+        g = self.settings["general"]
+        return await item_photos(url, g.get("proxies"), g.get("use_direct", True))
+
+    async def _photos_to_phone(self, url: str, notifier) -> None:
+        """Lien d'annonce envoyé au bot Telegram : il répond avec les photos, en JPEG."""
+        try:
+            info = await self.photos_of(url)
+            jpegs = await download_jpegs(info["photos"])
+            if not jpegs:
+                raise ValueError("photos illisibles")
+            await notifier.send_photos(info["title"], info["url"], jpegs)
+            log.info("Photos envoyées sur Telegram : %s (%d)", info["url"], len(jpegs))
+        except Exception as e:
+            log.warning("Photos de %s non envoyées : %s", url, e)
+            with contextlib.suppress(Exception):
+                await notifier.send_text(f"❌ Photos non récupérées : {e}")
+
     async def _reserve_from_phone(self, item_id: int) -> None:
         url = self._alert_url(item_id) or f"https://www.vinted.fr/items/{item_id}"
         await self.reserve(item_id, url, notify=True)
@@ -340,13 +370,22 @@ class Engine:
 
     # --- recommandations ----------------------------------------------------------------
 
-    def sample_pool(self) -> list[dict]:
-        """Alertes des 14 derniers jours dont on sait si elles sont parties en moins de 20 min."""
-        ts, pool = self._pool_cache
+    def _pools(self) -> tuple[list, list]:
+        """(alertes dont on sait si elles sont parties en moins de 20 min, ventes connues),
+        sur 14 jours, recalculées toutes les 2 min."""
+        ts, pool, sold = self._pool_cache
         if time.time() - ts > 120:
-            pool = samples(self.store.alerts_since(time.time() - 14 * 86400))
-            self._pool_cache = (time.time(), pool)
-        return pool
+            since = time.time() - 14 * 86400
+            alerts = self.store.alerts_since(since)
+            pool, sold = samples(alerts), sales(alerts, self.store.market_rows(since))
+            self._pool_cache = (time.time(), pool, sold)
+        return pool, sold
+
+    def sample_pool(self) -> list[dict]:
+        return self._pools()[0]
+
+    def min_profit(self) -> float:
+        return float((self.settings.get("profit") or {}).get("min", MIN_PROFIT))
 
     def recommend(self, title: str, price, search_key, item_id=None, model: str | None = "?") -> str | None:
         """Conseillée = les annonces du même modèle, à ce prix, sont parties en moins de 20 min."""
@@ -360,10 +399,22 @@ class Engine:
         """Pour une alerte de tes recherches : avertissement de prix, puis raison de la conseiller."""
         if self.source_of(search.key) != "mine":
             return None
-        item.warning = price_warning(self.sample_pool(), item.model, item.price)
+        pool, sold = self._pools()
+        if search.resale_price:
+            item.resale, item.resale_src = search.resale_price, "ton prix de revente"
+        elif est := resale_estimate(sold, search.key, item.model):
+            item.resale = round(est[0])
+            item.resale_src = f"médiane de {est[1]} ventes" + (f" de {item.model}" if item.model else "")
+        if item.resale and item.price is not None:
+            item.profit = round(profit(item.resale, item.price, item.total_price))
+        item.warning = price_warning(pool, item.model, item.price)
         if item.warning:
             return None  # trop beau pour être vrai : jamais conseillée
-        return self.recommend(item.title, item.price, search.key, item.id, item.model)
+        reason = self.recommend(item.title, item.price, search.key, item.id, item.model)
+        # Conseillée = part vite à ce prix ET rapporte au moins le bénéfice minimum.
+        if not reason or item.profit is None or item.profit < self.min_profit():
+            return None
+        return f"💰 +{item.profit:.0f} € estimés · {reason}"
 
     def blocked(self, item, search, reason: str) -> None:
         """Annonce écartée par l'anti-arnaque ou les vérifications : gardée pour que tu contrôles."""
@@ -386,6 +437,10 @@ class Engine:
             return "prix anormalement bas pour ce modèle"
         if (item.seller_reviews or 0) < max(1, search.min_reviews or 0):
             return "vendeur sans avis"
+        if item.profit is None:
+            return "bénéfice pas encore estimable (pas assez de ventes de ce modèle)"
+        if item.profit < self.min_profit():
+            return f"bénéfice estimé +{item.profit:.0f} €, sous ton minimum de {self.min_profit():.0f} €"
         if not item.reco:
             return "rien ne prouve qu'à ce prix ça part en moins de 20 min (pas 💎 conseillée)"
         now = time.time()
@@ -494,6 +549,11 @@ async def put_settings(request):
         for flag in ("use_direct", "extra_photos", "track_status"):
             if flag in g:
                 e.settings["general"][flag] = bool(g[flag])
+    if "profit" in body:
+        prof = e.settings.setdefault("profit", {"min": MIN_PROFIT, "telegram_big_only": True})
+        prof["min"] = min(500.0, max(0.0, float(body["profit"].get("min", prof["min"]))))
+        if "telegram_big_only" in body["profit"]:
+            prof["telegram_big_only"] = bool(body["profit"]["telegram_big_only"])
     if "auto_reserve" in body:
         per_day = int(body["auto_reserve"].get("per_day", 2))
         e.settings.setdefault("auto_reserve", {"per_day": 2, "history": []})["per_day"] = min(10, max(0, per_day))
@@ -595,6 +655,41 @@ async def tg_test(request):
     return web.json_response({"ok": True})
 
 
+def _attachment(name: str) -> str:
+    """En-tête de téléchargement, accents compris."""
+    ascii_name = name.encode("ascii", "ignore").decode() or "photos"
+    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{urllib.parse.quote(name)}'
+
+
+@routes.post("/api/photos")
+async def get_photos(request):
+    """Photos d'une annonce à partir de son lien (une lecture de page)."""
+    body = await request.json()
+    return web.json_response(await engine_of(request).photos_of((body.get("url") or "").strip()))
+
+
+@routes.get("/api/photos.zip")
+async def photos_zip(request):
+    title = request.query.get("title") or "annonce"
+    jpegs = await download_jpegs(request.query.getall("u", []))
+    if not jpegs:
+        raise ValueError("Aucune photo téléchargeable")
+    return web.Response(body=make_zip(title, jpegs), content_type="application/zip",
+                        headers={"Content-Disposition": _attachment(f"{safe_name(title)}.zip")})
+
+
+@routes.get("/api/photo.jpg")
+async def photo_jpg(request):
+    url = request.query.get("u", "")
+    if not is_photo_url(url):
+        raise ValueError("Ce n'est pas une photo Vinted")
+    jpegs = await download_jpegs([url])
+    if not jpegs:
+        raise ValueError("Photo illisible")
+    name = f"{safe_name(request.query.get('title') or 'annonce')}-{int(request.query.get('n') or 1):02d}.jpg"
+    return web.Response(body=jpegs[0], content_type="image/jpeg", headers={"Content-Disposition": _attachment(name)})
+
+
 @routes.get("/api/blocked")
 async def get_blocked(request):
     return web.json_response(engine_of(request).store.recent_blocked(100))
@@ -603,8 +698,9 @@ async def get_blocked(request):
 @routes.get("/api/analysis")
 async def get_analysis(request):
     e = engine_of(request)
-    alerts = e.store.alerts_since(time.time() - 14 * 86400)
-    return web.json_response(analyze(alerts, e.settings["search"]))
+    since = time.time() - 14 * 86400
+    return web.json_response(analyze(e.store.alerts_since(since), e.settings["search"], min_profit=e.min_profit(),
+                                     market_rows=e.store.market_rows(since)))
 
 
 @routes.post("/api/vinted-window")

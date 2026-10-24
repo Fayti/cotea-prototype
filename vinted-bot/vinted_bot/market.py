@@ -27,6 +27,7 @@ import time
 import unicodedata
 from collections import Counter, defaultdict
 
+from . import filters
 from .config import parse_vinted_url
 from .models import Item
 
@@ -65,7 +66,7 @@ def looks_like_packaging(title: str) -> bool:
 MIN_SOLD = 8            # ventes minimum pour estimer un prix de vente habituel
 KEEP_DAYS = 14
 SOLD_STATES = ("sold", "reserved")   # vente confirmée par la page de l'annonce
-ALERT_MIN_GAIN = 15.0   # pépite signalée tout de suite si le gain estimé atteint ce montant
+ALERT_MIN_GAIN = 40.0   # pépite signalée tout de suite si le gain estimé atteint ce montant (réglable)
 MEDIAN_TTL = 600.0      # prix de vente habituel recalculé toutes les 10 min par segment
 RECENT_IDS = 150_000     # ~10 min de numéros (Vinted en attribue ~250/s) : seuil de « nouvelle »
 RADAR_HOURS = 6.0       # le radar lit assez de pages pour couvrir ~6 h d'annonces
@@ -93,8 +94,8 @@ def radar_bands(min_price: float) -> list[dict]:
 
 
 def buy_cost(price: float) -> float:
-    """Prix payé sur Vinted : article + protection acheteurs (~5 % + 0,70 €) + envoi (~5 €)."""
-    return price * 1.05 + 0.70 + 5.0
+    """Prix payé sur Vinted : article + protection acheteurs (5 % + 0,70 €) + envoi (6 €)."""
+    return filters.buy_cost(price)
 
 
 def segment_params(seg: dict) -> tuple[str, dict[str, str]]:
@@ -132,8 +133,9 @@ DEFAULT_SEGMENTS = [
 
 class MarketWatch:
     def __init__(self, store, client_of, segments: list[dict], poll_every: float = POLL_EVERY,
-                 memory: dict | None = None, on_pepite=None, on_gone=None):
+                 memory: dict | None = None, on_pepite=None, on_gone=None, min_gain: float = ALERT_MIN_GAIN):
         self.store = store
+        self.min_gain = min_gain            # bénéfice minimum pour signaler une pépite
         self.on_pepite = on_pepite          # rappel (annonce, segment, prix habituel, gain)
         self.on_gone = on_gone              # rappel (annonce, lien, domaine) : départ à vérifier
         self._medians: dict[str, tuple[float | None, float]] = {}
@@ -260,7 +262,7 @@ class MarketWatch:
                 if (item.id in fresh and median and item.price is not None
                         and PEPITE_FLOOR * median <= item.price <= PEPITE_RATIO * median):
                     gain = round(median - buy_cost(item.price), 2)
-                    if gain >= ALERT_MIN_GAIN:
+                    if gain >= self.min_gain:
                         self.on_pepite(item, seg_id, median, gain)
 
         present = set(ids)

@@ -88,6 +88,20 @@ contre la médiane des prix récents de la même recherche.
   modèle (PS5 Pro, PS5 Digital, PS5 avec lecteur) d'après le titre, sinon la description
   (« PS5 slim 1 To » + « édition numérique »). Une console très en dessous du prix habituel de
   son modèle (moins de 60 %) est signalée « 💸 Prix anormalement bas » et n'est jamais conseillée.
+- **Bénéfice minimum** (Réglages, 40 € par défaut) : chaque alerte affiche son bénéfice estimé =
+  revente − (prix + protection acheteurs + 6 € d'envoi), sans frais de revente (sur Vinted, le
+  vendeur ne paie rien). Prix de revente : celui de la recherche s'il est rempli, sinon la
+  médiane des ventes du même modèle vues par le bot (au moins 5 ; les ventes en moins de 20 min,
+  sous le prix du marché, sont écartées dès qu'il reste assez de ventes normales ; la veille et le
+  radar ajoutent leurs ventes vérifiées). Sous le minimum : jamais conseillée, jamais réservée
+  seule, masquée par le filtre « 💰 ≥ 40 € » du fil et, au choix, pas envoyée sur Telegram
+  (bénéfice inconnu : envoyée). Le même minimum s'applique aux pépites de la veille. L'analyse
+  donne par modèle la revente et « Achète sous » : le prix qui laisse ce bénéfice ET auquel ça
+  part vite.
+- **Photos d'une annonce** (onglet 📷 Photos, ou lien envoyé au bot Telegram) : toutes les photos
+  (jusqu'à 20) à la plus grande taille que Vinted affiche (800 px ; la page ne donne pas d'original
+  plus grand, relevé du 24/10/2026), converties en JPEG, en .zip ou une par une. Sur Telegram, le
+  bot répond par des fichiers (qualité intacte), seulement à ton propre compte.
 - **Réservation automatique stricte** : seulement si l'annonce est vérifiée (anti-arnaque,
   vendeur avec au moins 1 avis), que c'est une console au prix normal pour son modèle, et
   qu'elle est 💎 conseillée. Une seule à la fois (10 min pour payer), au plus 2 par 24 h

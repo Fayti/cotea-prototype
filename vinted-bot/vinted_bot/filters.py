@@ -23,19 +23,34 @@ def _contains_word(haystack: str, needle: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(word)}{tail}", haystack) is not None
 
 
-RESALE_FEES = 0.20   # commission de la plateforme de revente (Vestiaire Collective : ~17 % + 3 %)
+# Revente sur Vinted : le vendeur ne paie aucune commission (l'acheteur paie la protection).
+# Pour une revente ailleurs, indique comme prix de revente ce que tu touches net.
+RESALE_FEES = 0.0
 SHIPPING = 6.0       # envoi de l'achat sur Vinted (Mondial Relay, Relais Colis…)
+PROTECTION_RATE, PROTECTION_FIXED = 0.05, 0.70   # protection acheteurs Vinted : 5 % + 0,70 €
+
+
+def buy_cost(price: float, total_price: float | None = None) -> float:
+    """Ce que coûte l'achat : article + protection acheteurs + envoi."""
+    total = total_price if total_price is not None else price * (1 + PROTECTION_RATE) + PROTECTION_FIXED
+    return total + SHIPPING
+
+
+def profit(resale: float, price: float, total_price: float | None = None) -> float:
+    """Bénéfice si l'article est revendu à `resale` : revente − frais de revente − coût d'achat."""
+    return round(resale * (1 - RESALE_FEES) - buy_cost(price, total_price), 2)
+
+
+def max_buy_price(resale: float, wanted: float) -> float:
+    """Prix d'achat le plus haut qui laisse au moins `wanted` € de bénéfice."""
+    return round((resale * (1 - RESALE_FEES) - wanted - SHIPPING - PROTECTION_FIXED) / (1 + PROTECTION_RATE), 2)
 
 
 def margin(item: Item, search: Search) -> float | None:
-    """Gain estimé si l'article est revendu au prix de revente indiqué pour la recherche.
-
-    revente − frais de revente − (prix + protection acheteurs Vinted) − envoi.
-    """
+    """Bénéfice estimé si l'article est revendu au prix de revente indiqué pour la recherche."""
     if search.resale_price is None or item.price is None:
         return None
-    cost = (item.total_price if item.total_price is not None else item.price) + SHIPPING
-    return round(search.resale_price * (1 - RESALE_FEES) - cost, 2)
+    return profit(search.resale_price, item.price, item.total_price)
 
 
 def accept(item: Item, search: Search) -> tuple[bool, str]:
@@ -63,7 +78,7 @@ def accept(item: Item, search: Search) -> tuple[bool, str]:
     if search.min_margin is not None:
         gain = margin(item, search)
         if gain is not None and gain < search.min_margin:
-            return False, f"marge estimée trop faible ({gain:.0f} €)"
+            return False, f"bénéfice estimé trop faible ({gain:.0f} €)"
     return True, ""
 
 
