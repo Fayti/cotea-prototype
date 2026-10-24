@@ -112,12 +112,17 @@ class Drafts:
                 self.photo_path(draft_id, n).unlink(missing_ok=True)
             d["photos"] = keep
         if patch.get("regenerate"):
-            d["title_edited"] = d["desc_edited"] = False
-        built = listing.build(d["fields"])
-        if not d["title_edited"]:
-            d["title"] = built["title"]
-        if not d["desc_edited"]:
-            d["description"] = built["description"]
+            d["title_edited"] = d["desc_edited"] = d["ai_text"] = False
+        if d.get("ai_text"):
+            # Texte écrit par l'IA : gardé. Une info changée depuis ? On le signale (bouton
+            # « Réécrire avec l'IA ») plutôt que de le remplacer par le modèle de texte simple.
+            d["ai_stale"] = d.get("ai_stale") or "fields" in patch
+        else:
+            built = listing.build(d["fields"])
+            if not d["title_edited"]:
+                d["title"] = built["title"]
+            if not d["desc_edited"]:
+                d["description"] = built["description"]
         if d["status"] in ("sent", "prefilled", "error") and set(patch) - {"status"}:
             d["status"], d["message"] = "local", None   # modifiée depuis l'envoi : à renvoyer
         return self.save(d)

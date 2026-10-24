@@ -61,7 +61,7 @@ jobs:
       - name: Construire l'exécutable
         run: >
           pyinstaller --noconfirm --onefile --name VintedBot --console
-          --collect-all curl_cffi --collect-all webview --collect-all pillow_heif
+          --collect-all curl_cffi --collect-all webview --collect-all pillow_heif --collect-submodules anthropic
           --add-data "vinted_bot/web${{ matrix.sep }}vinted_bot/web" launcher.py
       - name: Autotest de l'exécutable
         run: ./${{ matrix.built }} selftest

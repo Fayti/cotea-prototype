@@ -411,8 +411,11 @@ class TelegramNotifier:
         self._last_draft = (d["id"], time.time())
         price = (f"{d['price']:.0f} €" + (f" ({d['price_src']})" if d.get("price_src") else "")) if d.get("price") \
             else "à indiquer : réponds par ex. « 450 € »"
-        text = (f"📝 <b>Annonce prête</b> · {len(d['photos'])} photo(s)\n\n<b>{html.escape(d['title'])}</b>\n\n"
-                f"{html.escape(d['description'])}\n\n💶 Prix : {html.escape(price)}\n\n"
+        by = "✨ rédigée par l'IA" if d.get("ai") == "done" else f"{len(d['photos'])} photo(s)"
+        tips = "".join(f"\n💡 {html.escape(t)}" for t in d.get("ai_tips") or [])
+        warn = f"\n⚠️ {html.escape(d['ai_message'])}" if d.get("ai_message") else ""
+        text = (f"📝 <b>Annonce prête</b> · {by}\n\n<b>{html.escape(d['title'])}</b>\n\n"
+                f"{html.escape(d['description'])}\n\n💶 Prix : {html.escape(price)}{tips}{warn}\n\n"
                 "✏️ Pour corriger, réponds avec quelques mots (ex. « 2 manettes, boîte, 480 € »).")
         await self._call("sendMessage", {"text": text, "parse_mode": "HTML", "reply_markup": {"inline_keyboard": [[
             {"text": "📤 Créer le brouillon sur Vinted", "callback_data": f"a:{d['id']}"}]]}})

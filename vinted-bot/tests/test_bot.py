@@ -1757,3 +1757,76 @@ def test_photos_sent_to_telegram_become_a_draft_preview_with_a_button(monkeypatc
     preview = next(j for m, j in calls if m == "sendMessage" and "Annonce prête" in (j or {}).get("text", ""))
     assert preview["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "a:abc12" and "480 €" in preview["text"]
     assert tg._last_draft[0] == "abc12"
+
+
+def test_ai_request_sends_photos_and_market_and_asks_for_the_listing_schema(monkeypatch):
+    import base64 as _b64
+    from vinted_bot import ai
+    sent = {}
+
+    class Block:
+        type, text = "text", json.dumps({
+            "title": "PS5 Slim Standard 1 To + 2 manettes", "description": "PS5 Slim en très bon état.",
+            "model": "PS5 avec lecteur", "item": "", "condition": "tres_bon", "controllers": 2, "box": True,
+            "invoice": False, "slim": True, "storage": "1 To", "games": "", "defects": "", "price": 349,
+            "price_reason": "médiane 360 €, sans facture", "cover_index": 2, "tips": ["Ajoute une photo de l'étiquette"]})
+
+    class Messages:
+        async def create(self, **kw):
+            sent.update(kw)
+            return type("R", (), {"stop_reason": "end_turn", "content": [Block()],
+                                  "usage": type("U", (), {"input_tokens": 9000, "output_tokens": 800})()})()
+
+    client = type("C", (), {"beta": type("B", (), {"messages": Messages()})()})()
+    monkeypatch.setattr(ai, "_client", lambda key: client)
+    photos = [_photo_with_gps(1) for _ in range(10)]
+    out = asyncio.run(ai.write_listing("sk-ant-x", photos, "ps5 slim 2 manettes", {"model": None, "controllers": 1},
+                                       ["PS5 avec lecteur : médiane 360 € sur 9 ventes"]))
+    assert out["price"] == 349 and out["cover_index"] == 2
+    assert sent["model"] == "claude-opus-5-5" and sent["fallbacks"] == "default"
+    assert sent["output_config"]["format"]["schema"] is ai.SCHEMA and sent["output_config"]["effort"] == "medium"
+    images = [c for c in sent["messages"][0]["content"] if c["type"] == "image"]
+    assert len(images) == ai.MAX_PHOTOS                                           # 8 photos au plus
+    from PIL import Image
+    import io as _io
+    assert max(Image.open(_io.BytesIO(_b64.b64decode(images[0]["source"]["data"]))).size) <= ai.PHOTO_SIDE
+    prompt = sent["messages"][0]["content"][-1]["text"]
+    assert "médiane 360 €" in prompt and "ps5 slim 2 manettes" in prompt
+    assert "N'affirme rien qui ne soit ni visible ni indiqué" in sent["system"]
+
+
+def test_ai_listing_is_applied_to_the_draft_with_cover_photo_and_price(tmp_path, monkeypatch):
+    from vinted_bot import ai
+    from vinted_bot.app import Engine
+    (tmp_path / "settings.json").write_text(json.dumps({"ai": {"api_key": "sk-ant-x"}}), "utf-8")
+    e = Engine(tmp_path)
+    answers = [{"title": "PS5 Pro 2 To + 2 manettes, boîte", "description": "PS5 Pro en très bon état.\nPlayStation 5, Sony",
+                "model": "PS5 Pro", "item": "", "condition": "tres_bon", "controllers": 2, "box": True, "invoice": False,
+                "slim": False, "storage": "2 To", "games": "", "defects": "", "price": 549.6, "price_reason": "médiane 560 €",
+                "cover_index": 1, "tips": ["Photographie la console allumée"]},
+               ai.AIError("plus de crédit sur ton compte Anthropic : ajoute du crédit sur console.anthropic.com")]
+
+    async def write_listing(key, photos, hints, fields, market):
+        assert key == "sk-ant-x" and len(photos) == 2
+        a = answers.pop(0)
+        if isinstance(a, Exception):
+            raise a
+        return a
+    monkeypatch.setattr(ai, "write_listing", write_listing)
+
+    async def scenario():
+        d = e.new_draft([_photo_with_gps(1), _photo_with_gps(6)], "")
+        assert d["ai"] == "pending"
+        while e._ai_tasks:
+            await asyncio.gather(*e._ai_tasks)
+        return e.drafts.get(d["id"])
+
+    d = asyncio.run(scenario())
+    assert d["ai"] == "done" and d["title"] == "PS5 Pro 2 To + 2 manettes, boîte" and d["ai_text"]
+    assert d["fields"]["model"] == "PS5 Pro" and d["fields"]["storage"] == "2 To" and d["price"] == 550
+    assert d["photos"] == ["02.jpg", "01.jpg"]                     # photo de couverture choisie par l'IA
+    d = e.update_draft(d["id"], {"fields": {"controllers": 1}})
+    assert d["title"] == "PS5 Pro 2 To + 2 manettes, boîte" and d["ai_stale"]   # texte de l'IA gardé, signalé
+    failed = asyncio.run(e.ai_write(d["id"]))
+    assert failed["ai"] == "error" and "crédit" in failed["ai_message"] and failed["title"] == d["title"]
+    e.store.close()

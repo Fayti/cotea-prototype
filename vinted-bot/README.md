@@ -114,6 +114,15 @@ contre la médiane des prix récents de la même recherche.
   « Vendre » s'ouvre pré-rempli dans la fenêtre (photos, titre, description, prix) et tu termines.
   Sur Telegram : photos (+ quelques mots) → aperçu avec le bouton « Créer le brouillon sur
   Vinted » ; une réponse comme « 2 manettes, 480 € » corrige l'annonce.
+- **IA intégrée pour les annonces** (Réglages → « ✨ IA », clé d'API Anthropic) : Claude
+  (`claude-opus-5-5`) regarde les photos (8 au plus, réduites à 1024 px, sans métadonnées) et
+  rédige l'annonce : modèle exact (Pro, Slim, Standard ou Digital, stockage), accessoires et état
+  vus sur les photos, titre avec les mots que les acheteurs tapent, description honnête (rien
+  d'affirmé qui ne soit visible ou dit par toi), ligne de mots-clés, prix d'après les ventes vues
+  par le bot, photo de couverture la plus vendeuse et 1 à 3 conseils. Réponse au format imposé
+  (sortie structurée), modèle de secours si un filtre de sécurité refusait la demande. Un texte
+  qui déclencherait l'anti-arnaque est écarté. Sans clé, le modèle de texte simple prend le
+  relais. Coût : environ 5 à 10 centimes par annonce, payés à Anthropic.
 - **Réservation automatique stricte** : seulement si l'annonce est vérifiée (anti-arnaque,
   vendeur avec au moins 1 avis), que c'est une console au prix normal pour son modèle, et
   qu'elle est 💎 conseillée. Une seule à la fois (10 min pour payer), au plus 2 par 24 h

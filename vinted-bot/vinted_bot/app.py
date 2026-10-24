@@ -31,6 +31,7 @@ from .config import Search, config_from_dict, parse_vinted_url
 from .filters import margin, profit
 from .models import Deal, Item
 from .monitor import Monitor
+from . import ai
 from .drafts import Drafts
 from .photos import download_jpegs, is_photo_url, item_photos, make_zip, safe_name
 from .products import product_model
@@ -53,6 +54,8 @@ DEFAULT_SETTINGS = {
     "auto_reserve": {"per_day": 2, "history": []},
     # Bénéfice minimum : en dessous, ni conseillée, ni réservée seule, ni envoyée sur Telegram.
     "profit": {"min": MIN_PROFIT, "telegram_big_only": True},
+    # IA intégrée (Claude) pour rédiger les annonces : clé d'API Anthropic.
+    "ai": {"api_key": ""},
 }
 AUTO_PAY_WAIT = 600.0  # après une réservation automatique, 10 min pour payer avant la suivante
 
@@ -180,6 +183,7 @@ class Engine:
         self.crash: str | None = None
         self.window = VintedWindow(data_dir, on_change=self._window_changed)
         self.drafts = Drafts(data_dir / "annonces")
+        self._ai_tasks: set[asyncio.Task] = set()
         self.side_tasks: list[asyncio.Task] = []
         self.market: MarketWatch | None = None
         self.market_memory: dict = {}  # garde le suivi de la veille d'un redémarrage du moteur à l'autre
@@ -435,14 +439,80 @@ class Engine:
                 return float(s["resale_price"]), f"ton prix de revente (recherche « {s['name']} »)"
         return None, None
 
-    def new_draft(self, photos: list[bytes], text: str = "", source: str = "ordinateur") -> dict:
+    def ai_key(self) -> str:
+        return ((self.settings.get("ai") or {}).get("api_key") or "").strip()
+
+    def ai_ready(self) -> bool:
+        return ai.available(self.ai_key())
+
+    def market_lines(self) -> list[str]:
+        """Prix de vente observés, donnés à l'IA pour fixer le prix."""
+        sold = self._pools()[1]
+        lines = []
+        for model in ("PS5 Pro", "PS5 Digital", "PS5 avec lecteur"):
+            if est := resale_estimate(sold, None, model):
+                lines.append(f"{model} : médiane {est[0]:.0f} € sur {est[1]} ventes")
+        for s in self.settings.get("search", []):
+            if s.get("resale_price"):
+                lines.append(f"prix de revente visé par le vendeur pour « {s['name']} » : {s['resale_price']:.0f} €")
+        return lines
+
+    def new_draft(self, photos: list[bytes], text: str = "", source: str = "ordinateur", use_ai: str = "background") -> dict:
+        """Annonce préparée. Avec l'IA : rédigée en arrière-plan (`background`), ou pas du tout
+        (`no`, l'appelant l'attend lui-même avec ai_write)."""
         d = self.drafts.create(photos, text, source)
         if d["price"] is None:
             price, src = self.price_suggestion(d["fields"].get("model"))
             if price:
                 d = self.drafts.save({**d, "price": price, "price_src": src})
+        if use_ai == "background" and self.ai_ready():
+            d = self.drafts.save({**d, "ai": "pending"})
+            task = asyncio.get_running_loop().create_task(self.ai_write(d["id"]))
+            self._ai_tasks.add(task)
+            task.add_done_callback(self._ai_tasks.discard)
         self._broadcast({"type": "draft", "draft": d})
         log.info("Annonce préparée (%s) : %s, %d photo(s)", source, d["title"], len(d["photos"]))
+        return d
+
+    async def ai_write(self, draft_id: str, force: bool = False) -> dict:
+        """L'IA regarde les photos et rédige l'annonce (titre, description, prix, couverture).
+        `force` : réécriture demandée, même si tu avais retouché le titre ou la description."""
+        from .scam import scam_reason
+        d = {**self.drafts.get(draft_id), "ai": "pending", "ai_message": None}
+        if force:
+            d.update(title_edited=False, desc_edited=False)
+        d = self.drafts.save(d)
+        self._broadcast({"type": "draft", "draft": d})
+        photos = [self.drafts.photo_path(d["id"], n).read_bytes() for n in d["photos"]]
+        try:
+            out = await ai.write_listing(self.ai_key(), photos, d.get("text") or "", d["fields"], self.market_lines())
+        except ai.AIError as e:
+            log.warning("IA : annonce non rédigée (%s)", e)
+            d = self.drafts.save({**self.drafts.get(draft_id), "ai": "error", "ai_message": f"IA : {e}"})
+            self._broadcast({"type": "draft", "draft": d})
+            return d
+        d = self.drafts.get(draft_id)
+        f = d["fields"]
+        f.update({"model": None if out["model"] == "autre" else out["model"], "condition": out["condition"],
+                  "controllers": max(0, int(out["controllers"])), "box": out["box"], "invoice": out["invoice"],
+                  "slim": out["slim"], "storage": out["storage"], "games": out["games"]})
+        if out["model"] == "autre":
+            f["title_hint"] = out["item"]
+        title, desc = out["title"].strip()[:100], out["description"].strip()[:3000]
+        if scam_reason(title + "\n" + desc):   # jamais : une annonce qui déclencherait les filtres anti-arnaque
+            log.warning("IA : texte écarté (ressemble à une arnaque), modèle de texte simple utilisé")
+        elif not (d.get("title_edited") or d.get("desc_edited")):
+            d.update(title=title, description=desc, ai_text=True, ai_stale=False)
+        if d.get("price_src") not in ("ton prix", "tes mots") and out["price"] > 0:
+            d.update(price=float(round(out["price"])), price_src=f"l'IA : {out['price_reason']}"[:200])
+        cover = int(out["cover_index"])
+        if 0 < cover < len(d["photos"]):   # la photo la plus vendeuse en premier
+            d["photos"] = [d["photos"][cover]] + [n for i, n in enumerate(d["photos"]) if i != cover]
+        d.update(ai="done", ai_tips=[t for t in out["tips"] if t][:3], ai_message=None)
+        if d["status"] in ("sent", "prefilled", "error"):
+            d.update(status="local", message=None)
+        d = self.drafts.save(d)
+        self._broadcast({"type": "draft", "draft": d})
         return d
 
     def update_draft(self, draft_id: str, patch: dict) -> dict:
@@ -487,7 +557,9 @@ class Engine:
         """Photos envoyées au bot Telegram : annonce préparée, aperçu renvoyé avec le bouton
         « Créer le brouillon »."""
         try:
-            d = self.new_draft(photos, text, "Telegram")
+            d = self.new_draft(photos, text, "Telegram", use_ai="no")
+            if self.ai_ready():
+                d = await self.ai_write(d["id"])
             await notifier.draft_preview(d)
         except Exception as e:
             log.warning("Annonce depuis Telegram impossible : %s", e)
@@ -651,6 +723,10 @@ async def put_settings(request):
         for flag in ("use_direct", "extra_photos", "track_status"):
             if flag in g:
                 e.settings["general"][flag] = bool(g[flag])
+    if "ai" in body:
+        e.settings.setdefault("ai", {})["api_key"] = str(body["ai"].get("api_key", "")).strip()
+        e.save()
+        return web.json_response({"settings": e.settings})   # pas besoin de relancer la surveillance
     if "profit" in body:
         prof = e.settings.setdefault("profit", {"min": MIN_PROFIT, "telegram_big_only": True})
         prof["min"] = min(500.0, max(0.0, float(body["profit"].get("min", prof["min"]))))
@@ -840,6 +916,25 @@ async def draft_zip(request):
     jpegs = [e.drafts.photo_path(d["id"], n).read_bytes() for n in d["photos"]]
     return web.Response(body=make_zip(d["title"], jpegs), content_type="application/zip",
                         headers={"Content-Disposition": _attachment(f"{safe_name(d['title'])}.zip")})
+
+
+@routes.post("/api/annonces/{id}/ia")
+async def rewrite_draft_ai(request):
+    e = engine_of(request)
+    if not e.ai_ready():
+        raise ValueError("Ajoute d'abord ta clé d'API Anthropic dans Réglages → IA")
+    return web.json_response(await e.ai_write(request.match_info["id"], force=True))
+
+
+@routes.post("/api/ai/test")
+async def ai_test(request):
+    body = await request.json()
+    key = (body.get("api_key") or engine_of(request).ai_key()).strip()
+    try:
+        name = await ai.check_key(key)
+    except ai.AIError as err:
+        raise ValueError(str(err)) from None
+    return web.json_response({"ok": True, "model": name})
 
 
 @routes.post("/api/annonces/{id}/vinted")
@@ -1123,6 +1218,8 @@ async def selftest() -> None:
                 from PIL import Image
                 from . import listing
                 assert listing.pillow_heif is not None, "lecture des photos HEIC (iPhone) absente"
+                import anthropic   # IA intégrée : bibliothèque embarquée et utilisable
+                assert anthropic.AsyncAnthropic(api_key="test").beta.messages.create, "IA (anthropic) absente"
                 heic = io.BytesIO()
                 Image.new("RGB", (40, 30), (9, 9, 9)).save(heic, "HEIF")
                 form = aiohttp.FormData()

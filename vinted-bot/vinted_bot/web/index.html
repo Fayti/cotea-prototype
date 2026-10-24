@@ -519,7 +519,7 @@ select { border-radius: 10px; }
     <div class="stack">
       <div class="card stack">
         <div><h2>📝 Annonce automatique</h2>
-          <p class="sub">Glisse les photos de ton article (depuis le Mac, ou de l'iPhone par AirDrop) : le bot prépare le titre, la description et le prix, puis l'enregistre en <strong>brouillon</strong> sur ton compte Vinted, par la fenêtre Vinted (ouverte et connectée). Tu vérifies et tu publies toi-même. Depuis l'iPhone : envoie simplement les photos à ton bot Telegram, avec quelques mots si tu veux.</p></div>
+          <p class="sub">Glisse les photos de ton article (depuis le Mac, ou de l'iPhone par AirDrop) : l'IA (si tu as mis ta clé dans Réglages) regarde les photos et rédige le titre, la description et le prix, puis le bot l'enregistre en <strong>brouillon</strong> sur ton compte Vinted, par la fenêtre Vinted (ouverte et connectée). Tu vérifies et tu publies toi-même. Depuis l'iPhone : envoie simplement les photos à ton bot Telegram, avec quelques mots si tu veux.</p></div>
         <label id="dropZone" class="drop"><input type="file" id="sellFiles" accept="image/*,.heic,.heif" multiple hidden>
           <div class="big">📸</div><div><strong>Glisse tes photos ici</strong> ou clique pour les choisir</div>
           <small class="sub">JPEG, PNG, HEIC (iPhone) · 20 au plus · position GPS et infos du téléphone retirées</small></label>
@@ -584,6 +584,17 @@ select { border-radius: 10px; }
         <label class="check"><input type="checkbox" id="extraPhotos"> Afficher 3 photos par annonce</label>
         <label class="check"><input type="checkbox" id="trackStatus"> Indiquer quand une annonce est vendue, réservée ou supprimée</label>
         <div><button id="saveTrack" class="btn primary">Enregistrer</button></div>
+      </div>
+
+      <div class="card stack">
+        <div><h2>✨ IA pour tes annonces</h2><p class="sub">Avec une clé d'API Anthropic, l'IA (Claude) regarde tes photos et rédige l'annonce optimisée : modèle exact, état vu sur les photos, titre avec les mots que les acheteurs tapent, description honnête, prix d'après les ventes vues par le bot, et photo de couverture la plus vendeuse. Compte environ 5 à 10 centimes par annonce, payés à Anthropic. Les photos (réduites, sans GPS) leur sont envoyées pour l'analyse.</p></div>
+        <ol class="steps">
+          <li>Crée un compte sur <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com ↗</a> et ajoute quelques euros de crédit (Billing).</li>
+          <li>Dans « API Keys », crée une clé (elle commence par <code>sk-ant-</code>) et colle-la ici :</li>
+        </ol>
+        <div class="row"><input id="aiKey" type="password" placeholder="sk-ant-…" style="flex:1;min-width:220px" autocomplete="off">
+          <button id="aiTest" class="btn">Vérifier</button><button id="aiSave" class="btn primary">Enregistrer</button></div>
+        <div id="aiMsg"></div>
       </div>
 
       <div class="card stack">
@@ -848,11 +859,15 @@ function renderEditor() {
   if (!d) { $("#sellEditor").innerHTML = ""; return; }
   const ready = S.window?.open && S.window?.user;
   $("#sellEditor").innerHTML = `<div class="card stack" id="draftCard">
-    <div class="toolbar" style="margin:0"><div class="grow"><h2>Annonce · ${DSTATUS[d.status] || ""}</h2>
-      <p class="sub">Modifie ce que tu veux : titre et description se réécrivent tout seuls tant que tu ne les touches pas.</p></div>
+    <div class="toolbar" style="margin:0"><div class="grow"><h2>Annonce · ${DSTATUS[d.status] || ""}${d.ai === "done" ? " · ✨ rédigée par l'IA" : ""}</h2>
+      <p class="sub">${d.ai_text ? "Texte écrit par l'IA : modifie ce que tu veux." : "Modifie ce que tu veux : titre et description se réécrivent tout seuls tant que tu ne les touches pas."}</p></div>
       <button class="btn small" data-act="close">Fermer</button></div>
     <div class="sell-photos">${d.photos.map((n, i) => `<figure><img src="${photoUrl(d, n)}" alt="">
       <figcaption><button data-act="left" data-i="${i}" title="Avancer">◀</button><button data-act="rm" data-i="${i}" title="Retirer">✕</button><button data-act="right" data-i="${i}" title="Reculer">▶</button></figcaption></figure>`).join("")}</div>
+    ${d.ai === "pending" ? `<div class="dmsg">✨ L'IA regarde tes photos et rédige l'annonce… (10 à 40 s)</div>` : ""}
+    ${d.ai === "error" && d.ai_message ? `<div class="dmsg error">${esc(d.ai_message)} · le texte ci-dessous vient du modèle simple.</div>` : ""}
+    ${d.ai_stale ? `<div class="dmsg prefilled">Tu as changé une info depuis : clique « ✨ Réécrire avec l'IA » pour mettre le texte à jour.</div>` : ""}
+    ${(d.ai_tips || []).length ? `<div class="dmsg">${d.ai_tips.map((t) => "💡 " + esc(t)).join("<br>")}</div>` : ""}
     ${fieldHTML(d)}
     <div class="form">
       <label class="field"><span>Prix (€)</span><input type="number" min="1" step="1" id="dPrice" value="${d.price ?? ""}" placeholder="à indiquer">
@@ -863,7 +878,8 @@ function renderEditor() {
     ${d.message ? `<div class="dmsg ${d.status}">${esc(d.message)}</div>` : ""}
     <div class="row">
       <button class="btn primary" data-act="send"${d.status === "sending" ? " disabled" : ""}>📤 Créer le brouillon sur Vinted</button>
-      <button class="btn" data-act="regen">↺ Réécrire titre et description</button>
+      ${S.settings?.ai?.api_key ? `<button class="btn" data-act="ai"${d.ai === "pending" ? " disabled" : ""}>✨ Réécrire avec l'IA</button>` : ""}
+      <button class="btn" data-act="regen">↺ Texte simple</button>
       <button class="btn" data-act="copyT">Copier le titre</button>
       <button class="btn" data-act="copyD">Copier la description</button>
       <a class="btn" href="/api/annonces/${d.id}/photos.zip">⬇️ Photos (.zip)</a>
@@ -930,6 +946,11 @@ $("#sellEditor").addEventListener("click", (e) => {
   if (act === "right" && i < photos.length - 1) { [photos[i + 1], photos[i]] = [photos[i], photos[i + 1]]; guarded(null, () => patchDraft({ photos }, true)); }
   if (act === "rm") { photos.splice(i, 1); guarded(null, () => patchDraft({ photos }, true)); }
   if (act === "regen") guarded(e.target, () => patchDraft({ regenerate: true }, true));
+  if (act === "ai") guarded(e.target, async () => {
+    CUR = { ...CUR, ai: "pending" }; renderEditor();
+    CUR = await api("POST", `/api/annonces/${CUR.id}/ia`); renderEditor(); renderDrafts();
+    if (CUR.ai === "error") toast(CUR.ai_message, true);
+  });
   if (act === "copyT") navigator.clipboard.writeText(CUR.title).then(() => toast("Titre copié"));
   if (act === "copyD") navigator.clipboard.writeText(CUR.description).then(() => toast("Description copiée"));
   if (act === "send") guarded(e.target, async () => {
@@ -1250,7 +1271,7 @@ function connectEvents() {
       const d = msg.draft, i = DRAFTS.findIndex((x) => x.id === d.id);
       if (i >= 0) DRAFTS[i] = d; else DRAFTS.unshift(d);
       renderDrafts();
-      if (CUR?.id === d.id && (CUR.status !== d.status || CUR.message !== d.message)) { CUR = d; renderEditor(); }
+      if (CUR?.id === d.id && (CUR.status !== d.status || CUR.message !== d.message || CUR.ai !== d.ai)) { CUR = d; renderEditor(); }
     }
     else if (msg.type === "blocked") { if (BLK) { BLK.unshift(msg.blocked); renderBlocked(); } }
     else onAlert(msg.alert || msg);
@@ -1395,6 +1416,8 @@ function renderSettings() {
   $("#thr").value = Math.round((st.deals.threshold ?? 0.3) * 100);
   $("#extraPhotos").checked = st.general.extra_photos !== false;
   $("#trackStatus").checked = st.general.track_status !== false;
+  if (document.activeElement !== $("#aiKey")) $("#aiKey").value = st.ai?.api_key || "";
+  $("#aiMsg").innerHTML = st.ai?.api_key ? `<p class="okline">✓ Clé enregistrée : l'IA rédige tes annonces (onglet 📝 Vendre et Telegram).</p>` : "";
   const prof = st.profit || { min: 40, telegram_big_only: true };
   if (document.activeElement !== $("#minProfit")) $("#minProfit").value = prof.min ?? 40;
   $("#tgBigOnly").checked = prof.telegram_big_only !== false;
@@ -1422,6 +1445,17 @@ $("#saveSpeed").addEventListener("click", (e) => guarded(e.target, async () => {
 $("#saveTrack").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { general: { extra_photos: $("#extraPhotos").checked, track_status: $("#trackStatus").checked } });
   await refresh(); toast("Réglages enregistrés");
+}));
+$("#aiTest").addEventListener("click", (e) => guarded(e.target, async () => {
+  $("#aiMsg").innerHTML = `<p class="sub">Vérification…</p>`;
+  try {
+    const r = await api("POST", "/api/ai/test", { api_key: $("#aiKey").value.trim() });
+    $("#aiMsg").innerHTML = `<p class="okline">✓ Clé valide (${esc(r.model)}). N'oublie pas d'enregistrer.</p>`;
+  } catch (err) { $("#aiMsg").innerHTML = `<p class="errline">✗ ${esc(err.message)}</p>`; }
+}));
+$("#aiSave").addEventListener("click", (e) => guarded(e.target, async () => {
+  await api("PUT", "/api/settings", { ai: { api_key: $("#aiKey").value.trim() } });
+  await refresh(); toast($("#aiKey").value.trim() ? "Clé enregistrée : l'IA rédigera tes annonces" : "IA désactivée");
 }));
 $("#saveProfit").addEventListener("click", (e) => guarded(e.target, async () => {
   await api("PUT", "/api/settings", { profit: { min: +$("#minProfit").value, telegram_big_only: $("#tgBigOnly").checked } });
